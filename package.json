@@ -1,0 +1,37 @@
+{
+  "name": "pdf2takeoff",
+  "version": "0.1.0",
+  "description": "Free, open-source PDF takeoff and markup tool that runs entirely in your browser. PDF in, quantities out \u2014 files never leave your machine.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "sample": "node scripts/make-sample.mjs",
+    "soak": "node scripts/make-soak.mjs"
+  },
+  "keywords": [
+    "pdf",
+    "takeoff",
+    "construction",
+    "estimating",
+    "measurement",
+    "bluebeam-alternative",
+    "quantity-survey"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ajflow/pdf2takeoff"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.30.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.149",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
+}

@@ -1,0 +1,12 @@
+# Cloudflare Pages headers.
+# Cross-origin isolation headers are commented out: not needed today (pdf.js
+# uses a worker without SharedArrayBuffer). Uncomment if/when WASM threads
+# arrive, e.g. for a local inference model.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+#  Cross-Origin-Opener-Policy: same-origin
+#  Cross-Origin-Embedder-Policy: require-corp
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -1,0 +1,224 @@
+/* Shared styles for the static intent pages (pdf2takeoff design system):
+   deep navy, teal→sky gradient accents, pill CTAs, hairline borders. */
+
+:root {
+  --navy-0: #0a1220;
+  --navy-1: #0d1526;
+  --navy-2: #101b30;
+  --navy-3: #16233c;
+  --line: rgba(148, 163, 184, 0.14);
+  --line-strong: rgba(148, 163, 184, 0.24);
+  --text: #e8edf5;
+  --text-dim: #94a3b8;
+  --teal: #2dd4bf;
+  --sky: #38bdf8;
+  --accent-ink: #052e2b;
+  --grad: linear-gradient(92deg, #2dd4bf 0%, #38bdf8 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--text);
+  background: var(--navy-0);
+  line-height: 1.6;
+}
+
+.m-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  background: rgba(10, 18, 32, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.m-topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.m-topbar .mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--grad);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--accent-ink);
+  font-family: ui-monospace, Menlo, monospace;
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.35);
+}
+
+.cta {
+  display: inline-block;
+  background: var(--grad);
+  color: var(--accent-ink);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 18px rgba(45, 212, 191, 0.28);
+  transition: filter 0.15s;
+}
+
+.cta:hover {
+  filter: brightness(1.08);
+}
+
+.cta.big {
+  font-size: 16px;
+  padding: 13px 26px;
+}
+
+.m-wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+  background-image:
+    radial-gradient(600px 300px at 50% 0%, rgba(45, 212, 191, 0.08), transparent 70%),
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    28px 28px,
+    28px 28px;
+}
+
+.m-wrap h1 {
+  font-size: clamp(27px, 4.5vw, 38px);
+  letter-spacing: -0.03em;
+  line-height: 1.14;
+  margin: 0 0 16px;
+  color: #f5f8fd;
+}
+
+.m-wrap h2 {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  margin: 48px 0 12px;
+  color: #f5f8fd;
+}
+
+.m-wrap p {
+  font-size: 16px;
+  color: var(--text-dim);
+}
+
+.m-wrap .lead {
+  font-size: 18px;
+  color: var(--text);
+}
+
+.m-wrap .lead strong {
+  font-weight: 700;
+}
+
+.c-red {
+  color: #fb7185;
+}
+.c-blue {
+  color: var(--sky);
+}
+
+.m-wrap em {
+  color: var(--sky);
+  font-style: normal;
+}
+
+.m-wrap ol,
+.m-wrap ul {
+  color: var(--text-dim);
+  font-size: 15.5px;
+  padding-left: 22px;
+}
+
+.m-wrap li {
+  margin-bottom: 8px;
+}
+
+.m-wrap li strong {
+  color: var(--text);
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid var(--line-strong);
+  background: rgba(16, 27, 48, 0.7);
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 20px;
+}
+
+.badge-pill::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 10px rgba(45, 212, 191, 0.9);
+}
+
+.fact-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.fact-strip span {
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--navy-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+
+.m-wrap details {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  background: var(--navy-1);
+}
+
+.m-wrap summary {
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.m-wrap footer {
+  margin-top: 52px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+
+.m-wrap footer a {
+  color: var(--teal);
+}

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Count symbols in a PDF drawing automatically, free | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="Count repeated symbols in a construction PDF automatically: downlights, GPOs, switches, diffusers. Click one symbol and the scan counts every match in about 100 ms. Free, in your browser, nothing uploaded."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/count-symbols-in-pdf-drawing" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#111827" />
+    <meta property="og:title" content="Count symbols in a PDF drawing, free | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Click one fixture and count every match on the sheet in ~100 ms. Runs entirely in your browser."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="/src/marketing.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to count repeated symbols in a PDF drawing automatically",
+        "totalTime": "PT1M",
+        "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff scan" }],
+        "step": [
+          { "@type": "HowToStep", "name": "Open the drawing", "text": "Open any PDF floor plan in pdf2takeoff. The drawing is rendered on your machine; nothing is uploaded." },
+          { "@type": "HowToStep", "name": "Press S and click one symbol", "text": "Activate the Scan tool and click directly on one instance of the symbol you want counted: a downlight, a power point, a smoke alarm." },
+          { "@type": "HowToStep", "name": "Read the count", "text": "The scan matches every instance of that symbol on the page in about 100 ms and drops a numbered count marker on each one." },
+          { "@type": "HowToStep", "name": "Group and export", "text": "Rename the group to your specification name (e.g. 'Downlight DL-100') and export the counts to CSV, Excel, or the printable report." }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How does the auto-count work?",
+            "acceptedAnswer": { "@type": "Answer", "text": "You click one instance of a repeated symbol. The tool rasterizes the sheet, extracts the symbol's shape, and matches every other symbol on the page by size, aspect, fill and a normalized shape signature, all locally in your browser, in about 100 ms." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which symbols can it count?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Any repeated symbol that appears as a distinct shape on the drawing: downlights, GPOs/power points, switches, smoke alarms, ceiling diffusers, hydrants, columns and similar fixtures. It works best on isolated symbols in vector CAD plots; symbols that touch wall lines on cluttered or scanned sheets are handled by the ML detector that is being trained." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is the symbol count free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes, completely free and open source (Apache-2.0), no page limits, no account, nothing uploaded." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need to upload my drawings?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. The scan runs on your own machine with local computer vision; no model download, no server, nothing uploaded. Confidential tender drawings stay private by design." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can it count across all sheets of a set?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Scan each sheet with one click; the markups list groups counts by label across the whole set, and the totals feed straight into the Excel export and the printable report." }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="m-topbar">
+      <a class="brand" href="/">
+        <span class="mark">p2t</span>
+        <span class="name">pdf2takeoff</span>
+      </a>
+      <a class="cta" href="/">Open the tool</a>
+    </header>
+
+    <main class="m-wrap">
+      <span class="badge-pill">Free &amp; open source · files never uploaded</span>
+      <h1>Count symbols in a PDF drawing automatically, free</h1>
+      <p class="lead">
+        Counting downlights across a floor plan by hand is how quantities get missed. With pdf2takeoff
+        you <strong>click one symbol and the scan counts every match</strong> on the sheet in about a
+        tenth of a second: numbered markers on the drawing, a running total in the list, ready for
+        Excel. It runs entirely in your browser, so confidential tender drawings never leave your
+        machine.
+      </p>
+
+      <div class="fact-strip">
+        <span>Free, no account</span>
+        <span>Files never uploaded</span>
+        <span>~100 ms per sheet</span>
+        <span>Open source · Apache-2.0</span>
+      </div>
+
+      <p><a class="cta big" href="/">Count your symbols now →</a></p>
+
+      <h2>How to auto-count fixtures on a drawing</h2>
+      <ol>
+        <li><strong>Open the drawing.</strong> Drag any PDF floor plan into pdf2takeoff.</li>
+        <li><strong>Click one symbol.</strong> Press <em>S</em> (Scan) and click directly on one instance of the symbol: a downlight, a power point, a smoke alarm.</li>
+        <li><strong>Every match gets counted.</strong> The scan finds all instances of that symbol on the sheet and places a numbered marker on each, in reading order.</li>
+        <li><strong>Group by spec name.</strong> Rename the group (e.g. <em>Downlight DL-100</em>) and scan the next symbol type; the list keeps one total per group.</li>
+        <li><strong>Export.</strong> Take the counts to CSV or Excel, print the quantity report, or save the count markers into the PDF itself.</li>
+      </ol>
+
+      <h2>What it's good at, honestly</h2>
+      <p>
+        The scan is classic computer vision: it learns the shape of the symbol you clicked and matches
+        every instance by size, aspect, fill and shape signature. That makes it fast, private and
+        dependable for <strong>isolated symbols in vector CAD plots</strong>: lighting layouts, power
+        and data schedules, fire services, ceiling grids. Symbols that touch wall lines, or dense
+        scanned sheets, are harder: those are the target of the ML detector being trained on an
+        open data pipeline, which drops into the same scan without changing how you use it.
+      </p>
+
+      <h2>Why count with a tool at all?</h2>
+      <p>
+        Fixture quantities are the classic takeoff error: 63 downlights on the lighting layout, 58 in
+        the estimate, and nobody finds out until the electrician's variation arrives. A click-per-sheet
+        count you can repeat on every revision and cross-check against the schedule turns that
+        risk into a 30-second check. Pair it with the
+        <a href="/compare-drawing-revisions">revision overlay compare</a> to see exactly which fixtures
+        moved between revisions before you recount.
+      </p>
+
+      <h2>FAQ</h2>
+      <details>
+        <summary>Is it really automatic?</summary>
+        <p>One click teaches the scan what to count; every match on the page is found and marked automatically after that.</p>
+      </details>
+      <details>
+        <summary>Does it work on scanned drawings?</summary>
+        <p>Clear scans of distinct symbols usually work. Dense or low-contrast scans are where the ML detector (in training) will take over.</p>
+      </details>
+      <details>
+        <summary>Can I count symbols on all pages?</summary>
+        <p>Yes: scan each sheet, and the markups list totals every label across the whole set for the Excel export.</p>
+      </details>
+      <details>
+        <summary>Do the count markers show in Bluebeam?</summary>
+        <p>Yes. Save into the PDF and the count markers become standard PDF annotations that open in Bluebeam Revu and Acrobat.</p>
+      </details>
+
+      <footer>
+        <a href="/">pdf2takeoff</a>: free, open-source PDF takeoff and markup. Calibrate, measure
+        lengths, areas and counts, auto-count repeated symbols, export to Excel.
+      </footer>
+    </main>
+  </body>
+</html>

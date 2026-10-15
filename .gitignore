@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.vscode/
+.idea/
+
+# generated training data — regenerate with scripts/generate-synthetic-dataset.mjs
+training/synthetic/
+
+# trained detector artifacts — drop into public/models/ to ship (see its README)
+public/models/*.onnx
+public/models/symbols.json
+training/floorplancad/
+public/examples/soak-*.pdf
+
+# business strategy doc stays local (never published)
+STRATEGY.md

@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pdf2takeoff: free, open-source PDF takeoff and markup in your browser</title>
+    <meta
+      name="description"
+      content="Turn construction PDF drawings into measured quantities for free. Calibrate the scale, measure lengths, areas and counts, export to CSV, and save markups back into the PDF. Runs entirely in your browser; files are never uploaded. Open source, Apache-2.0."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#111827" />
+    <meta property="og:title" content="pdf2takeoff: free, open-source PDF takeoff in your browser" />
+    <meta
+      property="og:description"
+      content="Calibrate, measure lengths, areas and counts on any PDF drawing, export the markups list to CSV, and save markups back into the PDF. Files never leave your machine."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/" />
+    <script type="module" src="/src/main.ts"></script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "pdf2takeoff",
+        "url": "https://pdf2takeoff.com/",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Any (web browser)",
+        "description": "Free, open-source PDF takeoff and markup tool. Calibrate drawing scales, measure lengths, areas and counts, export quantities to CSV, and save markups back into the PDF as standard annotations. Files are processed entirely in the browser and never uploaded.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "isAccessibleForFree": true,
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "featureList": [
+          "Open and view construction PDF drawings",
+          "Calibrate scale from a known dimension or standard presets",
+          "Measure lengths, areas and counts",
+          "Markups list with group totals",
+          "Export to CSV / clipboard for Excel",
+          "Save markups into the PDF as standard annotations",
+          "No account, no upload, works offline once loaded"
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to do a takeoff from a PDF drawing for free",
+        "totalTime": "PT5M",
+        "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff" }],
+        "step": [
+          { "@type": "HowToStep", "name": "Open the drawing", "text": "Open the PDF drawing in pdf2takeoff. The file is processed in your browser and is never uploaded." },
+          { "@type": "HowToStep", "name": "Calibrate the scale", "text": "Pick the Calibrate tool and click both ends of any dimension printed on the drawing, then type its real length. Or choose a standard scale like 1:100 or 1/4\" = 1'-0\"." },
+          { "@type": "HowToStep", "name": "Measure", "text": "Trace lengths along walls and pipes, outline areas for rooms and slabs, and click count marks for fixtures and columns. Totals update live." },
+          { "@type": "HowToStep", "name": "Export quantities", "text": "Export the markups list to CSV or copy it straight into Excel, grouped by label with totals." },
+          { "@type": "HowToStep", "name": "Save into the PDF", "text": "Save the drawing with markups written into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat." }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is pdf2takeoff really free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is free to use, Apache-2.0 licensed open source, with no account, no file limits and no paid tier. The source code is on GitHub." }
+          },
+          {
+            "@type": "Question",
+            "name": "Are my drawings uploaded to a server?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. pdf2takeoff runs entirely in your browser. Your PDFs are rendered and measured on your own machine and never leave it, so it is safe for confidential tender documents." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do the markups open in Bluebeam Revu or Adobe Acrobat?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Saved markups are written into the PDF as standard Line, PolyLine, Polygon and FreeText annotations with the measurement in the comment, so they appear in Bluebeam's markups list and in Acrobat." }
+          },
+          {
+            "@type": "Question",
+            "name": "What measurements can it do?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Lengths (including segmented runs), areas with perimeter, and counts, on any page you calibrate. Metric and imperial units are both supported." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work offline?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Once the page has loaded it needs no network: rendering and measurement happen locally in your browser." }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the licence and can I contribute?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Apache-2.0 licence. Contributions, feature requests and trade-specific ideas are welcome on GitHub." }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
+    <input type="file" id="cmpFileA" accept="application/pdf,.pdf" hidden />
+    <input type="file" id="cmpFileB" accept="application/pdf,.pdf" hidden />
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="mark">p2t</span>
+        <span class="name">pdf2takeoff</span>
+        <span class="ver">v0.1</span>
+      </a>
+
+      <button class="btn primary" id="openBtn" title="Open a PDF drawing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Open PDF
+      </button>
+
+      <div class="toolgroup" role="toolbar" aria-label="Tools">
+        <button class="btn" data-tool="pan" title="Select / pan (V)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
+          <span class="label">Pan</span><span class="kbd">V</span>
+        </button>
+        <button class="btn" data-tool="calibrate" title="Calibrate scale (C)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>
+          <span class="label">Calibrate</span><span class="kbd">C</span>
+        </button>
+        <button class="btn" data-tool="length" title="Measure length (L)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></svg>
+          <span class="label">Length</span><span class="kbd">L</span>
+        </button>
+        <button class="btn" data-tool="area" title="Measure area (A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 6-3 11H6L3 9z"/></svg>
+          <span class="label">Area</span><span class="kbd">A</span>
+        </button>
+        <button class="btn" data-tool="count" title="Count items (N)">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6.5" cy="17.5" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="17.5" cy="6.5" r="2.4"/></svg>
+          <span class="label">Count</span><span class="kbd">N</span>
+        </button>
+        <button class="btn" data-tool="scan" title="Scan: click a repeated symbol to count all of them (S)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity="0.65"/></svg>
+          <span class="label">Scan</span><span class="kbd">S</span>
+        </button>
+      </div>
+
+      <select class="btn" id="unitSelect" title="Display units" aria-label="Display units"></select>
+
+      <button class="btn" id="scaleBadge" title="Scale for the current page (click to calibrate)">Scale</button>
+
+      <span class="spacer"></span>
+
+      <div class="toolgroup">
+        <button class="btn" id="prevPage" title="Previous page (←)">‹</button>
+        <span id="pageIndicator" style="font-size:11px; padding:0 4px; font-family: var(--mono); color: var(--text-dim)">- / -</span>
+        <button class="btn" id="nextPage" title="Next page (→)">›</button>
+      </div>
+      <div class="toolgroup">
+        <button class="btn" id="zoomOut" title="Zoom out (−)">−</button>
+        <span id="zoomIndicator" style="font-size:11px; padding:0 4px; font-family: var(--mono); color: var(--text-dim)">100%</span>
+        <button class="btn" id="zoomIn" title="Zoom in (+)">+</button>
+        <button class="btn" id="zoomFit" title="Fit width (F)">Fit</button>
+      </div>
+
+      <div class="toolgroup">
+        <button class="btn" id="compareBtn" title="Overlay-compare two revisions of a drawing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="12" height="12" rx="1.5"/><rect x="9" y="3" width="12" height="12" rx="1.5"/></svg>
+          Compare
+        </button>
+        <button class="btn" id="demoBtn" title="Watch the guided demo on the sample drawing">▶ Demo</button>
+      </div>
+    </header>
+
+    <div id="app">
+      <main id="workspace">
+        <div id="scrollContainer">
+          <div id="pageWrap">
+            <canvas id="pdfCanvas"></canvas>
+            <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
+              <g id="previewLayer"></g>
+              <g id="markupsLayer"></g>
+            </svg>
+          </div>
+        </div>
+
+        <div id="loading" class="loading-pill hidden">Rendering…</div>
+
+        <div id="demoCaption" class="hidden">
+          <b id="demoStep"></b>
+          <span id="demoText"></span>
+        </div>
+
+        <div id="pageStrip" class="hidden"></div>
+
+        <div id="demoEnd" class="hidden">
+          <div class="demo-card">
+            <h3>Takeoff complete: this is the output</h3>
+            <p class="demo-sub">Same numbers the CSV / Excel exports contain, grouped by label with totals.</p>
+            <table class="demo-results">
+              <thead><tr><th style="text-align:left">Item</th><th>Type</th><th style="text-align:right">Total</th></tr></thead>
+              <tbody id="demoResults"></tbody>
+            </table>
+            <div class="demo-actions">
+              <button class="btn primary" id="demoXlsx">Download the Excel</button>
+              <button class="btn" id="demoTry">Try it yourself</button>
+              <button class="btn" id="demoReplay">↻ Replay</button>
+            </div>
+            <p class="demo-note">The measurements on the drawing are live: rename labels, drag them, measure more, or export again.</p>
+          </div>
+        </div>
+
+        <div id="compareBar" class="hidden">
+          <strong>Overlay compare</strong>
+          <span class="legend">
+            <i class="sw only-a"></i> only in A (removed)
+            <i class="sw only-b"></i> only in B (added)
+            <i class="sw both"></i> unchanged
+          </span>
+          <span class="cmp-slot">A: <b id="cmpAName">-</b> <button class="btn" id="cmpPickA">Choose…</button></span>
+          <span class="cmp-slot">B: <b id="cmpBName">-</b> <button class="btn" id="cmpPickB">Choose…</button></span>
+          <button class="btn" id="cmpSwap" title="Swap revisions A and B">⇄ Swap</button>
+          <label class="chk"><input type="checkbox" id="cmpFit" checked /> Fit B to A</label>
+          <label class="chk"><input type="checkbox" id="cmpFade" /> Changes only</label>
+          <span class="nudge">
+            nudge B
+            <button class="btn" data-nudge="-10,0" title="Move B left 10 pt">◀◀</button>
+            <button class="btn" data-nudge="-1,0" title="Move B left 1 pt">◀</button>
+            <button class="btn" data-nudge="1,0" title="Move B right 1 pt">▶</button>
+            <button class="btn" data-nudge="10,0" title="Move B right 10 pt">▶▶</button>
+            <button class="btn" data-nudge="0,-10" title="Move B up 10 pt">▲▲</button>
+            <button class="btn" data-nudge="0,-1" title="Move B up 1 pt">▲</button>
+            <button class="btn" data-nudge="0,1" title="Move B down 1 pt">▼</button>
+            <button class="btn" data-nudge="0,10" title="Move B down 10 pt">▼▼</button>
+            <span id="cmpOffset" class="mono"></span>
+          </span>
+          <span class="spacer"></span>
+          <button class="btn" id="cmpClose">✕ Exit compare</button>
+        </div>
+
+        <div id="dropzone">
+          <span class="badge"><i class="dot"></i> Free &amp; open source · runs in your browser</span>
+          <h1>Turn any PDF drawing into <em>measured quantities</em></h1>
+          <p class="sub">
+            Calibrate the scale, measure lengths, areas and counts, and export the markups list to
+            CSV, or save it back into the PDF so it opens in Bluebeam and Acrobat.
+          </p>
+          <div class="hero-actions">
+            <button class="btn primary" id="openBtnHero">Open a PDF drawing</button>
+            <button class="btn" id="demoBtnHero">▶ Watch the demo</button>
+            <button class="btn" id="sampleBtnHero">Try the sample drawing</button>
+          </div>
+          <div class="privacy-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            Files never leave your machine · open source · no account, ever
+          </div>
+        </div>
+      </main>
+
+      <aside id="sidebar">
+        <h2>Markups</h2>
+        <div id="markupTotals"></div>
+        <div class="markup-table-wrap">
+          <table class="markup-table">
+            <thead>
+              <tr><th>Label</th><th>Type</th><th>Page</th><th style="text-align:right">Value</th><th></th></tr>
+            </thead>
+            <tbody id="markupRows"></tbody>
+          </table>
+        </div>
+        <div class="side-actions">
+          <button class="btn" id="copyTsvBtn" title="Copy the list for pasting into Excel">Copy</button>
+          <button class="btn" id="exportCsvBtn" title="Download the markups list as CSV">CSV</button>
+          <button class="btn" id="exportXlsxBtn" title="Download the markups list as an Excel workbook">Excel</button>
+          <button class="btn" id="reportBtn" title="Printable report: marked-up sheets + quantities">Report</button>
+        </div>
+        <div class="side-actions">
+          <button class="btn primary" id="savePdfBtn" title="Save the PDF with markups as standard annotations">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg>
+            Save into PDF
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <footer id="statusbar">
+      <span id="toolHint">Open a PDF drawing to begin</span>
+      <span class="spacer"></span>
+      <span id="cursorPos"></span>
+      <span id="fileIndicator"></span>
+    </footer>
+
+    <!-- calibration modal -->
+    <div id="calibModal" class="hidden" role="dialog" aria-modal="true" aria-label="Calibrate scale">
+      <div class="modal-card">
+        <h3>Calibrate the scale</h3>
+        <p class="modal-sub"><span id="calibDrawn"></span> How long is it in the real world?</p>
+        <div class="calib-row">
+          <input type="text" id="calibLength" inputmode="decimal" placeholder="e.g. 6000 or 6.5" autocomplete="off" />
+          <select id="calibUnit" aria-label="Unit">
+            <option value="mm">mm</option>
+            <option value="cm">cm</option>
+            <option value="m" selected>m</option>
+            <option value="in">in</option>
+            <option value="ft">ft</option>
+          </select>
+        </div>
+        <select id="calibPreset" aria-label="Standard scale presets"></select>
+        <label class="chk-wide" style="display:flex;align-items:center;gap:8px;margin:0 0 14px;color:var(--text-dim);cursor:pointer;font-size:12.5px;">
+          <input type="checkbox" id="calibAllPages" checked style="accent-color:#2dd4bf;" />
+          Apply this scale to every page in the set
+        </label>
+        <div class="modal-actions">
+          <button class="btn" id="calibCancel">Cancel</button>
+          <button class="btn primary" id="calibApply">Apply scale</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AEO content: the plain answer, how-to, FAQ -->
+    <section id="seo">
+      <div class="wrap">
+        <h2>What is pdf2takeoff?</h2>
+        <p class="lead">
+          pdf2takeoff is a free, open-source tool that turns construction PDF drawings into measured
+          quantities. Calibrate the scale from any printed dimension, measure lengths, areas and
+          counts, then export the list to Excel or save it back into the PDF. It runs entirely in
+          your browser, so drawings are never uploaded.
+        </p>
+        <div class="fact-strip">
+          <span>Free, no account</span>
+          <span>Files never uploaded</span>
+          <span>Open source · Apache-2.0</span>
+          <span>Metric &amp; imperial</span>
+          <span>Markups open in Bluebeam &amp; Acrobat</span>
+        </div>
+
+        <h2>How to do a takeoff from a PDF, free</h2>
+        <ol>
+          <li><strong>Open the drawing.</strong> Drag any PDF into the window. Rendering happens on your machine; nothing is sent to a server.</li>
+          <li><strong>Calibrate the scale.</strong> Click both ends of a printed dimension, type its real length, or pick a standard scale like 1:100 or 1/4&Prime; = 1&prime;-0&Prime;.</li>
+          <li><strong>Measure.</strong> Trace wall runs with the Length tool, outline rooms and slabs with Area, and click Count for fixtures, columns and sockets. Each page keeps its own scale.</li>
+          <li><strong>Export quantities.</strong> The markups list groups by label with running totals. Copy it into Excel or download the CSV.</li>
+          <li><strong>Save into the PDF.</strong> Markups are written as standard PDF annotations, so the annotated file opens cleanly in Bluebeam Revu, Adobe Acrobat and every other PDF app.</li>
+        </ol>
+
+        <h2>Why open source?</h2>
+        <p>
+          Estimators shouldn't need a per-seat licence to count light fixtures. An open core means
+          builders and developers can add trade-specific tools (HVAC, rebar, electrical) and AI
+          takeoff helpers without asking permission. The roadmap includes revision overlay compare,
+          live multi-user sessions, and a plugin API for auto-counting.
+        </p>
+
+        <h2>Frequently asked questions</h2>
+        <details>
+          <summary>Is it really free? What's the catch?</summary>
+          <p>There is no catch and no paid tier. The project is Apache-2.0 licensed open source; hosting is a static page, so there is nothing to meter.</p>
+        </details>
+        <details>
+          <summary>Are my drawings private?</summary>
+          <p>Yes. The tool is a static web page: your browser renders the PDF and computes every measurement locally. Tender documents never leave your machine.</p>
+        </details>
+        <details>
+          <summary>Will my markups show up in Bluebeam Revu?</summary>
+          <p>Yes, that's the point. Measurements are saved as standard Line, PolyLine, Polygon and FreeText annotations with values in the comments, so they appear in Bluebeam's markups list and can be exported from there to Excel as usual.</p>
+        </details>
+        <details>
+          <summary>What can't it do yet?</summary>
+          <p>Live multi-user sessions and ML detection for cluttered sheets are on the roadmap. Today it covers calibrated measurement of lengths, areas and counts, CSV export, annotation round-tripping, revision <a href="/compare-drawing-revisions">overlay compare</a>, and a click-to-teach <strong>Scan</strong> that auto-counts repeated symbols locally in about a tenth of a second.</p>
+        </details>
+        <details>
+          <summary>Does it work offline?</summary>
+          <p>Once the page has loaded, no network access is needed. You can keep working through an outage.</p>
+        </details>
+
+        <footer>
+          pdf2takeoff is an open-source project (Apache-2.0). Source code and issues live on GitHub;
+          contributions and trade-specific ideas are welcome. Also see
+          <a href="/compare-drawing-revisions">compare drawing revisions, free</a> and
+          <a href="/count-symbols-in-pdf-drawing">count symbols in a PDF drawing automatically</a>.
+        </footer>
+      </div>
+    </section>
+  </body>
+</html>

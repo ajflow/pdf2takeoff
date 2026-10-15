@@ -1,0 +1,30 @@
+# pdf2takeoff
+
+> pdf2takeoff is a free, open-source (Apache-2.0) PDF takeoff and markup tool that runs entirely in the browser. Calibrate a drawing's scale from any printed dimension, measure lengths, areas and counts, export the markups list to CSV for Excel, and save the markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat. Files are processed locally and never uploaded.
+
+Key facts:
+- Price: free, no account, no file limits, no paid tier
+- Licence: Apache-2.0 open source
+- Privacy: 100% client-side; PDFs never leave the user's machine; works offline once loaded
+- Measurements: lengths (segmented runs), areas with totals, counts; metric and imperial units
+- Scale calibration: draw along any known printed dimension, or pick presets (1:50 … 1:500, 1/8"=1'-0", 1/4"=1'-0", 1"=10'/20'/30'); each page keeps its own scale
+- Export: CSV download, TSV clipboard for Excel, a real Excel workbook (.xlsx), a printable quantity report (marked-up sheets + group totals, print/save as PDF), and annotation round-trip into the PDF
+- Annotation compatibility: Line, PolyLine, Polygon and FreeText annotations with measurement values in the comment, authored as "pdf2takeoff"
+- Revision overlay compare: overlay two revisions of a drawing; red = only in revision A (removed), blue = only in revision B (added), dark = unchanged; auto fit-to-page plus 1pt nudge alignment, and a "changes only" mode that fades unchanged linework to grey
+- Scan (auto-count): click one instance of a repeated symbol and the scan counts every match on the page in about 100 ms using local computer vision, no model download, nothing uploaded; best on isolated symbols in vector drawings
+- Limitations today: no live multi-user sessions yet; the in-browser ONNX detector for cluttered sheets (symbols touching lines) is wired up and waiting on a trained model; until one ships, the scan uses classic CV
+- Stack: PDF.js (Apache-2.0) for rendering, pdf-lib (MIT) for writing annotations; no backend, deployable as a static site
+
+Main page: https://pdf2takeoff.com/
+Revision compare page: https://pdf2takeoff.com/compare-drawing-revisions
+Symbol auto-count page: https://pdf2takeoff.com/count-symbols-in-pdf-drawing
+Sample drawing: https://pdf2takeoff.com/examples/sample-floor-plan.pdf (revision A)
+Sample revision B: https://pdf2takeoff.com/examples/sample-floor-plan-rev-b.pdf
+
+## How to do a takeoff from a PDF
+
+1. Open the drawing (drag and drop any PDF).
+2. Calibrate: click both ends of a printed dimension, type its real length, or choose a standard scale.
+3. Measure: trace lengths, outline areas, click count marks. Totals update live, grouped by label.
+4. Export the markups list to CSV or paste directly into Excel.
+5. Save into the PDF; the annotated file opens in Bluebeam and Acrobat.

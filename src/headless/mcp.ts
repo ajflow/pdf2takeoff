@@ -18,7 +18,8 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, compareDocs } from './ops.ts';
+import { readMarkups, scanDocAt, compareDocs, compareFolders } from './ops.ts';
+import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
@@ -310,13 +311,19 @@ export async function runMcpServer(): Promise<void> {
     'compare_revisions',
     {
       description:
-        'Compare two revisions of a drawing set (file paths): per-sheet change fraction, changed regions in PDF points, and which sheets changed. Red-family regions exist only in A (removed), blue-family only in B (added).',
+        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added).',
       inputSchema: {
-        a: z.string().describe('path to the older revision'),
-        b: z.string().describe('path to the newer revision'),
+        a: z.string().describe('path to the older revision (file or folder)'),
+        b: z.string().describe('path to the newer revision (file or folder)'),
       },
     },
     async ({ a, b }) => {
+      const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+      if (isDir(a) || isDir(b)) {
+        if (!isDir(a) || !isDir(b)) throw new Error('folder comparison needs two folders');
+        const result = await compareFolders(a, b);
+        return text(result);
+      }
       const docA = await openPdf(new Uint8Array(readFileSync(a)));
       const docB = await openPdf(new Uint8Array(readFileSync(b)));
       const result = await compareDocs(docA, docB);

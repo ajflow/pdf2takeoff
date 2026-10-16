@@ -81,7 +81,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Overlay compare | Core | ✅ | Red = removed, blue = added, dark = unchanged |
 | Changes-only fade | — | ✅ | Greys everything unchanged |
 | Alignment nudge & auto-fit | Complete (Auto-Align) | ✅ | 1 pt nudge + fit; full auto-align planned |
-| Batch compare across sets | Complete | 🔜 | Next feature up — lands in engine, UI and CLI at once |
+| Batch compare across sets | Complete | ✅ | CLI + MCP: two folders, sheets paired by filename, added/removed listed, per-pair overlays (interactive UI compare stays single-sheet for now) |
 | Quantity diff between revisions | — | 🔜 | Headless H4; nobody in this space ships it |
 | Sets / slip-sheeting | Revu Sets | 🔜 | Revision grouping by sheet number |
 

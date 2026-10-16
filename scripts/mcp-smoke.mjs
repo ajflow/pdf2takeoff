@@ -4,7 +4,7 @@
 // export → save → compare. Exits non-zero on the first failed step.
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, mkdirSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -150,6 +150,22 @@ check(
 
 const compared = textOf(await call('compare_revisions', { a: sample, b: revB }));
 check('compare_revisions: both sheets changed', JSON.stringify(compared.changedSheets) === '[1,2]');
+
+// folder mode: batch compare across two revision directories
+const dirA = '/tmp/mcp-revA';
+const dirB = '/tmp/mcp-revB';
+mkdirSync(dirA, { recursive: true });
+mkdirSync(dirB, { recursive: true });
+copyFileSync(sample, join(dirA, 'A-101.pdf'));
+copyFileSync(revB, join(dirB, 'A-101.pdf')); // changed
+copyFileSync(sample, join(dirA, 'A-102.pdf'));
+copyFileSync(sample, join(dirB, 'A-102.pdf')); // unchanged
+const folderCompare = textOf(await call('compare_revisions', { a: dirA, b: dirB }));
+check(
+  'compare_revisions (folders): 1 changed of 2 pairs',
+  folderCompare.totals.pairs === 2 && folderCompare.totals.changed === 1 && folderCompare.totals.unchanged === 1,
+  JSON.stringify(folderCompare.totals),
+);
 
 proc.kill();
 console.log('\nMCP smoke test: all steps passed');

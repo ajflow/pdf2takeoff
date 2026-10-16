@@ -1,10 +1,12 @@
 // Document operations shared by the CLI and the MCP server: one code path
 // for scanning, comparing and annotation reading, whatever drives it.
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
+import { openPdf } from './pdfjs-node.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { cvScan } from '../engine/scan-cv.ts';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
@@ -110,5 +112,100 @@ export async function compareDocs(
       onlyInB: docB.numPages > pairs ? docB.numPages - pairs : 0,
     },
     sheets,
+  };
+}
+
+// --- batch compare across folders ---
+
+function listPdfs(dir: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string) => {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.toLowerCase().endsWith('.pdf')) out.push(full);
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+export interface FolderPairResult {
+  sheet: string; // basename
+  aPages: number;
+  bPages: number;
+  changedSheets: number[];
+  summary: { changed: number; unchanged: number; onlyInA: number; onlyInB: number };
+}
+
+export interface FolderCompareResult {
+  a: string;
+  b: string;
+  pairs: FolderPairResult[];
+  addedInB: string[]; // sheets only in the newer set
+  removedFromA: string[]; // sheets only in the older set
+  totals: { pairs: number; changed: number; unchanged: number };
+  notes: string[];
+}
+
+/** Recursively pair PDFs across two revision folders by filename and diff every pair. */
+export async function compareFolders(
+  dirA: string,
+  dirB: string,
+  opts: { pngDir?: string; threshold?: number } = {},
+): Promise<FolderCompareResult> {
+  const byBase = (dir: string) => {
+    const map = new Map<string, string[]>();
+    for (const f of listPdfs(dir)) {
+      const key = basename(f);
+      map.set(key, [...(map.get(key) ?? []), f]);
+    }
+    return map;
+  };
+  const a = byBase(dirA);
+  const b = byBase(dirB);
+  const notes: string[] = [];
+  for (const [side, map] of [
+    ['a', a],
+    ['b', b],
+  ] as const) {
+    for (const [key, files] of map) {
+      if (files.length > 1) notes.push(`${side}: ${files.length} files share the name "${key}"; using the first (${files[0]})`);
+    }
+  }
+
+  const pairs: FolderPairResult[] = [];
+  let changed = 0;
+  let unchanged = 0;
+  for (const sheet of [...new Set([...a.keys(), ...b.keys()])].sort()) {
+    const fa = a.get(sheet)?.[0];
+    const fb = b.get(sheet)?.[0];
+    if (fa && !fb) continue; // handled by removedFromA below
+    if (!fa && fb) continue;
+    const docA = await openPdf(new Uint8Array(readFileSync(fa!)));
+    const docB = await openPdf(new Uint8Array(readFileSync(fb!)));
+    const result = await compareDocs(docA, docB, {
+      threshold: opts.threshold,
+      ...(opts.pngDir ? { png: join(opts.pngDir, `${sheet.replace(/\.pdf$/i, '')}-overlay.png`) } : {}),
+    });
+    pairs.push({
+      sheet,
+      aPages: docA.numPages,
+      bPages: docB.numPages,
+      changedSheets: result.changedSheets,
+      summary: result.summary,
+    });
+    if (result.summary.changed > 0) changed++;
+    else unchanged++;
+  }
+
+  return {
+    a: dirA,
+    b: dirB,
+    pairs,
+    addedInB: [...b.keys()].filter((k) => !a.has(k)).sort(),
+    removedFromA: [...a.keys()].filter((k) => !b.has(k)).sort(),
+    totals: { pairs: pairs.length, changed, unchanged },
+    notes,
   };
 }

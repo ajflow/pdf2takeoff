@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, compareDocs } from './ops.ts';
+import { readMarkups, scanDocAt, compareDocs, compareFolders } from './ops.ts';
+import { statSync, mkdirSync } from 'node:fs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
@@ -19,9 +20,12 @@ const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 Usage:
   pdf2takeoff info <file.pdf>
       Pages, page sizes, and annotation counts as JSON.
-  pdf2takeoff compare <a.pdf> <b.pdf> [--png out.png] [--threshold 24]
-      Per-sheet change fractions and changed regions; --png writes the
-      colour-blend overlay of the first changed sheet.
+  pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
+      Two PDFs: per-sheet change fractions and changed regions.
+      Two folders: batch compare — sheets paired by filename across the
+      revision sets, with added/removed sheets listed. --png writes the
+      overlay of the first changed sheet; --png-dir (folder mode) writes
+      an overlay per changed pair.
   pdf2takeoff scan <file.pdf> --page N --at x,y
       Click-point auto-count (tier-1 CV): every match on the page as JSON.
       --at is in PDF points; run "info" first to see page sizes.
@@ -91,7 +95,16 @@ async function cmdScan(file: string, pageArg: string, atArg: string): Promise<un
   };
 }
 
-async function cmdCompare(fileA: string, fileB: string, png: string | undefined, threshold: number): Promise<unknown> {
+async function cmdCompare(fileA: string, fileB: string, png: string | undefined, pngDir: string | undefined, threshold: number): Promise<unknown> {
+  // directory pair -> batch compare across the two revision folders
+  const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+  if (isDir(fileA) || isDir(fileB)) {
+    if (!isDir(fileA) || !isDir(fileB)) {
+      throw new Error('folder compare needs two directories (got one file, one folder)');
+    }
+    if (pngDir) mkdirSync(pngDir, { recursive: true });
+    return await compareFolders(fileA, fileB, { pngDir, threshold });
+  }
   const docA = await openPdf(readPdf(fileA));
   const docB = await openPdf(readPdf(fileB));
   const result = await compareDocs(docA, docB, { png, threshold });
@@ -202,12 +215,14 @@ export async function run(argv: string[]): Promise<void> {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { png: { type: 'string' }, threshold: { type: 'string', default: '24' } },
+        options: { png: { type: 'string' }, 'png-dir': { type: 'string' }, threshold: { type: 'string', default: '24' } },
       });
-      if (positionals.length !== 2) throw new Error('usage: pdf2takeoff compare <a.pdf> <b.pdf> [--png out.png]');
+      if (positionals.length !== 2) throw new Error('usage: pdf2takeoff compare <a> <b> (files or folders) [--png out.png] [--png-dir out/]');
       const threshold = parseFloat(values.threshold);
       if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 255) throw new Error('--threshold must be 1..255');
-      process.stdout.write(JSON.stringify(await cmdCompare(positionals[0], positionals[1], values.png, threshold), null, 2) + '\n');
+      process.stdout.write(
+        JSON.stringify(await cmdCompare(positionals[0], positionals[1], values.png, values['png-dir'], threshold), null, 2) + '\n',
+      );
       return;
     }
     if (cmd === 'export') {

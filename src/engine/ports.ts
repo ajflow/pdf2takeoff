@@ -12,7 +12,7 @@
 //   • RasterPage.toPdf/toRaster are the only place the two meet, so hosts
 //     with page rotation keep exact fidelity by delegating to their renderer.
 
-import type { Pt } from './types';
+import type { Pt } from './types.ts';
 
 /** Raster scale (px per PDF point) both scan tiers render at. */
 export const RASTER_SCALE = 3;

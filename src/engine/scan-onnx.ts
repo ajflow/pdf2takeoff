@@ -8,8 +8,8 @@
 // runs page-wide, then keeps only the class of the detection nearest the
 // click, so a click on a downlight returns every downlight, pre-labelled.
 
-import type { Pt, ScanHit, ScanResult } from './types';
-import type { DetectorSession, RasterPage } from './ports';
+import type { Pt, ScanHit, ScanResult } from './types.ts';
+import type { DetectorSession, RasterPage } from './ports.ts';
 
 const MAX_DET = 500;
 

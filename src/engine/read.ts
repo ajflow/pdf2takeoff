@@ -3,8 +3,8 @@
 // renderer); this parser is tolerant of the str-or-string / typed-array
 // shapes PDF libraries hand back, and returns plain Markups.
 
-import type { Markup } from './types';
-import { ANNOTATION_AUTHOR } from './annotate';
+import type { Markup } from './types.ts';
+import { ANNOTATION_AUTHOR } from './annotate.ts';
 
 /** A renderer's annotation object, accessed structurally. */
 export type AnnotationLike = Record<string, unknown> & { subtype?: string };

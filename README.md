@@ -45,6 +45,23 @@ npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 
+## Headless CLI (agents & scripts)
+
+The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, no
+network calls:
+
+```bash
+npm run cli -- info drawing.pdf                      # pages, sizes, annotation counts
+npm run cli -- compare r2.pdf r3.pdf --png diff.png  # per-sheet change fractions + regions
+npm run cli -- scan drawing.pdf --page 1 --at 88,271 # click-point auto-count, JSON hits
+npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantities CSV
+npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
+```
+
+`compare --json` is designed for pipelines (`jq '.changedSheets'`); `scan`
+returns the same hits the web Scan tool finds. This is the substrate for the
+agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
+
 ## Architecture
 
 - **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and, upcoming, headless in Node (CLI + MCP — see [specs/headless-engine.md](specs/headless-engine.md)).

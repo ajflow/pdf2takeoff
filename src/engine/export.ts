@@ -2,10 +2,10 @@
 // Everything here is pure data transformation; hosts add file delivery.
 
 import * as XLSX from 'xlsx';
-import type { Calibration, Markup, MarkupType } from './types';
-import type { DisplayUnit } from './units';
-import { markupLength, markupArea } from './geometry';
-import { formatLength, formatArea } from './units';
+import type { Calibration, Markup, MarkupType } from './types.ts';
+import type { DisplayUnit } from './units.ts';
+import { markupLength, markupArea } from './geometry.ts';
+import { formatLength, formatArea } from './units.ts';
 
 export interface TakeoffData {
   markups: Markup[];

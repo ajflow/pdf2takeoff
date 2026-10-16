@@ -5,10 +5,10 @@
 // falls back to tier 1 in the same call, so scanning never hard-fails
 // because of a missing or broken model.
 
-import type { Pt, ScanResult } from './types';
-import { RASTER_SCALE, type ScanDeps } from './ports';
-import { cvScan } from './scan-cv';
-import { detectorScan } from './scan-onnx';
+import type { Pt, ScanResult } from './types.ts';
+import { RASTER_SCALE, type ScanDeps } from './ports.ts';
+import { cvScan } from './scan-cv.ts';
+import { detectorScan } from './scan-onnx.ts';
 
 export async function scanForSimilar(pageNum: number, clicked: Pt, deps: ScanDeps): Promise<ScanResult> {
   const detector = await deps.detector();

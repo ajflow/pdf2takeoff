@@ -3,9 +3,9 @@
 // Pure pdf-lib: bytes in, bytes out — works identically in any host.
 
 import { PDFDocument, PDFName, PDFString, type PDFObject } from 'pdf-lib';
-import type { Calibration, Markup, Pt } from './types';
-import { markupLength, markupArea } from './geometry';
-import { formatLength, formatArea, type DisplayUnit } from './units';
+import type { Calibration, Markup, Pt } from './types.ts';
+import { markupLength, markupArea } from './geometry.ts';
+import { formatLength, formatArea, type DisplayUnit } from './units.ts';
 
 export const ANNOTATION_AUTHOR = 'pdf2takeoff';
 

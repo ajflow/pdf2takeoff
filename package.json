@@ -1,12 +1,19 @@
 {
   "name": "pdf2takeoff",
   "version": "0.1.0",
-  "description": "Free, open-source PDF takeoff and markup tool that runs entirely in your browser. PDF in, quantities out \u2014 files never leave your machine.",
+  "description": "Free, open-source PDF takeoff and markup tool that runs entirely in your browser. PDF in, quantities out — files never leave your machine.",
   "type": "module",
+  "bin": {
+    "pdf2takeoff": "bin/pdf2takeoff.js"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
   "scripts": {
     "dev": "vite",
     "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs",
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
+    "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",
     "sample": "node scripts/make-sample.mjs",
     "soak": "node scripts/make-soak.mjs"
@@ -26,12 +33,15 @@
     "url": "https://github.com/ajflow/pdf2takeoff"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.11",
+    "js-yaml": "^5.5.0",
     "onnxruntime-web": "^1.30.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.149",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "typescript": "^5.9.3",
     "vite": "^7.1.9"
   }

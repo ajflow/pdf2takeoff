@@ -1,7 +1,7 @@
 // Measurement geometry over markup points. Points arrive in PDF user space
 // (points, origin bottom-left); all returned lengths/areas are metric.
 
-import type { Markup, MarkupType, Pt } from './types';
+import type { Markup, MarkupType, Pt } from './types.ts';
 
 /** Length of a markup's geometry in metres. */
 export function markupLength(m: Markup, metersPerPt: number): number {

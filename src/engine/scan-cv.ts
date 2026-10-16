@@ -6,9 +6,9 @@
 // alone. Tier 2 (scan-onnx.ts) is a trained detector that slots in behind
 // the same ScanResult interface; scan.ts picks whichever is available.
 
-import type { Pt } from './types';
-import type { RasterPage } from './ports';
-import type { ScanResult } from './types';
+import type { Pt } from './types.ts';
+import type { RasterPage } from './ports.ts';
+import type { ScanResult } from './types.ts';
 
 const SIG = 20; // signature grid
 const MIN_COMPONENT_PX = 12;

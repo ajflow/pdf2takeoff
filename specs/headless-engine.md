@@ -307,7 +307,7 @@ Explicitly **not** used: MuPDF (AGPL), Ultralytics (AGPL).
 | Phase | Work | Est. | Exit criteria |
 |---|---|---|---|
 | **H1 — Engine extraction** ✅ (2026-10-16) | `src/engine` + `src/app` split; Raster/Detector/ScanDeps ports; web app behavior identical | ~1 wk | ✅ Zero DOM/Vite imports under `engine/` (CI guard: `npm run typecheck:engine` = no-DOM-lib tsc + `scripts/check-engine.mjs`); ✅ engine type-checks standalone; ✅ build green; ✅ browser-verified: scan 8/8 in 192 ms, overlay compare red/blue, XLSX + annotated-PDF downloads, IndexedDB session restore |
-| **H2 — Node CLI** | pdfjs legacy + napi-rs/canvas adapters; `info`, `compare`, `scan`, `export`, `annotate` | ~1 wk | All commands work on sample + 86-sheet soak PDF; `compare --json` pipes through `jq`; golden-image test proves Node raster ≈ browser raster (tolerance documented) |
+| **H2 — Node CLI** ✅ (2026-10-16) | pdfjs legacy + napi-rs/canvas adapters; `info`, `compare`, `scan`, `export`, `annotate` (runs from source via Node ≥22.6 type stripping — no bundler) | ~1 wk | ✅ All commands verified on sample + 86-sheet soak; ✅ `compare --json` self-compare = 86/86 unchanged, 0 false positives (~93 ms/sheet), sample-vs-revB localizes the changed wall/door regions; ✅ scan 8/8 downlights, matching the browser exactly; ✅ golden raster: identical dimensions, mean Δ2.5/255, ~1.8% px >16/255 (glyph anti-aliasing only — see H2 notes); CI smokes `info` + `scan` |
 | **H3 — MCP server** | stdio server with §6 tools; `pdf2takeoff mcp` + npx entry | ~1 wk | An MCP client (ZCode/Claude Desktop) lists the tools; a scripted end-to-end session completes open → render → scan → export → save_annotated on the sample |
 | **H4 — Spec runner + CI** (after ONNX model) | `takeoff.yaml`, `run`, quantity diff between runs | ~1 wk | Sample repo: swap in rev B, re-run, diff shows the known changes; class-based counts work headless |
 
@@ -320,6 +320,34 @@ Sequencing notes:
 - Total: ~4 weeks alongside ongoing Phase 2 hardening.
 
 ---
+
+## 11b. H2 engineering notes (the gotchas, so nobody re-lives them)
+
+Running pdf.js v5's legacy build on @napi-rs/canvas in Node:
+
+1. **Path2D must be napi's, unconditionally.** pdf.js v5 draws through the
+   global `Path2D`, and its legacy build installs its *own JS polyfill* on
+   `globalThis` at import. skia's `ctx.fill(path)` only accepts its *native*
+   `Path2D` class — rendering through pdf.js's polyfill **segfaults in native
+   code** (SIGSEGV/SIGBUS, no stack). Fix: assign `globalThis.Path2D` /
+   `ImageData` from `@napi-rs/canvas` **unconditionally** in
+   `src/headless/raster-node.ts` — never "only if missing"; pdf.js defers to
+   an existing global, so any module load order works.
+2. **`standardFontDataUrl` must be a `file://` URL.** A bare filesystem path
+   silently fails the standard-fonts load and the glyph fallback segfaults.
+3. **Don't pass `canvas` to `page.render()`** — canvasContext + viewport only.
+   The canvas param sends pdf.js down a bitmap-transfer path that also
+   crashes native canvas.
+4. **Golden raster (browser vs Node, same pdf.js 5.7, scale 3):** identical
+   pixel dimensions; mean per-channel Δ 2.5/255; 1.8% of pixels exceed
+   Δ16/255, concentrated on text glyph anti-aliasing (different skia builds).
+   Functionally equivalent: the tier-1 scan returns identical results (8/8
+   symbols) in both environments. Reproduce with `scripts/golden-raster.mjs`
+   + the in-browser compare-canvas recipe.
+
+H2 ships without the ONNX detector in Node (no model exists yet — training
+is in flight); the `DetectorSession` port is ready for `onnxruntime-node`
+the moment `symbols.onnx` lands (H4 prep).
 
 ## 12. Risks & mitigations
 

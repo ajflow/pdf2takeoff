@@ -6,6 +6,8 @@ import { eventToView, viewToPdf, isTypingTarget } from './viewer';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
+import { ocrPage } from './ocr';
+import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
 import { scanDeps } from './adapters';
 import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from '../engine/units';
 
@@ -85,6 +87,8 @@ export function initTools(overlay: SVGSVGElement): void {
   calibInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') applyCalibration();
   });
+  document.getElementById('ocrReadBtn')?.addEventListener('click', () => void runOcrRead());
+
   calibPresetSel.addEventListener('change', () => {
     const ratio = parseFloat(calibPresetSel.value);
     if (!Number.isFinite(ratio) || ratio <= 0) return;
@@ -388,6 +392,44 @@ function applyDepth(): void {
   draft = [];
   setTool('pan');
   hint('Volume added · switch units any time in the toolbar');
+}
+
+/** OCR the sheet and either apply a title-block ratio or pre-fill the clicked dimension's value. */
+async function runOcrRead(): Promise<void> {
+  const btn = document.getElementById('ocrReadBtn') as HTMLButtonElement;
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Reading… (first run fetches the OCR pack)';
+  try {
+    const words = await ocrPage(state.pageNum);
+    const scaleHit = findScaleRatio(words);
+
+    // with a clicked dimension, its printed label is the most direct answer
+    if (pendingCalib) {
+      const dim = nearestDimensionValue(words, pendingCalib.a, pendingCalib.b);
+      if (dim) {
+        calibInput.value = String(dim.value);
+        calibUnitSel.value = dim.unit;
+        calibInput.classList.remove('invalid');
+        hint(`Read "${dim.text}" next to your dimension — check it, then Apply scale`);
+        return;
+      }
+    }
+    if (scaleHit) {
+      applyScaleToPages(metersPerPtForRatio(scaleHit.ratio), `${scaleHit.source} (sheet)`);
+      closeCalibModal();
+      renderMarkups();
+      emit();
+      hint(`Scale 1:${scaleHit.ratio} read from the sheet · press L to measure`);
+      return;
+    }
+    hint('Could not read a scale or dimension from this sheet — type the length manually');
+  } catch {
+    hint('OCR failed — the first run needs internet to fetch the language pack');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
 }
 
 function applyCalibration(): void {

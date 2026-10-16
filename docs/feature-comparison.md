@@ -91,7 +91,7 @@ pdf2takeoff runs in any modern browser on any OS.
 |---|---|---|---|
 | Combine & split PDFs | Basics | 🔜 | pdf-lib |
 | Rotate / extract pages | Basics | 🔜 | |
-| OCR | Complete | 🔜 | Tesseract.js (Apache-2.0); auto-read scales & title blocks |
+| OCR | Complete | ✅ | Tesseract.js: reads the printed dimension you clicked or the title-block scale ("1:100") straight into the calibration |
 | Bookmarks & TOC | Basics | ➖ | Low takeoff value |
 | Headers, footers, page labels | Basics | ➖ | |
 

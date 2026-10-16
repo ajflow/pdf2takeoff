@@ -101,7 +101,7 @@ pdf2takeoff runs in any modern browser on any OS.
 |---|---|---|---|
 | Runs in any browser, any OS | Companion web tier | ⭐ | Revu desktop is Windows-only |
 | Offline use | Mobile tier | ⭐ | Works offline once loaded; drawings never leave the machine |
-| Real-time multi-user sessions | Core (Studio Sessions) | 🔜 | Yjs CRDT + WebRTC (roadmap phase 4) |
+| Real-time multi-user sessions | Core (Studio Sessions) | ✅ | Experimental: same-machine live sync (Live toggle) — placements, deletions, calibrations, presence; cross-machine relay + edit propagation are next |
 | Mobile app | — | ➖ | The browser app serves tablets |
 | Cloud project hosting | Core (Studio Projects) | ➖ | Local-first by design |
 

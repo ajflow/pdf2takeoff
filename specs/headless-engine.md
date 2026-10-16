@@ -388,10 +388,9 @@ the moment `symbols.onnx` lands (H4 prep).
 
 Shipped: Yjs CRDT over BroadcastChannel per file-hash channel. Verified
 syncing both directions: placements, deletions, clear, calibrations,
-presence + bye. Known issue: EDITS to existing markups (rename, status,
-drag — i.e. Y.Map value replacements) apply to the remote doc (recv/
-apply/observe all fire, verified by counters) but the rebuilt state
-reads the pre-edit value — reproduces in neither isolated Node (same
-yjs version, same pattern) nor in-tab; suspected in the bundled build's
-update encoding for value replaces. Next session: root-cause that, then
-4b = Cloudflare Durable Object relay for cross-machine sessions.
+presence + bye. RESOLVED: the JSON-leaf model + observeDeep fixed edit
+propagation; final verification failed earlier only because the test
+tabs were running stale HMR module generations. Verified clean both
+directions: rename, status, drag-class edits, place, delete, clear,
+calibration, presence. Remaining for 4b: Cloudflare Durable Object
+relay for cross-machine sessions.

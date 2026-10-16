@@ -10,8 +10,8 @@ import {
   toDelimited,
   xlsxBytes,
 } from '../engine/export';
-import { defaultLabel, markupLength, markupArea } from '../engine/geometry';
-import { formatLength, formatArea } from '../engine/units';
+import { defaultLabel, markupLength, markupArea, markupPerimeter, markupVolume } from '../engine/geometry';
+import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 
 let tbody: HTMLElement;
@@ -96,12 +96,18 @@ function renderTotals(): void {
     let text: string;
     if (g.type === 'count') {
       text = `${g.items.length} ×`;
+    } else if (g.type === 'angle') {
+      text = '—'; // angles don't sum
     } else if (cal) {
-      const total = g.items.reduce(
-        (s, m) => s + (g.type === 'length' ? markupLength(m, cal.metersPerPt) : markupArea(m, cal.metersPerPt)),
-        0,
-      );
-      text = g.type === 'length' ? formatLength(total, state.displayUnit) : formatArea(total, state.displayUnit);
+      const total = g.items.reduce((s, m) => {
+        if (g.type === 'length') return s + markupLength(m, cal.metersPerPt);
+        if (g.type === 'perimeter') return s + markupPerimeter(m, cal.metersPerPt);
+        if (g.type === 'volume') return s + markupVolume(m, cal.metersPerPt);
+        return s + markupArea(m, cal.metersPerPt);
+      }, 0);
+      if (g.type === 'length' || g.type === 'perimeter') text = formatLength(total, state.displayUnit);
+      else if (g.type === 'volume') text = formatVolume(total, state.displayUnit);
+      else text = formatArea(total, state.displayUnit);
     } else {
       text = 'not calibrated';
     }

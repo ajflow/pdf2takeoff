@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs",
+    "build": "npm run typecheck:engine && tsc --noEmit && vite build",
     "preview": "vite preview",
     "sample": "node scripts/make-sample.mjs",
     "soak": "node scripts/make-soak.mjs"

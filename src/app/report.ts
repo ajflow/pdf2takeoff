@@ -4,11 +4,10 @@
 // save-as-PDF via the browser — the report is the deliverable estimators
 // attach to a tender or a review email.
 
-import { state, type Markup, type Pt, markupLength, markupArea, calibrationFor } from './state';
+import { state, type Markup, type Pt, calibrationFor, takeoffData } from './state';
 import { getPdfDoc } from './viewer';
 import { COLORS, countNumberFor } from './render';
-import { formatLength, formatArea } from './units';
-import { buildMatrix } from './table';
+import { buildMatrix, formatMarkupValue } from '../engine/export';
 
 const MAX_LONG_EDGE_PX = 1400;
 
@@ -203,12 +202,7 @@ function labelText(m: Markup): string {
 }
 
 function displayValue(m: Markup): string {
-  const cal = calibrationFor(m.page);
-  if (!cal) return '';
-  if (m.type === 'count') return '1';
-  return m.type === 'length'
-    ? formatLength(markupLength(m, cal.metersPerPt), state.displayUnit)
-    : formatArea(markupArea(m, cal.metersPerPt), state.displayUnit);
+  return formatMarkupValue(m, calibrationFor(m.page), state.displayUnit);
 }
 
 function centroid(pts: Pt[]): Pt {
@@ -222,7 +216,7 @@ function centroid(pts: Pt[]): Pt {
 }
 
 function totalsTable(): string {
-  const matrix = buildMatrix();
+  const matrix = buildMatrix(takeoffData());
   const groupStart = matrix.findIndex((r) => r[0] === 'Group');
   const groups = groupStart >= 0 ? matrix.slice(groupStart + 1) : [];
   const rows = groups

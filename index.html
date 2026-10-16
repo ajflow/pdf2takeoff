@@ -18,7 +18,7 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://pdf2takeoff.com/" />
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/app/main.ts"></script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -236,15 +236,38 @@
         <div id="dropzone">
           <span class="badge"><i class="dot"></i> Free &amp; open source · runs in your browser</span>
           <h1>Turn any PDF drawing into <em>measured quantities</em></h1>
-          <p class="sub">
-            Calibrate the scale, measure lengths, areas and counts, and export the markups list to
-            CSV, or save it back into the PDF so it opens in Bluebeam and Acrobat.
-          </p>
-          <div class="hero-actions">
-            <button class="btn primary" id="openBtnHero">Open a PDF drawing</button>
-            <button class="btn" id="demoBtnHero">▶ Watch the demo</button>
-            <button class="btn" id="sampleBtnHero">Try the sample drawing</button>
+          <p class="sub">Drop a drawing in. Calibrate, measure, export. Nothing uploads.</p>
+
+          <div class="widget-card">
+            <div class="widget-io">
+              <span class="io-chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> PDF drawing</span>
+              <span class="io-arrow" aria-hidden="true">
+                <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7h22M18 2l5 5-5 5"/></svg>
+              </span>
+              <span class="io-chip out">Quantities</span>
+            </div>
+            <div class="widget-drop">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              <p class="drop-title">Drop your drawing here</p>
+              <p class="drop-hint">lengths · areas · fixture counts · revision compare</p>
+              <div class="hero-actions">
+                <button class="btn primary" id="openBtnHero">Select File</button>
+                <button class="btn" id="sampleBtnHero">Try the sample drawing</button>
+              </div>
+            </div>
+            <div class="widget-foot">
+              <span>Output: calibrated takeoff</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span>CSV</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span>Excel</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <span>PDF markups</span>
+              <span class="spacer"></span>
+              <button class="linklike" id="demoBtnHero">▶ Watch the demo</button>
+            </div>
           </div>
+
           <div class="privacy-note">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
             Files never leave your machine · open source · no account, ever

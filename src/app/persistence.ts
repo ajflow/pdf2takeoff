@@ -3,6 +3,7 @@
 // itself is never stored or uploaded anywhere.
 
 import { state, type Markup, type Calibration } from './state';
+import { fileHash } from '../engine/export';
 
 const DB_NAME = 'pdf2takeoff-sessions';
 const STORE = 'sessions';
@@ -23,17 +24,6 @@ function openDb(): Promise<IDBDatabase | null> {
     }
   });
   return dbPromise;
-}
-
-/** FNV-1a over a sampled stride of the bytes — fast on 100 MB files. */
-export function fileHash(bytes: Uint8Array): string {
-  let h = 0x811c9dc5;
-  const stride = Math.max(1, Math.floor(bytes.length / 65536));
-  for (let i = 0; i < bytes.length; i += stride) {
-    h ^= bytes[i];
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return `${bytes.length.toString(36)}-${h.toString(36)}`;
 }
 
 interface StoredSession {

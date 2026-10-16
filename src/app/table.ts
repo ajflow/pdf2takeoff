@@ -1,9 +1,17 @@
 // Markups list (right sidebar): rows per measurement, group totals, and
-// CSV / clipboard export.
+// CSV / clipboard / Excel export. Serialization math lives in the engine.
 
-import { state, emit, type Markup, markupLength, markupArea, calibrationFor, defaultLabel } from './state';
-import { formatLength, formatArea } from './units';
-import * as XLSX from 'xlsx';
+import { state, emit, calibrationFor, takeoffData } from './state';
+import {
+  groupsOf,
+  valueParts,
+  formatMarkupValue,
+  buildMatrix,
+  toDelimited,
+  xlsxBytes,
+} from '../engine/export';
+import { defaultLabel, markupLength, markupArea } from '../engine/geometry';
+import { formatLength, formatArea } from '../engine/units';
 import { exportReport } from './report';
 
 let tbody: HTMLElement;
@@ -50,36 +58,6 @@ export function initTable(): void {
   document.getElementById('reportBtn')?.addEventListener('click', () => void exportReport());
 }
 
-interface Group {
-  type: Markup['type'];
-  label: string;
-  items: Markup[];
-}
-
-function groups(): Group[] {
-  const map = new Map<string, Group>();
-  for (const m of state.markups) {
-    const key = `${m.type}|${m.label}`;
-    let g = map.get(key);
-    if (!g) {
-      g = { type: m.type, label: m.label, items: [] };
-      map.set(key, g);
-    }
-    g.items.push(m);
-  }
-  return [...map.values()];
-}
-
-function valueParts(m: Markup): { value: string; unit: string } {
-  const cal = calibrationFor(m.page);
-  const u = state.displayUnit;
-  const base = u === 'ft-in' ? 'ft' : u;
-  if (m.type === 'count') return { value: '1', unit: 'each' };
-  if (!cal) return { value: '', unit: '' };
-  if (m.type === 'length') return { value: String(markupLength(m, cal.metersPerPt)), unit: base };
-  return { value: String(markupArea(m, cal.metersPerPt)), unit: `${base}2` };
-}
-
 export function renderTable(): void {
   tbody.replaceChildren();
   if (state.markups.length === 0) {
@@ -91,33 +69,22 @@ export function renderTable(): void {
     const tr = document.createElement('tr');
     tr.dataset.id = m.id;
     if (m.id === state.selectedId) tr.classList.add('selected');
-    const { value, unit } = valueParts(m);
+    const { value } = valueParts(m, calibrationFor(m.page), state.displayUnit);
     const typeIcon = m.type === 'length' ? '📏' : m.type === 'area' ? '⬡' : '🔢';
     tr.innerHTML = `
       <td class="cell-label"><input data-label-for="${m.id}" value="${escapeAttr(m.label)}" title="Rename" /></td>
       <td class="cell-type"><span class="tag tag-${m.type}">${typeIcon} ${m.type}</span></td>
       <td class="cell-num">p${m.page}</td>
-      <td class="cell-measure">${value ? `${escapeHtml(displayValue(m))}` : '<span class="warn">not calibrated</span>'}</td>
+      <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationFor(m.page), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
       <td class="cell-del"><button data-del="${m.id}" title="Delete">✕</button></td>`;
-    void unit;
     tbody.appendChild(tr);
   }
   renderTotals();
 }
 
-function displayValue(m: Markup): string {
-  const cal = calibrationFor(m.page);
-  if (!cal) return '';
-  return m.type === 'length'
-    ? formatLength(markupLength(m, cal.metersPerPt), state.displayUnit)
-    : m.type === 'area'
-      ? formatArea(markupArea(m, cal.metersPerPt), state.displayUnit)
-      : '1';
-}
-
 function renderTotals(): void {
   totalsEl.replaceChildren();
-  const gs = groups();
+  const gs = groupsOf(state.markups);
   if (gs.length === 0) {
     totalsEl.innerHTML = `<div class="totals-empty">Totals appear once you measure something.</div>`;
     return;
@@ -145,49 +112,8 @@ function renderTotals(): void {
 
 // --- export ---
 
-function csvEscape(s: string): string {
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-type Matrix = (string | number)[][];
-
-/** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
-export function buildMatrix(): Matrix {
-  const rows: Matrix = [['Label', 'Type', 'Page', 'Value', 'Unit']];
-  for (const m of state.markups) {
-    const { value, unit } = valueParts(m);
-    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit]);
-  }
-  const gs = groups();
-  if (gs.length) {
-    rows.push([]);
-    rows.push(['Group', 'Type', 'Items', 'Total', '']);
-    for (const g of gs) {
-      const cal = calibrationFor(g.items[0].page);
-      let total: string | number = '';
-      if (g.type === 'count') {
-        total = g.items.length;
-      } else if (cal) {
-        total = g.items.reduce(
-          (s, m) => s + (g.type === 'length' ? markupLength(m, cal.metersPerPt) : markupArea(m, cal.metersPerPt)),
-          0,
-        );
-      }
-      const unit = g.type === 'count' ? 'each' : valueParts(g.items[0]).unit;
-      rows.push([g.label, g.type, g.items.length, total, unit]);
-    }
-  }
-  return rows;
-}
-
-function buildDelimited(sep: string): string {
-  return buildMatrix()
-    .map((row) => row.map((c) => csvEscape(String(c))).join(sep))
-    .join('\n');
-}
-
-function download(name: string, mime: string, text: string): void {
-  const blob = new Blob([text], { type: mime });
+function download(name: string, mime: string, data: string | Uint8Array): void {
+  const blob = new Blob([data as BlobPart], { type: mime });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -202,23 +128,23 @@ function baseName(): string {
 function exportCsv(): void {
   if (!state.markups.length) return;
   // UTF-8 BOM so Excel opens the units correctly
-  download(`${baseName()}-takeoff.csv`, 'text/csv;charset=utf-8', '\ufeff' + buildDelimited(','));
+  download(`${baseName()}-takeoff.csv`, 'text/csv;charset=utf-8', '\ufeff' + toDelimited(buildMatrix(takeoffData()), ','));
 }
 
 /** Export the takeoff as an Excel workbook. Also used by demo mode. */
 export function exportXlsx(): void {
   if (!state.markups.length) return;
-  const ws = XLSX.utils.aoa_to_sheet(buildMatrix());
-  ws['!cols'] = [{ wch: 24 }, { wch: 8 }, { wch: 6 }, { wch: 12 }, { wch: 8 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Takeoff');
-  XLSX.writeFile(wb, `${baseName()}-takeoff.xlsx`);
+  download(
+    `${baseName()}-takeoff.xlsx`,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xlsxBytes(buildMatrix(takeoffData())),
+  );
 }
 
 async function copyTsv(): Promise<void> {
   if (!state.markups.length) return;
   try {
-    await navigator.clipboard.writeText(buildDelimited('\t'));
+    await navigator.clipboard.writeText(toDelimited(buildMatrix(takeoffData()), '\t'));
     const btn = document.getElementById('copyTsvBtn')!;
     const old = btn.textContent;
     btn.textContent = 'Copied ✓';

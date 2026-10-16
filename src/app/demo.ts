@@ -17,7 +17,7 @@ import { loadPdf, renderPage } from './viewer';
 import { setTool } from './tools';
 import { renderMarkups } from './render';
 import { exitCompare } from './compare';
-import { formatLength, formatArea } from './units';
+import { formatLength, formatArea } from '../engine/units';
 
 let playing = false;
 let cancelled = false;

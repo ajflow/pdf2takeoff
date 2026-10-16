@@ -45,6 +45,11 @@ npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 
+## Architecture
+
+- **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and, upcoming, headless in Node (CLI + MCP — see [specs/headless-engine.md](specs/headless-engine.md)).
+- **`src/app/`** — the browser UI: PDF.js viewer, tools, markups table, report, persistence. Wires the engine's ports (`RasterPage`, `DetectorSession`) to browser adapters.
+
 ## Keyboard
 
 | Key | Action |

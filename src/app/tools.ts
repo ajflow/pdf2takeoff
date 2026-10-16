@@ -5,8 +5,9 @@ import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt } from 
 import { eventToView, viewToPdf, isTypingTarget } from './viewer';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
-import { scanForSimilar } from './scan';
-import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from './units';
+import { scanForSimilar } from '../engine/scan';
+import { scanDeps } from './adapters';
+import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -209,7 +210,7 @@ function onDoubleClick(e: MouseEvent): void {
 
 async function runScan(p: Pt): Promise<void> {
   const t0 = performance.now();
-  const result = await scanForSimilar(state.pageNum, p);
+  const result = await scanForSimilar(state.pageNum, p, scanDeps);
   if ('error' in result) {
     hint(result.error);
     return;

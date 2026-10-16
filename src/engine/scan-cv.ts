@@ -1,17 +1,15 @@
-// Scan provider, tier 1: pure local computer vision, no model download.
-// Click one instance of a repeated symbol; the engine rasterizes the page,
-// binarizes the ink, extracts connected components, and matches every
-// component to the clicked one by size, aspect, fill and a normalized shape
-// signature. Runs in well under a second per sheet on typed arrays alone.
-// Tier 2 (src/scan-onnx.ts) is a trained ONNX detector that slots in behind
-// the same ScanResult interface; src/scan.ts picks whichever is available.
+// Scan provider, tier 1: classic computer vision, no model download.
+// Click one instance of a repeated symbol; the host rasterizes the page, and
+// this pass binarizes the ink, extracts connected components, and matches
+// every component to the clicked one by size, aspect, fill and a normalized
+// shape signature. Runs in well under a second per sheet on typed arrays
+// alone. Tier 2 (scan-onnx.ts) is a trained detector that slots in behind
+// the same ScanResult interface; scan.ts picks whichever is available.
 
-import type { PDFPageProxy } from 'pdfjs-dist';
-import { getPdfDoc } from './viewer';
-import type { Pt } from './state';
-import type { ScanResult } from './scan';
+import type { Pt } from './types';
+import type { RasterPage } from './ports';
+import type { ScanResult } from './types';
 
-export const RASTER_SCALE = 3;
 const SIG = 20; // signature grid
 const MIN_COMPONENT_PX = 12;
 const MATCH_DIST = 0.16; // signature L1 distance threshold (0 = identical)
@@ -32,12 +30,10 @@ interface Component {
   sig: Float32Array;
 }
 
-export async function cvScan(pageNum: number, clicked: Pt): Promise<ScanResult> {
-  const { canvas: cnv, viewport: vp } = await renderRaster(pageNum, RASTER_SCALE);
-  const w = cnv.width;
-  const h = cnv.height;
-  const ctx = cnv.getContext('2d', { willReadFrequently: true })!;
-  const data = ctx.getImageData(0, 0, w, h).data;
+export function cvScan(raster: RasterPage, clicked: Pt): ScanResult {
+  const w = raster.width;
+  const h = raster.height;
+  const data = raster.data;
 
   // ink mask — vector CAD output is high-contrast, a fixed threshold is enough
   const mask = new Uint8Array(w * h);
@@ -47,9 +43,9 @@ export async function cvScan(pageNum: number, clicked: Pt): Promise<ScanResult> 
   }
 
   // clicked point → raster px (with a small tolerance for anti-aliased edges)
-  const [vx, vy] = vp.convertToViewportPoint(clicked.x, clicked.y);
-  const px = Math.round(vx);
-  const py = Math.round(vy);
+  const click = raster.toRaster(clicked.x, clicked.y);
+  const px = Math.round(click.x);
+  const py = Math.round(click.y);
   let clickedLabel = 0;
   if (px >= 0 && py >= 0 && px < w && py < h) {
     // ring search up to ~3.3 PDF pt so a click anywhere inside a symbol
@@ -136,7 +132,10 @@ export async function cvScan(pageNum: number, clicked: Pt): Promise<ScanResult> 
       }
     }
   }
-  if (!template) return { error: 'that symbol is too small or part of a large structure; try a smaller, isolated symbol' };
+  if (!template)
+    return {
+      error: 'that symbol is too small or part of a large structure; try a smaller, isolated symbol',
+    };
 
   // match every component against the template
   const aspectT = (template.x1 - template.x0 + 1) / (template.y1 - template.y0 + 1);
@@ -150,34 +149,13 @@ export async function cvScan(pageNum: number, clicked: Pt): Promise<ScanResult> 
     let d = 0;
     for (let i = 0; i < template.sig.length; i++) d += Math.abs(template.sig[i] - c.sig[i]);
     if (d <= MATCH_DIST) {
-      const [hx, hy] = vp.convertToPdfPoint(c.cx, c.cy);
-      hits.push({ x: hx, y: hy });
+      hits.push(raster.toPdf(c.cx, c.cy));
     }
   }
 
   // stable numbering: reading order, rows then columns
   hits.sort((a, b) => (Math.abs(b.y - a.y) > 8 ? b.y - a.y : a.x - b.x));
   return { hits, provider: 'cv', templatePx: template.count };
-}
-
-// Rasterize a page off-screen at an integer scale. Shared by both scan
-// providers so tier 1 and tier 2 always see identical pixels.
-export async function renderRaster(
-  pageNum: number,
-  scale: number,
-): Promise<{ canvas: HTMLCanvasElement; viewport: ReturnType<PDFPageProxy['getViewport']> }> {
-  const doc = getPdfDoc();
-  if (!doc) throw new Error('open a drawing first');
-  const page: PDFPageProxy = await doc.getPage(pageNum);
-  const vp = page.getViewport({ scale });
-  const w = Math.max(1, Math.floor(vp.width));
-  const h = Math.max(1, Math.floor(vp.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  await page.render({ canvas, canvasContext: ctx, viewport: vp }).promise;
-  return { canvas, viewport: vp };
 }
 
 function makeComponent(

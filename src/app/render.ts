@@ -4,7 +4,7 @@
 
 import { state, type Markup, type Pt, markupLength, markupArea, calibrationFor, defaultLabel } from './state';
 import { markupsLayer, previewLayer, pdfToView } from './viewer';
-import { formatLength, formatArea } from './units';
+import { formatLength, formatArea } from '../engine/units';
 
 const NS = 'http://www.w3.org/2000/svg';
 

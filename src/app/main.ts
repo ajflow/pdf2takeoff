@@ -25,7 +25,7 @@ import {
   nudge,
 } from './compare';
 import { calibrationFor, type Pt } from './state';
-import { formatLength, DISPLAY_UNITS, unitLabel, ratioForMetersPerPt } from './units';
+import { formatLength, DISPLAY_UNITS, unitLabel, ratioForMetersPerPt } from '../engine/units';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 

@@ -371,6 +371,114 @@ select.btn {
   margin: 0;
 }
 
+/* cloudconvert-style widget card: the tool itself is the call to action */
+.widget-card {
+  width: min(520px, 100%);
+  margin-top: 26px;
+  background: var(--navy-1);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(2, 6, 16, 0.5);
+}
+
+.widget-io {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--navy-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.io-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--navy-1);
+  color: var(--text);
+}
+
+.io-chip.out {
+  border-color: rgba(45, 212, 191, 0.4);
+  color: var(--teal);
+  background: var(--accent-soft);
+}
+
+.io-chip svg { color: var(--text-dim); }
+.io-chip.out svg { color: var(--teal); }
+.io-arrow { color: var(--text-dim); display: inline-flex; }
+
+.widget-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 34px 26px 28px;
+  text-align: center;
+  color: var(--text-dim);
+  outline: 2px dashed rgba(148, 163, 184, 0.28);
+  outline-offset: -12px;
+  border-radius: 14px;
+  margin: 12px;
+  transition: outline-color 0.15s ease;
+}
+
+#dropzone.drag .widget-drop {
+  outline-color: var(--teal);
+}
+
+.widget-drop svg { color: var(--text-dim); }
+
+.drop-title {
+  margin: 4px 0 0;
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.drop-hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.widget-foot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--navy-2);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.widget-foot .sep { opacity: 0.5; }
+.widget-foot .spacer { flex: 1; }
+
+.widget-foot .linklike {
+  font: inherit;
+  font-weight: 600;
+  color: var(--teal);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.widget-foot .linklike:hover {
+  text-decoration: underline;
+}
+
 #dropzone .hero-actions {
   display: flex;
   gap: 10px;

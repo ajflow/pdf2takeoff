@@ -6,6 +6,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { emit } from './state';
+import { blendOverlay, type RGBA } from '../engine/compare';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -53,7 +54,7 @@ async function rasterizeTo(
   rev: Revision,
   targetW: number,
   targetH: number,
-): Promise<{ data: Uint8ClampedArray; w: number; h: number }> {
+): Promise<RGBA> {
   const page = await rev.doc.getPage(rev.page);
   const vp1 = page.getViewport({ scale: 1 });
   // "cover" the target box, then stretch-draw so B's page maps onto it exactly
@@ -71,7 +72,7 @@ async function rasterizeTo(
   const ctx = cnv.getContext('2d', { willReadFrequently: true })!;
   ctx.drawImage(tmp, 0, 0, cnv.width, cnv.height);
   const img = ctx.getImageData(0, 0, cnv.width, cnv.height);
-  return { data: img.data, w: cnv.width, h: cnv.height };
+  return { width: cnv.width, height: cnv.height, data: img.data };
 }
 
 /** Blend both revisions into the main canvas. `zoom` drives CSS sizing. */
@@ -88,65 +89,14 @@ export async function renderCompare(zoom = 1): Promise<void> {
 
   const [ra, rb] = await Promise.all([rasterizeTo(a, w, h), rasterizeTo(b, bw, bh)]);
 
-  canvas.width = ra.w;
-  canvas.height = ra.h;
-  const out = new ImageData(ra.w, ra.h);
-  const o = out.data;
+  canvas.width = ra.width;
+  canvas.height = ra.height;
+  const out = new ImageData(ra.width, ra.height);
 
   const dxPx = compareState.offsetX * rasterScale;
   const dyPx = compareState.offsetY * rasterScale;
 
-  for (let y = 0; y < ra.h; y++) {
-    const by = Math.round(y - dyPx);
-    const rowInB = by >= 0 && by < rb.h;
-    const rowA = y * ra.w * 4;
-    const rowB = by * rb.w * 4;
-    const rowO = y * ra.w * 4;
-    for (let x = 0; x < ra.w; x++) {
-      const ai = rowA + x * 4;
-      const rA = ra.data[ai];
-      const gA = ra.data[ai + 1];
-      const bA_ = ra.data[ai + 2];
-      const inkA = 255 - (rA * 299 + gA * 587 + bA_ * 114) / 1000;
-
-      let inkB = 0;
-      if (rowInB) {
-        const bx = Math.round(x - dxPx);
-        if (bx >= 0 && bx < rb.w) {
-          const bi = rowB + bx * 4;
-          const rB = rb.data[bi];
-          const gB = rb.data[bi + 1];
-          const bB_ = rb.data[bi + 2];
-          inkB = 255 - (rB * 299 + gB * 587 + bB_ * 114) / 1000;
-        }
-      }
-
-      let r: number, g: number, bl: number, m: number;
-      if (compareState.fadeUnchanged) {
-        const both = Math.min(inkA, inkB);
-        const onlyA = inkA - both;
-        const onlyB = inkB - both;
-        const gray = both * 0.22;
-        r = gray + onlyA;
-        g = gray + onlyB;
-        bl = gray + onlyB;
-        m = Math.max(r, g, bl);
-      } else {
-        r = inkA;
-        g = inkB;
-        bl = inkB;
-        m = Math.max(inkA, inkB);
-      }
-
-      // composite the tint over white
-      const oi = rowO + x * 4;
-      o[oi] = 255 - (m * (255 - r)) / 255;
-      o[oi + 1] = 255 - (m * (255 - g)) / 255;
-      o[oi + 2] = 255 - (m * (255 - bl)) / 255;
-      o[oi + 3] = 255;
-    }
-  }
-
+  blendOverlay(ra, rb, dxPx, dyPx, compareState.fadeUnchanged, out.data);
   const ctx = canvas.getContext('2d')!;
   ctx.putImageData(out, 0, 0);
 

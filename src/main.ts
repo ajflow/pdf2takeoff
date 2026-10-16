@@ -273,6 +273,9 @@ subscribe(() => {
   $('compareBtn').classList.toggle('active', compareState.active);
   overlay.style.display = compareState.active ? 'none' : '';
   dropzone.classList.toggle('hidden', compareState.active || hasDoc());
+  // the AEO content is for the landing state; once a drawing is open the
+  // tool is the whole page (scrollers were running into marketing below)
+  $('seo')?.classList.toggle('hidden', hasDoc() || compareState.active);
   if (compareState.active) {
     $('cmpAName').textContent = compareState.a?.name ?? '-';
     $('cmpBName').textContent = compareState.b?.name ?? '-';

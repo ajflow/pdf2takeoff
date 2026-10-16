@@ -73,9 +73,9 @@ console.log('ok: initialize');
 
 const tools = await request('tools/list', {});
 const names = tools.tools.map((t) => t.name);
-check('tools/list has all 10 tools', [
+check('tools/list has all 11 tools', [
   'open_document', 'render_page', 'set_scale', 'measure', 'scan_symbol',
-  'compare_revisions', 'list_markups', 'delete_markup', 'export', 'save_annotated',
+  'compare_revisions', 'list_markups', 'set_status', 'delete_markup', 'export', 'save_annotated',
 ].every((n) => names.includes(n)), `got: ${names.join(', ')}`);
 
 const opened = textOf(await call('open_document', { path: sample }));
@@ -104,6 +104,11 @@ const wallId = measured.markupId;
 
 const listed = textOf(await call('list_markups', { id: docId }));
 check('list_markups: 9 rows', listed.markups.length === 9, `got ${listed.markups.length}`);
+
+const statusSet = textOf(await call('set_status', { id: docId, markup_id: wallId, status: 'check' }));
+check('set_status: marked for checking', statusSet.status === 'check');
+const withStatus = textOf(await call('list_markups', { id: docId }));
+check('list_markups: status visible', withStatus.markups.find((m) => m.id === wallId)?.status === 'check');
 
 await call('delete_markup', { id: docId, markup_id: wallId });
 const afterDelete = textOf(await call('list_markups', { id: docId }));

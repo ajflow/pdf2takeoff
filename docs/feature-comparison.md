@@ -68,8 +68,8 @@ pdf2takeoff runs in any modern browser on any OS.
 | Markup legend | Complete | ✅ | Group totals in report (visual legend later) |
 | Round-trip with Revu & Acrobat | — | ⭐ | Interoperability is the design, not an afterthought |
 | Excel workbook export | Complete (Quantity Link output) | ⭐ | One-click .xlsx; the live Excel link is desktop-only by nature |
-| Filter & sort | Basics | 🔜 | |
-| Custom statuses | Basics | 🔜 | |
+| Filter & sort | Basics | ✅ | Search by label, status pills, sort by label/page |
+| Custom statuses | Basics | ✅ | Flag / confirm cycle; rides in the PDF comment so it survives round-trips; agents can set it via MCP | |
 | Saved tool presets | Basics (Tool Chest) | ✅ | Our name: tool library — chips apply type + label to every placement and scan hit; persist locally |
 | Markup layers | Basics | 🔜 | |
 | Note / callout tool | Basics | 🔜 | FreeText annotations already round-trip |

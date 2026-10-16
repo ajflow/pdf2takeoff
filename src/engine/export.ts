@@ -64,10 +64,10 @@ export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: Di
 
 /** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
 export function buildMatrix(d: TakeoffData): Matrix {
-  const rows: Matrix = [['Label', 'Type', 'Page', 'Value', 'Unit']];
+  const rows: Matrix = [['Label', 'Type', 'Page', 'Value', 'Unit', 'Status']];
   for (const m of d.markups) {
     const { value, unit } = valueParts(m, d.calibrations.get(m.page), d.displayUnit);
-    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit]);
+    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '']);
   }
   const gs = groupsOf(d.markups);
   if (gs.length) {
@@ -89,7 +89,8 @@ export function buildMatrix(d: TakeoffData): Matrix {
         }, 0);
       }
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
-      rows.push([g.label, g.type, g.items.length, total, unit]);
+      const confirmed = g.items.filter((m) => m.status === 'confirmed').length;
+      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '']);
     }
   }
   return rows;

@@ -14,6 +14,8 @@ export interface Markup {
   createdAt: number;
   /** Volume only: the extrusion depth in metres. */
   depth?: number;
+  /** Review status: 'check' = needs verification, 'confirmed' = verified. */
+  status?: 'check' | 'confirmed';
 }
 
 export interface Calibration {

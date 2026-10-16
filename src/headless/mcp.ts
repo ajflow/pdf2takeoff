@@ -76,6 +76,7 @@ function markupRows(d: OpenDoc) {
       type: m.type,
       label: m.label,
       page: m.page,
+      status: m.status ?? null,
       value: value === null ? null : round(value, 4),
       unit:
         m.type === 'count'
@@ -330,6 +331,27 @@ export async function runMcpServer(): Promise<void> {
       inputSchema: { id: z.string() },
     },
     async ({ id }) => text({ markups: markupRows(getDoc(id)) }),
+  );
+
+  server.registerTool(
+    'set_status',
+    {
+      description:
+        "Set a measurement's review status: 'check' (needs human verification), 'confirmed' (verified), or null to clear. The agent-proposes/human-verifies loop: mark your own takeoffs as 'check' and let the estimator confirm them.",
+      inputSchema: {
+        id: z.string(),
+        markup_id: z.string(),
+        status: z.enum(['check', 'confirmed']).nullable(),
+      },
+    },
+    async ({ id, markup_id, status }) => {
+      const d = getDoc(id);
+      const m = d.markups.find((x) => x.id === markup_id);
+      if (!m) throw new Error(`no markup with id "${markup_id}"`);
+      if (status === null) delete m.status;
+      else m.status = status;
+      return text({ markupId: m.id, status: m.status ?? null });
+    },
   );
 
   server.registerTool(

@@ -26,6 +26,12 @@ function pdfDate(): string {
 }
 
 function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
+  const tag = m.status ? ` [${m.status}]` : '';
+  const body = contentsBody(m, calibrations, displayUnit);
+  return body + tag;
+}
+
+function contentsBody(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
   const cal = calibrations.get(m.page);
   // angles are scale-free — they never need calibration
   if (m.type === 'angle') return `${m.label}: ${markupAngle(m).toFixed(1)}°`;

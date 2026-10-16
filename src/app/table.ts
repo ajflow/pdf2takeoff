@@ -22,6 +22,16 @@ export function initTable(): void {
   totalsEl = document.getElementById('markupTotals')!;
   tbody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    const st = target.closest('[data-status-for]');
+    if (st) {
+      const m = state.markups.find((x) => x.id === st.getAttribute('data-status-for'));
+      if (m) {
+        // cycle none -> check -> confirmed -> none
+        m.status = m.status === 'check' ? 'confirmed' : m.status === 'confirmed' ? undefined : 'check';
+        emit();
+      }
+      return;
+    }
     const del = target.closest('[data-del]');
     if (del) {
       const id = del.getAttribute('data-del')!;
@@ -56,16 +66,65 @@ export function initTable(): void {
   document.getElementById('copyTsvBtn')?.addEventListener('click', copyTsv);
   document.getElementById('exportXlsxBtn')?.addEventListener('click', exportXlsx);
   document.getElementById('reportBtn')?.addEventListener('click', () => void exportReport());
+  document.getElementById('clearMarkups')?.addEventListener('click', () => {
+    if (state.markups.length === 0) return;
+    if (!window.confirm(`Remove all ${state.markups.length} measurements in this takeoff?`)) return;
+    state.markups = [];
+    state.selectedId = null;
+    emit();
+  });
+
+  const search = document.getElementById('listSearch') as HTMLInputElement | null;
+  search?.addEventListener('input', () => {
+    state.listFilter.text = search.value;
+    renderTable();
+  });
+  document.querySelectorAll<HTMLElement>('[data-status-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.listFilter.status = btn.getAttribute('data-status-filter') as typeof state.listFilter.status;
+      syncFilterUi();
+      renderTable();
+    });
+  });
+  document.getElementById('listSort')?.addEventListener('change', (e) => {
+    state.listFilter.sort = (e.target as HTMLSelectElement).value as typeof state.listFilter.sort;
+    renderTable();
+  });
+  syncFilterUi();
+}
+
+function syncFilterUi(): void {
+  document.querySelectorAll<HTMLElement>('[data-status-filter]').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-status-filter') === state.listFilter.status);
+  });
+}
+
+function filteredMarkups() {
+  const f = state.listFilter;
+  const text = f.text.trim().toLowerCase();
+  let rows = state.markups.filter(
+    (m) =>
+      (f.status === 'all' || (f.status === 'none' ? !m.status : m.status === f.status)) &&
+      (!text || m.label.toLowerCase().includes(text)),
+  );
+  if (f.sort === 'label') rows = [...rows].sort((a, b) => a.label.localeCompare(b.label));
+  else if (f.sort === 'page') rows = [...rows].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt);
+  return rows;
 }
 
 export function renderTable(): void {
   tbody.replaceChildren();
+  const rows = filteredMarkups();
   if (state.markups.length === 0) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" class="empty">No measurements yet; calibrate the scale, then use the Length, Area and Count tools.</td>`;
+    tr.innerHTML = `<td colspan="6" class="empty">No measurements yet; calibrate the scale, then use the Length, Area and Count tools.</td>`;
+    tbody.appendChild(tr);
+  } else if (rows.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="6" class="empty">No measurements match the filter.</td>`;
     tbody.appendChild(tr);
   }
-  for (const m of state.markups) {
+  for (const m of rows) {
     const tr = document.createElement('tr');
     tr.dataset.id = m.id;
     if (m.id === state.selectedId) tr.classList.add('selected');
@@ -78,6 +137,7 @@ export function renderTable(): void {
       <td class="cell-type"><span class="tag tag-${m.type}">${typeIcon} ${m.type}</span></td>
       <td class="cell-num">p${m.page}</td>
       <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationFor(m.page), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
+      <td class="cell-status"><button data-status-for="${m.id}" class="status-btn st-${m.status ?? 'none'}" title="${m.status === 'check' ? 'Needs checking — click to confirm' : m.status === 'confirmed' ? 'Confirmed — click to clear' : 'Click to mark for checking'}">${m.status === 'check' ? '⚑' : m.status === 'confirmed' ? '✓' : '○'}</button></td>
       <td class="cell-del"><button data-del="${m.id}" title="Delete">✕</button></td>`;
     tbody.appendChild(tr);
   }

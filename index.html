@@ -302,10 +302,24 @@
         </div>
         <h2>Markups</h2>
         <div id="markupTotals"></div>
+        <div class="list-tools">
+          <input type="text" id="listSearch" placeholder="Filter by label…" autocomplete="off" aria-label="Filter by label" />
+          <div class="list-pills" role="group" aria-label="Filter by status">
+            <button class="pill" data-status-filter="all" title="All measurements">All</button>
+            <button class="pill" data-status-filter="none" title="No status yet">Unmarked</button>
+            <button class="pill" data-status-filter="check" title="Needs checking">⚑</button>
+            <button class="pill" data-status-filter="confirmed" title="Confirmed">✓</button>
+          </div>
+          <select id="listSort" aria-label="Sort list">
+            <option value="added">Added order</option>
+            <option value="label">Label A–Z</option>
+            <option value="page">Page</option>
+          </select>
+        </div>
         <div class="markup-table-wrap">
           <table class="markup-table">
             <thead>
-              <tr><th>Label</th><th>Type</th><th>Page</th><th style="text-align:right">Value</th><th></th></tr>
+              <tr><th>Label</th><th>Type</th><th>Page</th><th style="text-align:right">Value</th><th>Status</th><th></th></tr>
             </thead>
             <tbody id="markupRows"></tbody>
           </table>
@@ -313,8 +327,9 @@
         <div class="side-actions">
           <button class="btn" id="copyTsvBtn" title="Copy the list for pasting into Excel">Copy</button>
           <button class="btn" id="exportCsvBtn" title="Download the markups list as CSV">CSV</button>
-          <button class="btn" id="exportXlsxBtn" title="Download the markups list as an Excel workbook">Excel</button>
+          <button class="btn" id="exportXlsxBtn" title="Download the takeoff as an Excel workbook">Excel</button>
           <button class="btn" id="reportBtn" title="Printable report: marked-up sheets + quantities">Report</button>
+          <button class="btn" id="clearMarkups" title="Remove every measurement in this takeoff">Clear</button>
         </div>
         <div class="side-actions">
           <button class="btn primary" id="savePdfBtn" title="Save the PDF with markups as standard annotations">

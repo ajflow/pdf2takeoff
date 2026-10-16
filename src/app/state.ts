@@ -32,6 +32,11 @@ export interface AppState {
   lastAction: { kind: 'move'; id: string; before: Pt[] } | null;
   presets: ToolPreset[];
   activePreset: ToolPreset | null;
+  listFilter: {
+    status: 'all' | 'none' | 'check' | 'confirmed';
+    text: string;
+    sort: 'added' | 'label' | 'page';
+  };
 }
 
 export const state: AppState = {
@@ -49,6 +54,7 @@ export const state: AppState = {
   lastAction: null,
   presets: [],
   activePreset: null,
+  listFilter: { status: 'all', text: '', sort: 'added' },
 };
 
 type Listener = () => void;

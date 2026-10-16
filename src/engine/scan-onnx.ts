@@ -65,10 +65,13 @@ export async function detectorScan(
   const { input, scale, dw, dh } = letterboxCHW(raster, S);
   const { data: arr, dims } = await det.run(input, S);
 
-  // YOLOX exports are [1, N, 5+C]; tolerate a transposed [1, 5+C, N]
-  const rows = dims[2] >= dims[1] ? dims[1] : dims[2];
-  const stride = dims[2] >= dims[1] ? dims[2] : dims[1];
-  const rowMajor = dims[2] >= dims[1];
+  // Rows are [x1,y1,x2,y2,obj,cls...] in [1, N, 5+C] (or a transposed
+  // [1, 5+C, N]). Anchor the row width to the manifest's class count —
+  // picking it by "larger dim" misorients [1, N, 5+C] whenever N > 5+C.
+  const rowW = 5 + det.classes.length;
+  const stride = dims.includes(rowW) ? rowW : Math.max(dims[1] ?? 0, dims[2] ?? 1);
+  const rows = Math.floor(arr.length / stride);
+  const rowMajor = dims[dims.length - 1] === stride;
   const nCls = stride - 5;
   const at = (r: number, c: number) => (rowMajor ? arr[r * stride + c] : arr[c * rows + r]);
 

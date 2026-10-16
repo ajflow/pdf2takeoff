@@ -74,7 +74,10 @@ async function getEngine(): Promise<DetectorSession> {
   ort.env.wasm.proxy = false;
   ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
   try {
-    const s = await ort.InferenceSession.create(`${base}models/${m.model}`, {
+    // absolute model URLs are allowed for CORS-enabled hosts (e.g. a
+    // raw.githubusercontent.com model branch); relative names stay same-origin
+    const modelUrl = /^https?:\/\//.test(m.model) ? m.model : `${base}models/${m.model}`;
+    const s = await ort.InferenceSession.create(modelUrl, {
       executionProviders: ['wasm'],
     });
     session = {

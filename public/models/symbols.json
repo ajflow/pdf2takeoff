@@ -1,0 +1,14 @@
+{
+  "model": "https://raw.githubusercontent.com/ajflow/pdf2takeoff/model-v1/public/models/symbols.onnx",
+  "input": 800,
+  "classes": [
+    "downlight",
+    "gpo",
+    "switch",
+    "smoke-alarm",
+    "diffuser"
+  ],
+  "score": 0.25,
+  "iou": 0.45,
+  "head": "yolox-raw"
+}

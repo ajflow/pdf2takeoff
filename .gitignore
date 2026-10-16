@@ -9,8 +9,8 @@ dist/
 training/synthetic/
 
 # trained detector artifacts — drop into public/models/ to ship (see its README)
-public/models/*.onnx
-public/models/symbols.json
+# model binaries live on the model-v1 branch (raw.githubusercontent, CORS-enabled)
+# public/models/symbols.json IS committed (manifest)
 training/floorplancad/
 public/examples/soak-*.pdf
 

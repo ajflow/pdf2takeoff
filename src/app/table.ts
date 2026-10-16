@@ -1,7 +1,7 @@
 // Markups list (right sidebar): rows per measurement, group totals, and
 // CSV / clipboard / Excel export. Serialization math lives in the engine.
 
-import { state, emit, calibrationFor, takeoffData } from './state';
+import { state, emit, calibrationForMarkup, takeoffData } from './state';
 import {
   groupsOf,
   valueParts,
@@ -136,7 +136,7 @@ export function renderTable(): void {
     const tr = document.createElement('tr');
     tr.dataset.id = m.id;
     if (m.id === state.selectedId) tr.classList.add('selected');
-    const { value } = valueParts(m, calibrationFor(m.page), state.displayUnit);
+    const { value } = valueParts(m, calibrationForMarkup(m), state.displayUnit);
     const typeIcon =
       m.type === 'length' ? '📏' : m.type === 'area' ? '⬡' : m.type === 'count' ? '🔢'
       : m.type === 'perimeter' ? '↻' : m.type === 'volume' ? '◨' : m.type === 'note' ? '💬' : '∠';
@@ -144,7 +144,7 @@ export function renderTable(): void {
       <td class="cell-label"><input data-label-for="${m.id}" value="${escapeAttr(m.label)}" title="Rename" /></td>
       <td class="cell-type"><span class="tag tag-${m.type}">${typeIcon} ${m.type}</span></td>
       <td class="cell-num">p${m.page}</td>
-      <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationFor(m.page), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
+      <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationForMarkup(m), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
       <td class="cell-status"><button data-status-for="${m.id}" class="status-btn st-${m.status ?? 'none'}" title="${m.status === 'check' ? 'Needs checking — click to confirm' : m.status === 'confirmed' ? 'Confirmed — click to clear' : 'Click to mark for checking'}">${m.status === 'check' ? '⚑' : m.status === 'confirmed' ? '✓' : '○'}</button></td>
       <td class="cell-del"><button data-del="${m.id}" title="Delete">✕</button></td>`;
     tbody.appendChild(tr);
@@ -160,7 +160,7 @@ function renderTotals(): void {
     return;
   }
   for (const g of gs) {
-    const cal = calibrationFor(g.items[0].page);
+    const cal = calibrationForMarkup(g.items[0]);
     let text: string;
     if (g.type === 'count') {
       text = `${g.items.length} ×`;

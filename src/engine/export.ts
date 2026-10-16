@@ -7,6 +7,7 @@ import type { DisplayUnit } from './units.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume } from './units.ts';
 import { evaluateFormula } from './formula.ts';
+import { resolveCalibration, type Viewport } from './viewports.ts';
 
 export interface CustomColumn {
   name: string;
@@ -19,6 +20,7 @@ export interface TakeoffData {
   calibrations: Map<number, Calibration>;
   displayUnit: DisplayUnit;
   columns?: CustomColumn[];
+  viewports?: Viewport[];
 }
 
 export type Matrix = (string | number)[][];
@@ -79,7 +81,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
   const rows: Matrix = [header];
   const round = (n: number) => Math.round(n * 10000) / 10000;
   for (const m of d.markups) {
-    const { value, unit } = valueParts(m, d.calibrations.get(m.page), d.displayUnit);
+    const { value, unit } = valueParts(m, resolveCalibration(m, d.calibrations, d.viewports), d.displayUnit);
     const numeric = value === '' ? null : Number(value);
     const extras = cols.map((c) => {
       const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: 1 });
@@ -92,7 +94,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
     rows.push([]);
     rows.push(['Group', 'Type', 'Items', 'Total', '']);
     for (const g of gs) {
-      const cal = d.calibrations.get(g.items[0].page);
+      const cal = resolveCalibration(g.items[0], d.calibrations, d.viewports);
       let total: string | number = '';
       if (g.type === 'count') {
         total = g.items.length;

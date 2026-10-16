@@ -2,12 +2,13 @@
 // PDF space; converted to the viewBox (viewport@1) here. Sizes are paper-space
 // points, so markups look like printed PDF annotations at any zoom.
 
-import { state, type Markup, type Pt, calibrationFor, defaultLabel } from './state';
+import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, defaultLabel } from './state';
 import { markupsLayer, previewLayer, pdfToView } from './viewer';
 import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';
 import { markupAngle } from '../engine/geometry';
 import { isVisibleLayer } from './layers';
+import { ratioForMetersPerPt } from '../engine/units';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -32,7 +33,7 @@ function el<K extends keyof SVGElementTagNameMap>(
 }
 
 function labelText(m: Markup): string {
-  const value = formatMarkupValue(m, calibrationFor(m.page), state.displayUnit) || '-';
+  const value = formatMarkupValue(m, calibrationForMarkup(m), state.displayUnit) || '-';
   return m.label === defaultLabel(m.type) ? value : `${m.label}: ${value}`;
 }
 
@@ -75,9 +76,37 @@ export function countNumberFor(m: Markup): number {
 export function renderMarkups(): void {
   markupsLayer.replaceChildren();
   const page = state.pageNum;
+  for (const v of state.viewports.filter((x) => x.page === page)) {
+    markupsLayer.appendChild(renderViewport(v));
+  }
   for (const m of state.markups.filter((x) => x.page === page && isVisibleLayer(x))) {
     markupsLayer.appendChild(renderMarkup(m));
   }
+}
+
+function renderViewport(v: { points: Pt[]; metersPerPt: number; source: string }): SVGGElement {
+  const pts = v.points.map(pdfToView);
+  const g = el('g', { class: 'viewport' });
+  g.appendChild(
+    el('polygon', {
+      points: pts.map((p) => `${p.x},${p.y}`).join(' '),
+      fill: '#d97706',
+      'fill-opacity': 0.04,
+      stroke: '#d97706',
+      'stroke-width': 1,
+      'stroke-dasharray': '5 3',
+    }),
+  );
+  const c = centroid(pts);
+  const label = el('text', {
+    x: c.x, y: c.y - 6, 'text-anchor': 'middle', 'font-size': 8, fill: '#b45309',
+    'paint-order': 'stroke', stroke: '#ffffff', 'stroke-width': 2.4, 'stroke-linejoin': 'round',
+    'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  });
+  const ratio = ratioForMetersPerPt(v.metersPerPt);
+  label.textContent = ` viewport 1:${Math.abs(ratio - Math.round(ratio)) < 0.5 ? Math.round(ratio) : ratio.toFixed(1)} `;
+  g.appendChild(label);
+  return g;
 }
 
 /** Vertex dots; selected markups get a fat invisible hit-target per vertex for dragging. */

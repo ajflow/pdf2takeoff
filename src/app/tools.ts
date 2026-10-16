@@ -8,6 +8,7 @@ import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { getActiveLayer, DEFAULT_LAYER } from './layers';
+import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage } from './ocr';
 import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
 import { dynamicFill } from '../engine/dynamicfill';
@@ -40,6 +41,7 @@ const HINTS: Record<string, string> = {
   angle: 'Click the corner vertex, then one point on each ray',
   note: 'Click where the note belongs, then type the text in the list (rename)',
   fill: 'Click inside a room or slab — the fill reads its area off the walls',
+  viewport: 'Outline a region drawn at a different scale (e.g. a 1:20 detail), then pick its scale',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
 };
 
@@ -79,6 +81,11 @@ export function initTools(overlay: SVGSVGElement): void {
   document.getElementById('calibCancel')?.addEventListener('click', closeCalibModal);
   document.getElementById('calibApply')?.addEventListener('click', applyCalibration);
   document.getElementById('depthCancel')?.addEventListener('click', closeDepthModal);
+  document.getElementById('vpCancel')?.addEventListener('click', closeVpModal);
+  document.getElementById('vpApply')?.addEventListener('click', applyViewport);
+  document.getElementById('vpModal')?.addEventListener('pointerdown', (e) => {
+    if (e.target === document.getElementById('vpModal')) closeVpModal();
+  });
   document.getElementById('depthApply')?.addEventListener('click', applyDepth);
   document.getElementById('depthModal')?.addEventListener('pointerdown', (e) => {
     if (e.target === document.getElementById('depthModal')) closeDepthModal();
@@ -172,6 +179,7 @@ function onPointerDown(e: PointerEvent): void {
     case 'area':
     case 'perimeter':
     case 'volume':
+    case 'viewport':
       draft.push(p);
       refreshPreview();
       break;
@@ -266,7 +274,7 @@ function onPointerMove(e: PointerEvent): void {
 function onDoubleClick(e: MouseEvent): void {
   const p = eventToPdf(e);
   if (!p) return;
-  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume') {
+  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport') {
     // the second click of a double-click registers as a duplicate vertex
     if (draft.length >= 2 && distPt(draft[draft.length - 1], draft[draft.length - 2]) < 1) {
       draft.pop();
@@ -355,7 +363,8 @@ async function runScan(p: Pt): Promise<void> {
 }
 
 function finishDraft(): void {
-  const min = state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' ? 3 : 2;
+  const min =
+    state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport' ? 3 : 2;
   if (state.tool === 'angle') {
     if (draft.length === 3) pushDraftMarkup('angle');
   } else if (draft.length >= min) {
@@ -363,6 +372,10 @@ function finishDraft(): void {
       pendingVolume = [...draft];
       draft = [];
       openDepthModal();
+    } else if (state.tool === 'viewport') {
+      pendingViewport = [...draft];
+      draft = [];
+      openVpModal();
     } else {
       pushDraftMarkup(state.tool as 'length' | 'area' | 'perimeter');
     }
@@ -390,7 +403,9 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
 
 function refreshPreview(): void {
   let spec: PreviewSpec | null = null;
-  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'angle') {
+  if (state.tool === 'viewport') {
+    if (draft.length > 0) spec = { kind: 'area', points: draft, cursor };
+  } else if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'angle') {
     if (draft.length > 0) spec = { kind: state.tool, points: draft, cursor };
   } else if (state.tool === 'calibrate' && calibFirst) {
     spec = { kind: 'calibrate', points: [calibFirst], cursor };
@@ -506,6 +521,50 @@ async function runOcrRead(): Promise<void> {
   }
 }
 
+// --- viewport scale modal ---
+
+let pendingViewport: Pt[] | null = null;
+let vpModal: HTMLElement;
+let vpPresetSel: HTMLSelectElement;
+
+function openVpModal(): void {
+  vpModal = document.getElementById('vpModal')!;
+  vpPresetSel = document.getElementById('vpPreset') as HTMLSelectElement;
+  vpPresetSel.replaceChildren(new Option('Pick the region\'s scale…', ''));
+  for (const p of SCALES) vpPresetSel.add(new Option(p.label, String(p.ratio)));
+  vpModal.classList.remove('hidden');
+  vpPresetSel.focus();
+}
+
+function closeVpModal(): void {
+  vpModal.classList.add('hidden');
+  pendingViewport = null;
+}
+
+function applyViewport(): void {
+  if (!pendingViewport) return closeVpModal();
+  const ratio = parseFloat(vpPresetSel.value);
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    vpPresetSel.classList.add('invalid');
+    setTimeout(() => vpPresetSel.classList.remove('invalid'), 600);
+    return;
+  }
+  const label = vpPresetSel.selectedOptions[0]?.label ?? `1:${Math.round(ratio)}`;
+  state.viewports.push({
+    id: nextId('vp'),
+    page: state.pageNum,
+    points: pendingViewport.map((p) => ({ ...p })),
+    metersPerPt: metersPerPtForRatio(ratio),
+    source: `viewport ${label}`,
+  });
+  pendingViewport = null;
+  vpModal.classList.add('hidden');
+  setTool('pan');
+  renderMarkups();
+  emit();
+  hint(`Viewport ${label} set · measurements inside it use this scale`);
+}
+
 function applyCalibration(): void {
   if (!pendingCalib) return closeCalibModal();
   const unit = calibUnitSel.value as Unit;
@@ -529,7 +588,8 @@ function applyCalibration(): void {
 function onKeyDown(e: KeyboardEvent): void {
   if (isTypingTarget(e.target)) return;
   const depthM = document.getElementById('depthModal');
-  if (!calibModal.classList.contains('hidden') || !depthM?.classList.contains('hidden')) {
+  const vpM = document.getElementById('vpModal');
+  if (!calibModal.classList.contains('hidden') || !depthM?.classList.contains('hidden') || !vpM?.classList.contains('hidden')) {
     if (e.key === 'Escape') {
       closeCalibModal();
       closeDepthModal();
@@ -548,6 +608,7 @@ function onKeyDown(e: KeyboardEvent): void {
     g: 'angle',
     t: 'note',
     d: 'fill',
+    w: 'viewport',
     s: 'scan',
   };
   const k = e.key.toLowerCase();

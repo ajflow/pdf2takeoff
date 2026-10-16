@@ -4,7 +4,7 @@
 // save-as-PDF via the browser — the report is the deliverable estimators
 // attach to a tender or a review email.
 
-import { state, type Markup, type Pt, calibrationFor, takeoffData } from './state';
+import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, takeoffData } from './state';
 import { getPdfDoc } from './viewer';
 import { COLORS, countNumberFor } from './render';
 import { buildMatrix, formatMarkupValue } from '../engine/export';
@@ -202,7 +202,7 @@ function labelText(m: Markup): string {
 }
 
 function displayValue(m: Markup): string {
-  return formatMarkupValue(m, calibrationFor(m.page), state.displayUnit);
+  return formatMarkupValue(m, calibrationForMarkup(m), state.displayUnit);
 }
 
 function centroid(pts: Pt[]): Pt {

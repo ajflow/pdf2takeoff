@@ -163,6 +163,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 15l3-8 6 3 5-4-2 12-7 1z" fill="currentColor" fill-opacity="0.18"/></svg>
           <span class="label">Fill</span><span class="kbd">D</span>
         </button>
+        <button class="btn" data-tool="viewport" title="Viewport: outline a region drawn at a different scale (W)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" stroke-linecap="round"/><path d="M9 12l2-3 2 3 2-3 1 3" stroke-dasharray="0"/><rect x="8" y="9" width="8" height="6" stroke-dasharray="3 2"/></svg>
+          <span class="label">Viewport</span><span class="kbd">W</span>
+        </button>
         <button class="btn" data-tool="scan" title="Scan: click a repeated symbol to count all of them (S)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity="0.65"/></svg>
           <span class="label">Scan</span><span class="kbd">S</span>
@@ -407,6 +411,19 @@
         <div class="modal-actions">
           <button class="btn" id="calibCancel">Cancel</button>
           <button class="btn primary" id="calibApply">Apply scale</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- viewport scale modal -->
+    <div id="vpModal" class="hidden" role="dialog" aria-modal="true" aria-label="Viewport scale">
+      <div class="modal-card">
+        <h3>Viewport scale</h3>
+        <p class="modal-sub">What scale is the region you outlined drawn at?</p>
+        <select id="vpPreset" aria-label="Viewport scale preset"></select>
+        <div class="modal-actions">
+          <button class="btn" id="vpCancel">Cancel</button>
+          <button class="btn primary" id="vpApply">Set viewport</button>
         </div>
       </div>
     </div>

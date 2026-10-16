@@ -20,7 +20,7 @@ export function initLibrary(): void {
       setTimeout(() => input.classList.remove('invalid'), 600);
       return;
     }
-    if (state.tool === 'pan' || state.tool === 'calibrate' || state.tool === 'scan' || state.tool === 'fill') {
+    if (state.tool === 'pan' || state.tool === 'calibrate' || state.tool === 'scan' || state.tool === 'fill' || state.tool === 'viewport') {
       showHint('Pick a measuring tool first (L, A, N, P, O or G), then save it with this label');
       input.classList.add('invalid');
       setTimeout(() => input.classList.remove('invalid'), 600);

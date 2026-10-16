@@ -4,6 +4,7 @@
 
 import { state, type Markup, type Calibration, type ToolPreset } from './state';
 import type { CustomColumn } from '../engine/export';
+import type { Viewport } from '../engine/viewports';
 import { fileHash } from '../engine/export';
 
 const DB_NAME = 'pdf2takeoff-sessions';
@@ -36,6 +37,7 @@ function openDb(): Promise<IDBDatabase | null> {
 interface StoredSession {
   markups: Markup[];
   calibrations: [number, Calibration][];
+  viewports?: Viewport[];
   savedAt: number;
 }
 
@@ -54,6 +56,7 @@ async function save(): Promise<void> {
   const session: StoredSession = {
     markups: state.markups,
     calibrations: [...state.calibrations],
+    viewports: state.viewports,
     savedAt: Date.now(),
   };
   try {
@@ -79,6 +82,7 @@ export async function restoreSession(bytes: Uint8Array): Promise<number> {
         }
         state.markups = s.markups;
         state.calibrations = new Map(s.calibrations ?? []);
+        state.viewports = Array.isArray(s.viewports) ? s.viewports : [];
         resolve(s.markups.length);
       };
       req.onerror = () => resolve(0);

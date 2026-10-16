@@ -4,12 +4,14 @@
 
 import type { DisplayUnit } from '../engine/units';
 import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
+import type { Viewport } from '../engine/viewports';
+import { resolveCalibration } from '../engine/viewports';
 import type { CustomColumn, TakeoffData } from '../engine/export';
 
 export type { Calibration, Markup, MarkupType, Pt };
 export { markupLength, markupArea, distPt, defaultLabel, nextId } from '../engine/geometry';
 
-export type ToolId = 'pan' | 'calibrate' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note' | 'fill' | 'scan';
+export type ToolId = 'pan' | 'calibrate' | 'viewport' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note' | 'fill' | 'scan';
 
 export interface ToolPreset {
   type: MarkupType;
@@ -33,6 +35,7 @@ export interface AppState {
   presets: ToolPreset[];
   activePreset: ToolPreset | null;
   columns: CustomColumn[];
+  viewports: Viewport[];
   listFilter: {
     status: 'all' | 'none' | 'check' | 'confirmed';
     text: string;
@@ -56,6 +59,7 @@ export const state: AppState = {
   presets: [],
   activePreset: null,
   columns: [],
+  viewports: [],
   listFilter: { status: 'all', text: '', sort: 'added' },
 };
 
@@ -75,6 +79,11 @@ export function calibrationFor(page: number): Calibration | undefined {
   return state.calibrations.get(page);
 }
 
+/** Calibration for a markup, honouring viewports (per-region scales). */
+export function calibrationForMarkup(m: Markup): Calibration | undefined {
+  return resolveCalibration(m, state.calibrations, state.viewports);
+}
+
 /** Everything the engine needs to serialize this session's takeoff. */
 export function takeoffData(): TakeoffData {
   return {
@@ -82,5 +91,6 @@ export function takeoffData(): TakeoffData {
     calibrations: state.calibrations,
     displayUnit: state.displayUnit,
     columns: state.columns,
+    viewports: state.viewports,
   };
 }

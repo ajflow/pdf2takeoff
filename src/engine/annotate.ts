@@ -6,6 +6,7 @@ import { PDFDocument, PDFName, PDFString, type PDFObject } from 'pdf-lib';
 import type { Calibration, Markup, Pt } from './types.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume, type DisplayUnit } from './units.ts';
+import { resolveCalibration, type Viewport } from './viewports.ts';
 
 export const ANNOTATION_AUTHOR = 'pdf2takeoff';
 
@@ -26,17 +27,16 @@ function pdfDate(): string {
   return `D:${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}+00'00'`;
 }
 
-function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
+function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit, viewports: Viewport[] = []): string {
   const tags = [
     ...(m.status ? [`[${m.status}]`] : []),
     ...(m.layer ? [`[layer:${m.layer}]`] : []),
   ];
-  const body = contentsBody(m, calibrations, displayUnit);
+  const body = contentsBody(m, resolveCalibration(m, calibrations, viewports), displayUnit);
   return tags.length ? `${body} ${tags.join(' ')}` : body;
 }
 
-function contentsBody(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
-  const cal = calibrations.get(m.page);
+function contentsBody(m: Markup, cal: Calibration | undefined, displayUnit: DisplayUnit): string {
   // angles are scale-free — they never need calibration
   if (m.type === 'angle') return `${m.label}: ${markupAngle(m).toFixed(1)}°`;
   if (m.type === 'note') return m.label; // the note IS the text
@@ -76,6 +76,7 @@ export interface AnnotateOptions {
   markups: Markup[];
   calibrations: Map<number, Calibration>;
   displayUnit: DisplayUnit;
+  viewports?: Viewport[];
 }
 
 /** Return a copy of the PDF with one standard annotation per markup. */

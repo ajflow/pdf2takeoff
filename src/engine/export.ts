@@ -4,8 +4,8 @@
 import * as XLSX from 'xlsx';
 import type { Calibration, Markup, MarkupType } from './types.ts';
 import type { DisplayUnit } from './units.ts';
-import { markupLength, markupArea } from './geometry.ts';
-import { formatLength, formatArea } from './units.ts';
+import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
+import { formatLength, formatArea, formatVolume } from './units.ts';
 
 export interface TakeoffData {
   markups: Markup[];
@@ -42,15 +42,21 @@ export function valueParts(
 ): { value: string; unit: string } {
   const base = u === 'ft-in' ? 'ft' : u;
   if (m.type === 'count') return { value: '1', unit: 'each' };
+  if (m.type === 'angle') return { value: String(markupAngle(m)), unit: 'deg' };
   if (!cal) return { value: '', unit: '' };
   if (m.type === 'length') return { value: String(markupLength(m, cal.metersPerPt)), unit: base };
+  if (m.type === 'perimeter') return { value: String(markupPerimeter(m, cal.metersPerPt)), unit: base };
+  if (m.type === 'volume') return { value: String(markupVolume(m, cal.metersPerPt)), unit: `${base}3` };
   return { value: String(markupArea(m, cal.metersPerPt)), unit: `${base}2` };
 }
 
 /** Formatted single-markup value ('' when the page isn't calibrated). */
 export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: DisplayUnit): string {
+  if (m.type === 'angle') return `${markupAngle(m).toFixed(1)}°`;
   if (!cal) return '';
   if (m.type === 'count') return '1';
+  if (m.type === 'perimeter') return formatLength(markupPerimeter(m, cal.metersPerPt), u);
+  if (m.type === 'volume') return formatVolume(markupVolume(m, cal.metersPerPt), u);
   return m.type === 'length'
     ? formatLength(markupLength(m, cal.metersPerPt), u)
     : formatArea(markupArea(m, cal.metersPerPt), u);
@@ -72,11 +78,15 @@ export function buildMatrix(d: TakeoffData): Matrix {
       let total: string | number = '';
       if (g.type === 'count') {
         total = g.items.length;
+      } else if (g.type === 'angle') {
+        total = ''; // angles don't sum
       } else if (cal) {
-        total = g.items.reduce(
-          (s, m) => s + (g.type === 'length' ? markupLength(m, cal.metersPerPt) : markupArea(m, cal.metersPerPt)),
-          0,
-        );
+        total = g.items.reduce((s, m) => {
+          if (g.type === 'length') return s + markupLength(m, cal.metersPerPt);
+          if (g.type === 'perimeter') return s + markupPerimeter(m, cal.metersPerPt);
+          if (g.type === 'volume') return s + markupVolume(m, cal.metersPerPt);
+          return s + markupArea(m, cal.metersPerPt);
+        }, 0);
       }
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
       rows.push([g.label, g.type, g.items.length, total, unit]);

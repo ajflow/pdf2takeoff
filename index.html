@@ -134,6 +134,18 @@
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6.5" cy="17.5" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="17.5" cy="6.5" r="2.4"/></svg>
           <span class="label">Count</span><span class="kbd">N</span>
         </button>
+        <button class="btn" data-tool="perimeter" title="Measure perimeter (P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 5h14v14H5z" stroke-dasharray="0"/><path d="M5 5l4-2M19 5l2 4M19 19l-4 2M5 19l-2-4" opacity="0.55"/></svg>
+          <span class="label">Perimeter</span><span class="kbd">P</span>
+        </button>
+        <button class="btn" data-tool="volume" title="Measure volume: area × depth (O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9" opacity="0.55"/></svg>
+          <span class="label">Volume</span><span class="kbd">O</span>
+        </button>
+        <button class="btn" data-tool="angle" title="Measure angle (G)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20L20 20"/><path d="M4 20L16 6"/><path d="M4 20 A 14 14 0 0 0 12.5 17.8" opacity="0.7"/></svg>
+          <span class="label">Angle</span><span class="kbd">G</span>
+        </button>
         <button class="btn" data-tool="scan" title="Scan: click a repeated symbol to count all of them (S)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity="0.65"/></svg>
           <span class="label">Scan</span><span class="kbd">S</span>
@@ -335,6 +347,28 @@
         <div class="modal-actions">
           <button class="btn" id="calibCancel">Cancel</button>
           <button class="btn primary" id="calibApply">Apply scale</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- volume depth modal -->
+    <div id="depthModal" class="hidden" role="dialog" aria-modal="true" aria-label="Extrusion depth">
+      <div class="modal-card">
+        <h3>Volume depth</h3>
+        <p class="modal-sub">How thick is the slab / wall / footing you outlined?</p>
+        <div class="calib-row">
+          <input type="text" id="depthInput" inputmode="decimal" placeholder="e.g. 0.2 or 200" autocomplete="off" />
+          <select id="depthUnit" aria-label="Unit">
+            <option value="mm">mm</option>
+            <option value="cm">cm</option>
+            <option value="m" selected>m</option>
+            <option value="in">in</option>
+            <option value="ft">ft</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="depthCancel">Cancel</button>
+          <button class="btn primary" id="depthApply">Add volume</button>
         </div>
       </div>
     </div>

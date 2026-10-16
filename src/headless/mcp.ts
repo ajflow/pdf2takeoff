@@ -19,7 +19,7 @@ import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, compareDocs } from './ops.ts';
-import { markupLength, markupArea, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
+import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { toMeters } from '../engine/units.ts';
@@ -58,14 +58,35 @@ function markupRows(d: OpenDoc) {
   return d.markups.map((m) => {
     const cal = d.calibrations.get(m.page);
     const value =
-      m.type === 'count' ? 1 : cal ? (m.type === 'length' ? markupLength(m, cal.metersPerPt) : markupArea(m, cal.metersPerPt)) : null;
+      m.type === 'count'
+        ? 1
+        : m.type === 'angle'
+          ? markupAngle(m)
+          : cal
+            ? m.type === 'length'
+              ? markupLength(m, cal.metersPerPt)
+              : m.type === 'perimeter'
+                ? markupPerimeter(m, cal.metersPerPt)
+                : m.type === 'volume'
+                  ? markupVolume(m, cal.metersPerPt)
+                  : markupArea(m, cal.metersPerPt)
+            : null;
     return {
       id: m.id,
       type: m.type,
       label: m.label,
       page: m.page,
       value: value === null ? null : round(value, 4),
-      unit: m.type === 'count' ? 'each' : m.type === 'length' ? 'm' : 'm2',
+      unit:
+        m.type === 'count'
+          ? 'each'
+          : m.type === 'angle'
+            ? 'deg'
+            : m.type === 'length' || m.type === 'perimeter'
+              ? 'm'
+              : m.type === 'volume'
+                ? 'm3'
+                : 'm2',
     };
   });
 }
@@ -194,20 +215,25 @@ export async function runMcpServer(): Promise<void> {
     'measure',
     {
       description:
-        'Record a measurement on a sheet and get its real-world value (requires set_scale first; count needs no scale). Points are PDF points, bottom-left origin. length: 2+ points (polyline run); area: 3+ points (polygon); count: exactly 1 point.',
+        'Record a measurement on a sheet and get its real-world value (length/area/perimeter/volume need set_scale first; count and angle are scale-free). Points are PDF points, bottom-left origin. length: 2+ points (polyline run); area/perimeter/volume: 3+ points (polygon, volume also needs depth in metres); angle: exactly 3 points (vertex first); count: exactly 1 point.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
-        type: z.enum(['length', 'area', 'count']),
+        type: z.enum(['length', 'area', 'count', 'perimeter', 'volume', 'angle']),
         points: z.array(ptTuple).min(1),
+        depth: z.number().positive().optional().describe('volume only: extrusion depth in metres'),
         label: z.string().optional(),
       },
     },
-    async ({ id, page, type, points, label }) => {
+    async ({ id, page, type, points, depth, label }) => {
       const d = getDoc(id);
       if (type === 'count' && points.length !== 1) throw new Error('count takes exactly one point');
       if (type === 'length' && points.length < 2) throw new Error('length needs at least 2 points');
-      if (type === 'area' && points.length < 3) throw new Error('area needs at least 3 points');
+      if ((type === 'area' || type === 'perimeter' || type === 'volume') && points.length < 3) {
+        throw new Error(`${type} needs at least 3 points`);
+      }
+      if (type === 'angle' && points.length !== 3) throw new Error('angle takes exactly 3 points (vertex first)');
+      if (type === 'volume' && depth === undefined) throw new Error('volume requires depth (metres)');
       const markup: Markup = {
         id: nextId('mcp'),
         page,
@@ -215,17 +241,30 @@ export async function runMcpServer(): Promise<void> {
         label: label ?? defaultLabel(type),
         points: points.map(([x, y]) => ({ x, y })),
         createdAt: Date.now(),
+        ...(depth !== undefined ? { depth } : {}),
       };
       d.markups.push(markup);
       const cal = d.calibrations.get(page);
       const value =
-        type === 'count' ? 1 : cal ? (type === 'length' ? markupLength(markup, cal.metersPerPt) : markupArea(markup, cal.metersPerPt)) : null;
+        type === 'count'
+          ? 1
+          : type === 'angle'
+            ? markupAngle(markup)
+            : cal
+              ? type === 'length'
+                ? markupLength(markup, cal.metersPerPt)
+                : type === 'perimeter'
+                  ? markupPerimeter(markup, cal.metersPerPt)
+                  : type === 'volume'
+                    ? markupVolume(markup, cal.metersPerPt)
+                    : markupArea(markup, cal.metersPerPt)
+              : null;
       return text({
         markupId: markup.id,
         label: markup.label,
         value: value === null ? null : round(value, 4),
-        unit: type === 'count' ? 'each' : type === 'length' ? 'm' : 'm2',
-        calibrated: !!cal,
+        unit: type === 'count' ? 'each' : type === 'angle' ? 'deg' : type === 'length' || type === 'perimeter' ? 'm' : type === 'volume' ? 'm3' : 'm2',
+        calibrated: type === 'angle' || type === 'count' ? true : !!cal,
       });
     },
   );

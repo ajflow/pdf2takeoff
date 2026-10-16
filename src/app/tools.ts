@@ -24,6 +24,9 @@ const HINTS: Record<string, string> = {
   length: 'Click each vertex of the run · double-click or Enter to finish · Esc cancels',
   area: 'Click each corner of the area · double-click or Enter to finish · Esc cancels',
   count: 'Click to place a count mark · each click counts one item',
+  perimeter: 'Click each corner of the boundary · double-click or Enter to close · Esc cancels',
+  volume: 'Click each corner of the area · double-click or Enter to finish, then enter the depth',
+  angle: 'Click the corner vertex, then one point on each ray',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
 };
 
@@ -62,6 +65,15 @@ export function initTools(overlay: SVGSVGElement): void {
 
   document.getElementById('calibCancel')?.addEventListener('click', closeCalibModal);
   document.getElementById('calibApply')?.addEventListener('click', applyCalibration);
+  document.getElementById('depthCancel')?.addEventListener('click', closeDepthModal);
+  document.getElementById('depthApply')?.addEventListener('click', applyDepth);
+  document.getElementById('depthModal')?.addEventListener('pointerdown', (e) => {
+    if (e.target === document.getElementById('depthModal')) closeDepthModal();
+  });
+  document.getElementById('depthInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyDepth();
+    if (e.key === 'Escape') closeDepthModal();
+  });
   calibModal.addEventListener('pointerdown', (e) => {
     if (e.target === calibModal) closeCalibModal();
   });
@@ -134,7 +146,14 @@ function onPointerDown(e: PointerEvent): void {
     }
     case 'length':
     case 'area':
+    case 'perimeter':
+    case 'volume':
       draft.push(p);
+      refreshPreview();
+      break;
+    case 'angle':
+      draft.push(p);
+      if (draft.length === 3) finishDraft(); // vertex + two rays
       refreshPreview();
       break;
     case 'count': {
@@ -199,7 +218,7 @@ function onPointerMove(e: PointerEvent): void {
 function onDoubleClick(e: MouseEvent): void {
   const p = eventToPdf(e);
   if (!p) return;
-  if (state.tool === 'length' || state.tool === 'area') {
+  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume') {
     // the second click of a double-click registers as a duplicate vertex
     if (draft.length >= 2 && distPt(draft[draft.length - 1], draft[draft.length - 2]) < 1) {
       draft.pop();
@@ -249,17 +268,17 @@ async function runScan(p: Pt): Promise<void> {
 }
 
 function finishDraft(): void {
-  const min = state.tool === 'area' ? 3 : 2;
-  if (draft.length >= min) {
-    state.markups.push({
-      id: nextId('mk'),
-      page: state.pageNum,
-      type: state.tool as 'length' | 'area',
-      label: defaultLabel(state.tool as 'length' | 'area'),
-      points: [...draft],
-      createdAt: Date.now(),
-    });
-    state.lastAction = null;
+  const min = state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' ? 3 : 2;
+  if (state.tool === 'angle') {
+    if (draft.length === 3) pushDraftMarkup('angle');
+  } else if (draft.length >= min) {
+    if (state.tool === 'volume') {
+      pendingVolume = [...draft];
+      draft = [];
+      openDepthModal();
+    } else {
+      pushDraftMarkup(state.tool as 'length' | 'area' | 'perimeter');
+    }
   }
   draft = [];
   renderPreview(null);
@@ -267,9 +286,22 @@ function finishDraft(): void {
   emit();
 }
 
+function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'angle', depth?: number): void {
+  state.markups.push({
+    id: nextId('mk'),
+    page: state.pageNum,
+    type,
+    label: defaultLabel(type),
+    points: [...draft],
+    createdAt: Date.now(),
+    ...(depth !== undefined ? { depth } : {}),
+  });
+  state.lastAction = null;
+}
+
 function refreshPreview(): void {
   let spec: PreviewSpec | null = null;
-  if (state.tool === 'length' || state.tool === 'area') {
+  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'angle') {
     if (draft.length > 0) spec = { kind: state.tool, points: draft, cursor };
   } else if (state.tool === 'calibrate' && calibFirst) {
     spec = { kind: 'calibrate', points: [calibFirst], cursor };
@@ -302,6 +334,48 @@ function applyScaleToPages(metersPerPt: number, source: string): void {
   for (const p of pages) state.calibrations.set(p, { metersPerPt, source });
 }
 
+// --- volume depth modal ---
+
+let pendingVolume: Pt[] | null = null;
+let depthModal: HTMLElement;
+let depthInput: HTMLInputElement;
+let depthUnitSel: HTMLSelectElement;
+
+function openDepthModal(): void {
+  depthModal = document.getElementById('depthModal')!;
+  depthInput = document.getElementById('depthInput') as HTMLInputElement;
+  depthUnitSel = document.getElementById('depthUnit') as HTMLSelectElement;
+  depthInput.value = '';
+  depthUnitSel.value = state.displayUnit === 'ft-in' ? 'ft' : (state.displayUnit as Unit);
+  depthModal.classList.remove('hidden');
+  depthInput.focus();
+}
+
+function closeDepthModal(): void {
+  depthModal.classList.add('hidden');
+  pendingVolume = null;
+}
+
+function applyDepth(): void {
+  if (!pendingVolume) return closeDepthModal();
+  const unit = depthUnitSel.value as Unit;
+  const value = parseLength(depthInput.value, unit);
+  if (value == null) {
+    depthInput.classList.add('invalid');
+    setTimeout(() => depthInput.classList.remove('invalid'), 600);
+    return;
+  }
+  const depth = toMeters(value, unit);
+  const points = pendingVolume;
+  pendingVolume = null;
+  depthModal.classList.add('hidden');
+  draft = points; // reuse pushDraftMarkup against the stashed polygon
+  pushDraftMarkup('volume', depth);
+  draft = [];
+  setTool('pan');
+  hint('Volume added · switch units any time in the toolbar');
+}
+
 function applyCalibration(): void {
   if (!pendingCalib) return closeCalibModal();
   const unit = calibUnitSel.value as Unit;
@@ -324,8 +398,12 @@ function applyCalibration(): void {
 
 function onKeyDown(e: KeyboardEvent): void {
   if (isTypingTarget(e.target)) return;
-  if (!calibModal.classList.contains('hidden')) {
-    if (e.key === 'Escape') closeCalibModal();
+  const depthM = document.getElementById('depthModal');
+  if (!calibModal.classList.contains('hidden') || !depthM?.classList.contains('hidden')) {
+    if (e.key === 'Escape') {
+      closeCalibModal();
+      closeDepthModal();
+    }
     return;
   }
 
@@ -335,6 +413,9 @@ function onKeyDown(e: KeyboardEvent): void {
     l: 'length',
     a: 'area',
     n: 'count',
+    p: 'perimeter',
+    o: 'volume',
+    g: 'angle',
     s: 'scan',
   };
   const k = e.key.toLowerCase();

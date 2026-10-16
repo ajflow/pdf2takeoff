@@ -68,6 +68,13 @@ export function formatArea(sqMeters: number, u: DisplayUnit): string {
   return `${a.toFixed(dec)} ${base}²`;
 }
 
+export function formatVolume(cubicMeters: number, u: DisplayUnit): string {
+  const base: Unit = u === 'ft-in' ? 'ft' : u;
+  const v = cubicMeters / TO_M[base] ** 3;
+  const dec = base === 'mm' || base === 'in' ? 0 : 2;
+  return `${v.toFixed(dec)} ${base}³`;
+}
+
 /** Parse a user-entered length like "6", "6.5", "6 6" (ft in) into the unit's value. */
 export function parseLength(raw: string, u: Unit): number | null {
   const s = raw.trim();

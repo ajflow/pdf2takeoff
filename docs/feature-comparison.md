@@ -1,7 +1,7 @@
 # Feature comparison: pdf2takeoff vs Bluebeam Revu
 
 Living document — update when features ship or Bluebeam's lineup changes.
-Last verified against **bluebeam.com/au/pricing** on **2026-10-16**.
+Last verified against **bluebeam.com/au/pricing** on **2026-10-16**; updated 2026-10-16 after the measurement-completeness release.
 
 Purpose: (1) honest public comparison for users evaluating a free alternative,
 (2) internal roadmap tracker showing exactly which Bluebeam capabilities we
@@ -41,9 +41,9 @@ pdf2takeoff runs in any modern browser on any OS.
 | Count | Core | ✅ | Per-label group totals |
 | Scale calibration | Basics | ✅ | Known dimension or presets (1:50–1:500, imperial); metric + imperial |
 | Per-page scales | Core (viewports) | ✅ | Each sheet keeps its own scale; one-click apply-to-all |
-| Perimeter | Core | 🔜 | Quick win — polygon edge sum already computed internally |
-| Volume | Core | 🔜 | Area × depth prompt (walls, footings) |
-| Angle | Core | 🔜 | Vertex geometry helper |
+| Perimeter | Core | ✅ | Closed-polygon boundary length; round-trips as a Polygon annotation |
+| Volume | Core | ✅ | Area × depth with a depth prompt; depth stored in the annotation comment |
+| Angle | Core | ✅ | 3-click angle at a vertex; scale-free — works before calibration |
 | Multi-scale viewports on one page | Core | 🔜 | Per-region scales for detail views |
 | Dynamic Fill (flood-fill areas) | Complete | 🔜 | Click inside walls → bounded area |
 | Formulas & custom columns | Complete | 🔜 | Waste factors, cost/length, unit conversion |

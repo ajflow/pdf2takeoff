@@ -16,7 +16,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 
 - **Viewer**: open any PDF drawing; zoom, pan, multi-page (PDF.js)
 - **Scale calibration**: click both ends of a known dimension and type its real length, or pick a preset (1:50 … 1:500, 1/8″ = 1′-0″, 1/4″ = 1′-0″, 1″ = 10′/20′/30′). Each page keeps its own scale. Metric and imperial.
-- **Takeoff tools**: Length (segmented runs), Area, and Count, with live measurements on the drawing and per-label group totals
+- **Takeoff tools**: Length (segmented runs), Area, Perimeter, Volume (area × depth), Angle (scale-free) and Count, with live measurements on the drawing and per-label group totals
 - **Scan (auto-count)**: press `S` and click one instance of a repeated symbol: a local computer-vision pass (rasterize → binarize → connected components → shape matching) finds and counts every match on the page in ~100 ms, no model download and nothing uploaded. Drop a trained detector (`symbols.onnx` + `symbols.json`) into `public/models/` and the same click upgrades to an in-browser ONNX detector (via `onnxruntime-web`, WASM) that labels hits by class and handles cluttered sheets, with automatic fallback to the CV pass if the model is missing or fails. Train one with the pipeline in [`training/`](training/README.md).
 - **Markups list**: rename labels, jump to page, delete; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
@@ -93,7 +93,7 @@ Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 
 | Key | Action |
 | --- | --- |
-| `V` / `C` / `L` / `A` / `N` / `S` | pan · calibrate · length · area · count · scan |
+| `V` / `C` / `L` / `A` / `N` / `P` / `O` / `G` / `S` | pan · calibrate · length · area · count · perimeter · volume · angle · scan |
 | `F` | fit width |
 | `+` / `−` | zoom |
 | `←` / `→` | previous / next page |

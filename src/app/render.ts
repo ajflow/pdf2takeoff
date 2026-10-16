@@ -2,9 +2,11 @@
 // PDF space; converted to the viewBox (viewport@1) here. Sizes are paper-space
 // points, so markups look like printed PDF annotations at any zoom.
 
-import { state, type Markup, type Pt, markupLength, markupArea, calibrationFor, defaultLabel } from './state';
+import { state, type Markup, type Pt, calibrationFor, defaultLabel } from './state';
 import { markupsLayer, previewLayer, pdfToView } from './viewer';
+import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';
+import { markupAngle } from '../engine/geometry';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -12,6 +14,9 @@ export const COLORS: Record<string, string> = {
   length: '#e11d48',
   area: '#7c3aed',
   count: '#0284c7',
+  perimeter: '#0d9488',
+  volume: '#4f46e5',
+  angle: '#db2777',
   calibrate: '#d97706',
 };
 
@@ -25,15 +30,7 @@ function el<K extends keyof SVGElementTagNameMap>(
 }
 
 function labelText(m: Markup): string {
-  const cal = calibrationFor(m.page);
-  const value =
-    cal == null
-      ? '-'
-      : m.type === 'length'
-        ? formatLength(markupLength(m, cal.metersPerPt), state.displayUnit)
-        : m.type === 'area'
-          ? formatArea(markupArea(m, cal.metersPerPt), state.displayUnit)
-          : '1';
+  const value = formatMarkupValue(m, calibrationFor(m.page), state.displayUnit) || '-';
   return m.label === defaultLabel(m.type) ? value : `${m.label}: ${value}`;
 }
 
@@ -124,7 +121,7 @@ function renderMarkup(m: Markup): SVGGElement {
     const mid = pts[Math.max(0, pts.length - 2)] ?? pts[0];
     const end = pts[pts.length - 1] ?? mid;
     addLabel(g, labelText(m), { x: (mid.x + end.x) / 2, y: (mid.y + end.y) / 2 });
-  } else if (m.type === 'area') {
+  } else if (m.type === 'area' || m.type === 'volume') {
     g.appendChild(
       el('polygon', {
         points: pts.map((p) => `${p.x},${p.y}`).join(' '),
@@ -133,10 +130,33 @@ function renderMarkup(m: Markup): SVGGElement {
         stroke: color,
         'stroke-width': selected ? 2.4 : 1.6,
         'stroke-linejoin': 'round',
+        ...(m.type === 'volume' ? { 'stroke-dasharray': '6 2' } : {}),
       }),
     );
     addVertices(g, pts, color, selected);
     addLabel(g, labelText(m), centroid(pts));
+  } else if (m.type === 'perimeter') {
+    g.appendChild(
+      el('polygon', {
+        points: pts.map((p) => `${p.x},${p.y}`).join(' '),
+        fill: 'none',
+        stroke: color,
+        'stroke-width': selected ? 2.4 : 1.6,
+        'stroke-linejoin': 'round',
+      }),
+    );
+    addVertices(g, pts, color, selected);
+    addLabel(g, labelText(m), centroid(pts));
+  } else if (m.type === 'angle') {
+    const [v, a, b] = pts;
+    for (const ray of [a, b]) {
+      if (!ray) continue;
+      g.appendChild(
+        el('line', { x1: v.x, y1: v.y, x2: ray.x, y2: ray.y, stroke: color, 'stroke-width': selected ? 2.4 : 1.6 }),
+      );
+    }
+    addVertices(g, pts, color, selected);
+    addLabel(g, labelText(m), { x: v.x, y: v.y - 8 });
   } else {
     // count marker
     const p = pts[0];
@@ -161,7 +181,7 @@ function renderMarkup(m: Markup): SVGGElement {
 // --- in-progress preview ---
 
 export interface PreviewSpec {
-  kind: 'length' | 'area' | 'calibrate';
+  kind: 'length' | 'area' | 'perimeter' | 'volume' | 'angle' | 'calibrate';
   points: Pt[]; // PDF space
   cursor: Pt | null;
 }
@@ -175,11 +195,11 @@ export function renderPreview(spec: PreviewSpec | null): void {
   const cur = spec.cursor ? pdfToView(spec.cursor) : null;
   const chain = cur ? [...pts, cur] : pts;
 
-  if (spec.kind === 'area') {
+  if (spec.kind === 'area' || spec.kind === 'volume' || spec.kind === 'perimeter') {
     g.appendChild(
       el('polygon', {
         points: chain.map((p) => `${p.x},${p.y}`).join(' '),
-        fill: color,
+        fill: spec.kind === 'perimeter' ? 'none' : color,
         'fill-opacity': 0.1,
         stroke: color,
         'stroke-width': 1.4,
@@ -210,9 +230,15 @@ export function renderPreview(spec: PreviewSpec | null): void {
       let totalPt = 0;
       for (let i = 1; i < chain.length; i++) totalPt += Math.hypot(chain[i].x - chain[i - 1].x, chain[i].y - chain[i - 1].y);
       text = `${(totalPt * (25.4 / 72)).toFixed(1)} mm on paper`;
+    } else if (spec.kind === 'angle') {
+      // scale-free: live degrees as soon as vertex + one ray exist
+      if (spec.points.length >= 2) {
+        const poly = spec.points.length >= 3 ? spec.points : [spec.points[0], spec.points[1], spec.cursor!];
+        text = `${markupAngle({ points: poly } as Markup).toFixed(1)}°`;
+      }
     } else if (cal) {
       const toM = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y) * cal.metersPerPt;
-      if (spec.kind === 'area') {
+      if (spec.kind === 'area' || spec.kind === 'volume') {
         const poly = [...spec.points, spec.cursor!];
         let sum = 0;
         for (let i = 0; i < poly.length; i++) {
@@ -220,7 +246,12 @@ export function renderPreview(spec: PreviewSpec | null): void {
           const b = poly[(i + 1) % poly.length];
           sum += a.x * b.y - b.x * a.y;
         }
-        text = formatArea(Math.abs(sum / 2) * cal.metersPerPt ** 2, state.displayUnit);
+        text = `${formatArea(Math.abs(sum / 2) * cal.metersPerPt ** 2, state.displayUnit)}${spec.kind === 'volume' ? ' × d' : ''}`;
+      } else if (spec.kind === 'perimeter') {
+        const poly = [...spec.points, spec.cursor!];
+        let total = 0;
+        for (let i = 0; i < poly.length; i++) total += toM(poly[i], poly[(i + 1) % poly.length]);
+        text = formatLength(total, state.displayUnit);
       } else {
         let total = 0;
         for (let i = 1; i < chain.length; i++) total += toM(chain[i - 1], chain[i]);

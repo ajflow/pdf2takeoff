@@ -4,8 +4,8 @@
 
 import { PDFDocument, PDFName, PDFString, type PDFObject } from 'pdf-lib';
 import type { Calibration, Markup, Pt } from './types.ts';
-import { markupLength, markupArea } from './geometry.ts';
-import { formatLength, formatArea, type DisplayUnit } from './units.ts';
+import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
+import { formatLength, formatArea, formatVolume, type DisplayUnit } from './units.ts';
 
 export const ANNOTATION_AUTHOR = 'pdf2takeoff';
 
@@ -14,6 +14,9 @@ const COLOR_HEX: Record<string, [number, number, number]> = {
   length: [225 / 255, 29 / 255, 72 / 255],
   area: [124 / 255, 58 / 255, 237 / 255],
   count: [2 / 255, 132 / 255, 199 / 255],
+  perimeter: [13 / 255, 148 / 255, 136 / 255],
+  volume: [79 / 255, 70 / 255, 229 / 255],
+  angle: [219 / 255, 39 / 255, 119 / 255],
 };
 
 function pdfDate(): string {
@@ -24,13 +27,22 @@ function pdfDate(): string {
 
 function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
   const cal = calibrations.get(m.page);
+  // angles are scale-free — they never need calibration
+  if (m.type === 'angle') return `${m.label}: ${markupAngle(m).toFixed(1)}°`;
   if (!cal) return m.label;
-  const v =
-    m.type === 'length'
-      ? formatLength(markupLength(m, cal.metersPerPt), displayUnit)
-      : m.type === 'area'
-        ? formatArea(markupArea(m, cal.metersPerPt), displayUnit)
-        : '1';
+  if (m.type === 'count') return `${m.label}: 1`;
+  let v: string;
+  if (m.type === 'perimeter') {
+    v = formatLength(markupPerimeter(m, cal.metersPerPt), displayUnit);
+  } else if (m.type === 'volume') {
+    // depth rides along in the comment so round-trips (and humans in Revu) see it
+    const vol = formatVolume(markupVolume(m, cal.metersPerPt), displayUnit);
+    return `${m.label}: ${vol} (depth ${formatLength(m.depth ?? 0, displayUnit)})`;
+  } else if (m.type === 'length') {
+    v = formatLength(markupLength(m, cal.metersPerPt), displayUnit);
+  } else {
+    v = formatArea(markupArea(m, cal.metersPerPt), displayUnit);
+  }
   return `${m.label}: ${v}`;
 }
 
@@ -96,21 +108,21 @@ export async function buildAnnotatedPdf(opts: AnnotateOptions): Promise<Uint8Arr
         L: flat,
         IC: COLOR_HEX.length,
       });
-    } else if (m.type === 'length') {
+    } else if (m.type === 'length' || m.type === 'angle') {
       addAnnot(pi, {
         ...common(m),
         Subtype: PDFName.of('PolyLine'),
         Rect: bbox(m.points, 4),
         Vertices: flat,
-        IC: COLOR_HEX.length,
+        IC: COLOR_HEX[m.type],
       });
-    } else if (m.type === 'area') {
+    } else if (m.type === 'area' || m.type === 'perimeter' || m.type === 'volume') {
       addAnnot(pi, {
         ...common(m),
         Subtype: PDFName.of('Polygon'),
         Rect: bbox(m.points, 4),
         Vertices: flat,
-        IC: COLOR_HEX.area,
+        IC: COLOR_HEX[m.type],
       });
     } else {
       const [x, y] = [m.points[0].x, m.points[0].y];

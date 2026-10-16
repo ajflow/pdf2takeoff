@@ -3,7 +3,7 @@
 
 export type Pt = { x: number; y: number };
 
-export type MarkupType = 'length' | 'area' | 'count';
+export type MarkupType = 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle';
 
 export interface Markup {
   id: string;
@@ -12,6 +12,8 @@ export interface Markup {
   label: string;
   points: Pt[]; // PDF user space (origin bottom-left)
   createdAt: number;
+  /** Volume only: the extrusion depth in metres. */
+  depth?: number;
 }
 
 export interface Calibration {

@@ -5,6 +5,7 @@
 
 import type { Markup } from './types.ts';
 import { ANNOTATION_AUTHOR } from './annotate.ts';
+import { parseLength, toMeters, type Unit } from './units.ts';
 
 /** A renderer's annotation object, accessed structurally. */
 export type AnnotationLike = Record<string, unknown> & { subtype?: string };
@@ -44,13 +45,44 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     }
 
     if (points.length === 0) continue;
+
+    // Our writer encodes the value in Contents, so the unit suffix tells the
+    // type back: ² = area, ³ (+ depth note) = volume, ° = angle, a bare
+    // value on a Polygon = perimeter. Uncalibrated comments carry no value
+    // and degrade to the geometry's base type.
+    let type: Markup['type'];
+    let depth: number | undefined;
+    if (subtype === 'FreeText') {
+      type = 'count';
+    } else if (subtype === 'Polygon') {
+      if (contents.includes('³')) {
+        type = 'volume';
+        const d = contents.match(/\(depth ([^)]+?)\s*(m|ft)\)/);
+        if (d) {
+          const parsed = parseLength(d[1], d[2] as Unit);
+          if (parsed != null) depth = toMeters(parsed, d[2] as Unit);
+        }
+      } else if (contents.includes('²')) {
+        type = 'area';
+      } else if (contents.includes(':')) {
+        type = 'perimeter';
+      } else {
+        type = 'area';
+      }
+    } else if (subtype === 'PolyLine' && contents.includes('°')) {
+      type = 'angle';
+    } else {
+      type = 'length';
+    }
+
     found.push({
       id: `im-${page}-${startIndex + found.length}`,
       page,
-      type: subtype === 'Polygon' ? 'area' : subtype === 'FreeText' ? 'count' : 'length',
+      type,
       label,
       points,
       createdAt: Date.now() + startIndex + found.length,
+      ...(depth !== undefined ? { depth } : {}),
     });
   }
   return found;

@@ -9,7 +9,7 @@ import type { TakeoffData } from '../engine/export';
 export type { Calibration, Markup, MarkupType, Pt };
 export { markupLength, markupArea, distPt, defaultLabel, nextId } from '../engine/geometry';
 
-export type ToolId = 'pan' | 'calibrate' | 'length' | 'area' | 'count' | 'scan';
+export type ToolId = 'pan' | 'calibrate' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'scan';
 
 export interface AppState {
   fileName: string;

@@ -1512,3 +1512,18 @@ table.demo-results td.mono {
   background: var(--teal);
   box-shadow: 0 0 8px rgba(45, 212, 191, 0.9);
 }
+.tag-perimeter {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.25);
+  color: #5eead4;
+}
+.tag-volume {
+  background: rgba(129, 140, 248, 0.12);
+  border-color: rgba(129, 140, 248, 0.25);
+  color: #a5b4fc;
+}
+.tag-angle {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: rgba(244, 114, 182, 0.25);
+  color: #f9a8d4;
+}

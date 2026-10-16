@@ -103,13 +103,34 @@ check('measure: wall ~11.995 m', Math.abs(measured.value - 11.995) < 0.01, `got 
 const wallId = measured.markupId;
 
 const listed = textOf(await call('list_markups', { id: docId }));
-check('list_markups: 9 rows', listed.markups.length === 9);
+check('list_markups: 9 rows', listed.markups.length === 9, `got ${listed.markups.length}`);
 
 await call('delete_markup', { id: docId, markup_id: wallId });
 const afterDelete = textOf(await call('list_markups', { id: docId }));
 check('delete_markup: 8 rows left', afterDelete.markups.length === 8);
 // put the wall back for the export
 await call('measure', { id: docId, page: 1, type: 'length', points: [[60, 90], [400.02, 90]], label: 'External wall' });
+
+const vol = textOf(
+  await call('measure', {
+    id: docId, page: 1, type: 'volume', depth: 0.2,
+    points: [[60, 90], [173.39, 90], [173.39, 316.77], [60, 316.77]], label: 'Slab',
+  }),
+);
+check('measure: volume ~6.41 m3', Math.abs(vol.value - 6.41) < 0.05, `got ${vol.value}`);
+
+const ang = textOf(
+  await call('measure', { id: docId, page: 1, type: 'angle', points: [[60, 90], [200, 90], [60, 200]], label: 'Corner' }),
+);
+check('measure: angle 90 deg (no calibration needed)', Math.abs(ang.value - 90) < 0.1, `got ${ang.value}`);
+
+const per = textOf(
+  await call('measure', {
+    id: docId, page: 1, type: 'perimeter',
+    points: [[60, 90], [173.39, 90], [173.39, 316.77], [60, 316.77]], label: 'Room boundary',
+  }),
+);
+check('measure: perimeter ~24 m', Math.abs(per.value - 24.0) < 0.1, `got ${per.value}`);
 
 const csvPath = '/tmp/mcp-takeoff.csv';
 await call('export', { id: docId, format: 'csv', path: csvPath });
@@ -119,7 +140,7 @@ const pdfPath = '/tmp/mcp-annotated.pdf';
 const saved = textOf(await call('save_annotated', { id: docId, path: pdfPath }));
 check(
   'save_annotated: valid PDF written',
-  saved.markups === 9 && existsSync(pdfPath) && readFileSync(pdfPath).subarray(0, 5).toString() === '%PDF-',
+  saved.markups === 12 && existsSync(pdfPath) && readFileSync(pdfPath).subarray(0, 5).toString() === '%PDF-',
 );
 
 const compared = textOf(await call('compare_revisions', { a: sample, b: revB }));

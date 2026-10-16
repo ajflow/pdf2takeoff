@@ -4,7 +4,7 @@
 
 import type { DisplayUnit } from '../engine/units';
 import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
-import type { TakeoffData } from '../engine/export';
+import type { CustomColumn, TakeoffData } from '../engine/export';
 
 export type { Calibration, Markup, MarkupType, Pt };
 export { markupLength, markupArea, distPt, defaultLabel, nextId } from '../engine/geometry';
@@ -32,6 +32,7 @@ export interface AppState {
   lastAction: { kind: 'move'; id: string; before: Pt[] } | null;
   presets: ToolPreset[];
   activePreset: ToolPreset | null;
+  columns: CustomColumn[];
   listFilter: {
     status: 'all' | 'none' | 'check' | 'confirmed';
     text: string;
@@ -54,6 +55,7 @@ export const state: AppState = {
   lastAction: null,
   presets: [],
   activePreset: null,
+  columns: [],
   listFilter: { status: 'all', text: '', sort: 'added' },
 };
 
@@ -79,5 +81,6 @@ export function takeoffData(): TakeoffData {
     markups: state.markups,
     calibrations: state.calibrations,
     displayUnit: state.displayUnit,
+    columns: state.columns,
   };
 }

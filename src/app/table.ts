@@ -14,6 +14,7 @@ import { defaultLabel, markupLength, markupArea, markupPerimeter, markupVolume }
 import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
+import { columnValuesFor } from './columns';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -161,6 +162,8 @@ function renderTotals(): void {
     let text: string;
     if (g.type === 'count') {
       text = `${g.items.length} ×`;
+      const extras = columnValuesFor(g.items.length, g.items.length);
+      if (extras.length) text += extras.map((x) => ` · ${x.name}: ${x.text}`).join('');
     } else if (g.type === 'angle') {
       text = '—'; // angles don't sum
     } else if (cal) {
@@ -173,6 +176,8 @@ function renderTotals(): void {
       if (g.type === 'length' || g.type === 'perimeter') text = formatLength(total, state.displayUnit);
       else if (g.type === 'volume') text = formatVolume(total, state.displayUnit);
       else text = formatArea(total, state.displayUnit);
+      const extras = columnValuesFor(typeof total === 'number' ? total : null, g.items.length);
+      if (extras.length) text += extras.map((x) => ` · ${x.name}: ${x.text}`).join('');
     } else {
       text = 'not calibrated';
     }

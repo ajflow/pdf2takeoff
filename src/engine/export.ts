@@ -6,11 +6,19 @@ import type { Calibration, Markup, MarkupType } from './types.ts';
 import type { DisplayUnit } from './units.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume } from './units.ts';
+import { evaluateFormula } from './formula.ts';
+
+export interface CustomColumn {
+  name: string;
+  formula: string; // over vars: value (this row's quantity), count
+  unit: string;
+}
 
 export interface TakeoffData {
   markups: Markup[];
   calibrations: Map<number, Calibration>;
   displayUnit: DisplayUnit;
+  columns?: CustomColumn[];
 }
 
 export type Matrix = (string | number)[][];
@@ -64,10 +72,18 @@ export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: Di
 
 /** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
 export function buildMatrix(d: TakeoffData): Matrix {
-  const rows: Matrix = [['Label', 'Type', 'Page', 'Value', 'Unit', 'Status']];
+  const cols = d.columns ?? [];
+  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Status', ...cols.map((c) => c.name)];
+  const rows: Matrix = [header];
+  const round = (n: number) => Math.round(n * 10000) / 10000;
   for (const m of d.markups) {
     const { value, unit } = valueParts(m, d.calibrations.get(m.page), d.displayUnit);
-    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '']);
+    const numeric = value === '' ? null : Number(value);
+    const extras = cols.map((c) => {
+      const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: 1 });
+      return out === null ? 'ERR' : round(out);
+    });
+    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '', ...extras]);
   }
   const gs = groupsOf(d.markups);
   if (gs.length) {
@@ -90,7 +106,12 @@ export function buildMatrix(d: TakeoffData): Matrix {
       }
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
       const confirmed = g.items.filter((m) => m.status === 'confirmed').length;
-      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '']);
+      const numeric = typeof total === 'number' ? total : null;
+      const extras = cols.map((c) => {
+        const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: g.items.length });
+        return out === null ? 'ERR' : round(out);
+      });
+      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '', ...extras]);
     }
   }
   return rows;

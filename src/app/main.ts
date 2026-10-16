@@ -12,7 +12,8 @@ import { exportXlsx } from './table';
 import { initPageStrip } from './pagestrip';
 import { initLibrary, renderLibrary } from './library';
 import { startSession, stopSession, sessionActive, getPeers } from './session';
-import { loadPresets } from './persistence';
+import { loadPresets, loadColumns } from './persistence';
+import { initColumns, renderColumns } from './columns';
 import { scheduleSave, restoreSession } from './persistence';
 import {
   compareState,
@@ -47,9 +48,15 @@ initTable();
 initCompare(canvas, pageEl);
 initPageStrip(document.getElementById('pageStrip')!);
 initLibrary();
+initColumns();
 void loadPresets().then((presets) => {
   state.presets = presets;
   renderLibrary();
+});
+void loadColumns().then((columns) => {
+  state.columns = columns;
+  renderColumns();
+  emit();
 });
 
 // the workspace fills the viewport; keep reloads from restoring a mid-page offset

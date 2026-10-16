@@ -385,14 +385,19 @@ export async function runMcpServer(): Promise<void> {
         id: z.string(),
         format: z.enum(['csv', 'tsv', 'xlsx']).default('csv'),
         path: z.string().describe('output file path'),
+        columns: z
+          .array(z.object({ name: z.string(), formula: z.string(), unit: z.string() }))
+          .optional()
+          .describe('computed columns, e.g. {"name":"Waste +10%","formula":"value * 1.1","unit":"m"}'),
       },
     },
-    async ({ id, format, path }) => {
+    async ({ id, format, path, columns }) => {
       const d = getDoc(id);
       const matrix = buildMatrix({
         markups: d.markups,
         calibrations: d.calibrations,
         displayUnit: 'm',
+        columns,
       });
       if (format === 'xlsx') {
         writeFileSync(path, xlsxBytes(matrix));

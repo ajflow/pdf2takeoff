@@ -3,6 +3,7 @@
 // itself is never stored or uploaded anywhere.
 
 import { state, type Markup, type Calibration, type ToolPreset } from './state';
+import type { CustomColumn } from '../engine/export';
 import { fileHash } from '../engine/export';
 
 const DB_NAME = 'pdf2takeoff-sessions';
@@ -111,6 +112,36 @@ export async function loadPresets(): Promise<ToolPreset[]> {
       req.onsuccess = () => {
         const list = req.result as ToolPreset[] | undefined;
         resolve(Array.isArray(list) ? list.filter((p) => p && typeof p.label === 'string') : []);
+      };
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+const COLUMN_KEY = 'columns';
+
+export async function saveColumns(columns: CustomColumn[]): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(PRESET_STORE, 'readwrite');
+    tx.objectStore(PRESET_STORE).put(columns, COLUMN_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export async function loadColumns(): Promise<CustomColumn[]> {
+  const db = await openDb();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    try {
+      const req = db.transaction(PRESET_STORE, 'readonly').objectStore(PRESET_STORE).get(COLUMN_KEY);
+      req.onsuccess = () => {
+        const list = req.result as CustomColumn[] | undefined;
+        resolve(Array.isArray(list) ? list.filter((c) => c && typeof c.formula === 'string') : []);
       };
       req.onerror = () => resolve([]);
     } catch {

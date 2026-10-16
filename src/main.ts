@@ -105,6 +105,9 @@ async function openSample(): Promise<void> {
 }
 
 document.getElementById('sampleBtnHero')?.addEventListener('click', () => void openSample());
+document.getElementById('scrollCue')?.addEventListener('click', () => {
+  document.getElementById('seo')?.scrollIntoView({ behavior: 'smooth' });
+});
 
 // ?file=/path.pdf — open a same-origin drawing on load (deep links, tests).
 // Cross-origin URLs are refused on purpose: the privacy promise is that no

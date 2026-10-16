@@ -249,6 +249,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
             Files never leave your machine · open source · no account, ever
           </div>
+          <button class="scroll-cue" id="scrollCue" aria-label="Scroll to learn more">
+            See how it works
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          </button>
         </div>
       </main>
 
@@ -312,9 +316,10 @@
       </div>
     </div>
 
-    <!-- AEO content: the plain answer, how-to, FAQ -->
+    <!-- AEO content: the plain answer, how-to, FAQ (designed as one dark flow with the hero) -->
     <section id="seo">
       <div class="wrap">
+        <p class="eyebrow" aria-hidden="true">The tool</p>
         <h2>What is pdf2takeoff?</h2>
         <p class="lead">
           pdf2takeoff is a free, open-source tool that turns construction PDF drawings into measured
@@ -322,31 +327,36 @@
           counts, then export the list to Excel or save it back into the PDF. It runs entirely in
           your browser, so drawings are never uploaded.
         </p>
-        <div class="fact-strip">
-          <span>Free, no account</span>
-          <span>Files never uploaded</span>
-          <span>Open source · Apache-2.0</span>
-          <span>Metric &amp; imperial</span>
-          <span>Markups open in Bluebeam &amp; Acrobat</span>
+
+        <div class="feature-grid">
+          <div class="feature-card"><span class="ic">&#128274;</span><h3>Files never uploaded</h3><p>Rendering and measurement happen locally in your browser. Tender documents never leave your machine.</p></div>
+          <div class="feature-card"><span class="ic">&#127377;&#65039;</span><h3>Free, no account</h3><p>Apache-2.0 open source. No page limits, no paid tier, nothing to meter.</p></div>
+          <div class="feature-card"><span class="ic">&#128207;</span><h3>Metric &amp; imperial</h3><p>Calibrate from any printed dimension or pick presets like 1:100 and 1/4&Prime; = 1&prime;-0&Prime;. Each page keeps its own scale.</p></div>
+          <div class="feature-card"><span class="ic">&#128202;</span><h3>Excel, CSV &amp; report</h3><p>Quantities grouped by label with totals, a printable report, or copy straight into your estimate.</p></div>
+          <div class="feature-card"><span class="ic">&#128260;</span><h3>Bluebeam round-trip</h3><p>Markups save as standard PDF annotations, so the annotated file opens cleanly in Revu and Acrobat.</p></div>
+          <div class="feature-card"><span class="ic">&#9889;</span><h3>Scan auto-count</h3><p>Click one symbol and every match on the sheet is counted in about a tenth of a second, fully local.</p></div>
         </div>
 
+        <p class="eyebrow" aria-hidden="true">Workflow</p>
         <h2>How to do a takeoff from a PDF, free</h2>
-        <ol>
-          <li><strong>Open the drawing.</strong> Drag any PDF into the window. Rendering happens on your machine; nothing is sent to a server.</li>
-          <li><strong>Calibrate the scale.</strong> Click both ends of a printed dimension, type its real length, or pick a standard scale like 1:100 or 1/4&Prime; = 1&prime;-0&Prime;.</li>
-          <li><strong>Measure.</strong> Trace wall runs with the Length tool, outline rooms and slabs with Area, and click Count for fixtures, columns and sockets. Each page keeps its own scale.</li>
-          <li><strong>Export quantities.</strong> The markups list groups by label with running totals. Copy it into Excel or download the CSV.</li>
-          <li><strong>Save into the PDF.</strong> Markups are written as standard PDF annotations, so the annotated file opens cleanly in Bluebeam Revu, Adobe Acrobat and every other PDF app.</li>
+        <ol class="steps-grid">
+          <li class="step"><span class="n" aria-hidden="true">1</span><strong>Open the drawing.</strong> Drag any PDF into the window. Rendering happens on your machine; nothing is sent to a server.</li>
+          <li class="step"><span class="n" aria-hidden="true">2</span><strong>Calibrate the scale.</strong> Click both ends of a printed dimension, type its real length, or pick a standard scale like 1:100 or 1/4&Prime; = 1&prime;-0&Prime;.</li>
+          <li class="step"><span class="n" aria-hidden="true">3</span><strong>Measure.</strong> Trace wall runs with the Length tool, outline rooms and slabs with Area, and click Count for fixtures, columns and sockets. Each page keeps its own scale.</li>
+          <li class="step"><span class="n" aria-hidden="true">4</span><strong>Export quantities.</strong> The markups list groups by label with running totals. Copy it into Excel or download the CSV.</li>
+          <li class="step"><span class="n" aria-hidden="true">5</span><strong>Save into the PDF.</strong> Markups are written as standard PDF annotations, so the annotated file opens cleanly in Bluebeam Revu, Adobe Acrobat and every other PDF app.</li>
         </ol>
 
-        <h2>Why open source?</h2>
-        <p>
-          Estimators shouldn't need a per-seat licence to count light fixtures. An open core means
-          builders and developers can add trade-specific tools (HVAC, rebar, electrical) and AI
-          takeoff helpers without asking permission. The roadmap includes revision overlay compare,
-          live multi-user sessions, and a plugin API for auto-counting.
-        </p>
+        <div class="quote-card">
+          <p class="quote">Estimators shouldn't need a per-seat licence to count light fixtures.</p>
+          <p>
+            An open core means builders and developers can add trade-specific tools (HVAC, rebar,
+            electrical) and AI takeoff helpers without asking permission. The roadmap includes
+            revision overlay compare, live multi-user sessions, and a plugin API for auto-counting.
+          </p>
+        </div>
 
+        <p class="eyebrow" aria-hidden="true">FAQ</p>
         <h2>Frequently asked questions</h2>
         <details>
           <summary>Is it really free? What's the catch?</summary>

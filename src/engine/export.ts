@@ -49,6 +49,7 @@ export function valueParts(
   u: DisplayUnit,
 ): { value: string; unit: string } {
   const base = u === 'ft-in' ? 'ft' : u;
+  if (m.type === 'note') return { value: '', unit: '' };
   if (m.type === 'count') return { value: '1', unit: 'each' };
   if (m.type === 'angle') return { value: String(markupAngle(m)), unit: 'deg' };
   if (!cal) return { value: '', unit: '' };
@@ -60,6 +61,7 @@ export function valueParts(
 
 /** Formatted single-markup value ('' when the page isn't calibrated). */
 export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: DisplayUnit): string {
+  if (m.type === 'note') return '';
   if (m.type === 'angle') return `${markupAngle(m).toFixed(1)}°`;
   if (!cal) return '';
   if (m.type === 'count') return '1';
@@ -94,8 +96,8 @@ export function buildMatrix(d: TakeoffData): Matrix {
       let total: string | number = '';
       if (g.type === 'count') {
         total = g.items.length;
-      } else if (g.type === 'angle') {
-        total = ''; // angles don't sum
+      } else if (g.type === 'angle' || g.type === 'note') {
+        total = ''; // angles don't sum; notes carry no quantity
       } else if (cal) {
         total = g.items.reduce((s, m) => {
           if (g.type === 'length') return s + markupLength(m, cal.metersPerPt);

@@ -35,6 +35,7 @@ const HINTS: Record<string, string> = {
   perimeter: 'Click each corner of the boundary · double-click or Enter to close · Esc cancels',
   volume: 'Click each corner of the area · double-click or Enter to finish, then enter the depth',
   angle: 'Click the corner vertex, then one point on each ray',
+  note: 'Click where the note belongs, then type the text in the list (rename)',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
 };
 
@@ -189,6 +190,23 @@ function onPointerDown(e: PointerEvent): void {
       syncUpsertMarkup(m);
       renderMarkups();
       emit();
+      break;
+    }
+    case 'note': {
+      const note: Markup = {
+        id: nextId('mk'),
+        page: state.pageNum,
+        type: 'note',
+        label: state.activePreset?.type === 'note' ? state.activePreset.label : 'Note',
+        points: [p],
+        createdAt: Date.now(),
+      };
+      state.markups.push(note);
+      state.lastAction = null;
+      syncUpsertMarkup(note);
+      renderMarkups();
+      emit();
+      hint('Note placed · type its text in the Label column of the list');
       break;
     }
     case 'scan':
@@ -481,6 +499,7 @@ function onKeyDown(e: KeyboardEvent): void {
     p: 'perimeter',
     o: 'volume',
     g: 'angle',
+    t: 'note',
     s: 'scan',
   };
   const k = e.key.toLowerCase();

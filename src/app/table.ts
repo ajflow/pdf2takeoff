@@ -137,7 +137,7 @@ export function renderTable(): void {
     const { value } = valueParts(m, calibrationFor(m.page), state.displayUnit);
     const typeIcon =
       m.type === 'length' ? '📏' : m.type === 'area' ? '⬡' : m.type === 'count' ? '🔢'
-      : m.type === 'perimeter' ? '↻' : m.type === 'volume' ? '◨' : '∠';
+      : m.type === 'perimeter' ? '↻' : m.type === 'volume' ? '◨' : m.type === 'note' ? '💬' : '∠';
     tr.innerHTML = `
       <td class="cell-label"><input data-label-for="${m.id}" value="${escapeAttr(m.label)}" title="Rename" /></td>
       <td class="cell-type"><span class="tag tag-${m.type}">${typeIcon} ${m.type}</span></td>

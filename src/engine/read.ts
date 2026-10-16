@@ -55,7 +55,7 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     let type: Markup['type'];
     let depth: number | undefined;
     if (subtype === 'FreeText') {
-      type = 'count';
+      type = /: 1$/.test(contents) ? 'count' : 'note';
     } else if (subtype === 'Polygon') {
       if (contents.includes('³')) {
         type = 'volume';

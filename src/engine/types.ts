@@ -3,7 +3,7 @@
 
 export type Pt = { x: number; y: number };
 
-export type MarkupType = 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle';
+export type MarkupType = 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note';
 
 export interface Markup {
   id: string;

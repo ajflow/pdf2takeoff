@@ -17,6 +17,7 @@ export const COLORS: Record<string, string> = {
   perimeter: '#0d9488',
   volume: '#4f46e5',
   angle: '#db2777',
+  note: '#d97706',
   calibrate: '#d97706',
 };
 
@@ -157,6 +158,22 @@ function renderMarkup(m: Markup): SVGGElement {
     }
     addVertices(g, pts, color, selected);
     addLabel(g, labelText(m), { x: v.x, y: v.y - 8 });
+  } else if (m.type === 'note') {
+    const p = pts[0];
+    const g2 = el('g', {});
+    const text = m.label.length > 60 ? m.label.slice(0, 57) + '…' : m.label;
+    g2.appendChild(el('circle', { cx: p.x, cy: p.y, r: selected ? 8 : 7, fill: color, 'fill-opacity': 0.92 }));
+    const num = el('text', { x: p.x, y: p.y + 0.5, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 8, 'font-weight': '700', fill: '#ffffff' });
+    num.textContent = '✎';
+    g2.appendChild(num);
+    const label = el('text', {
+      x: p.x + 11, y: p.y + 3, 'font-size': 8, fill: '#111827',
+      'paint-order': 'stroke', stroke: '#ffffff', 'stroke-width': 2.4, 'stroke-linejoin': 'round',
+      'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    });
+    label.textContent = text;
+    g2.appendChild(label);
+    g.appendChild(g2);
   } else {
     // count marker
     const p = pts[0];

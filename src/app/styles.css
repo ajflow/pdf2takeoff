@@ -1717,3 +1717,8 @@ table.demo-results td.mono {
 .col-row input:focus { outline: none; border-color: rgba(45, 212, 191, 0.5); }
 .col-row input.invalid { border-color: rgba(251, 113, 133, 0.6); }
 .columns-box .btn { margin-top: 4px; font-size: 11px; padding: 4px 10px; }
+.tag-note {
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fcd34d;
+}

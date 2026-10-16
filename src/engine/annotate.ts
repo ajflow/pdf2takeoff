@@ -17,6 +17,7 @@ const COLOR_HEX: Record<string, [number, number, number]> = {
   perimeter: [13 / 255, 148 / 255, 136 / 255],
   volume: [79 / 255, 70 / 255, 229 / 255],
   angle: [219 / 255, 39 / 255, 119 / 255],
+  note: [217 / 255, 119 / 255, 6 / 255],
 };
 
 function pdfDate(): string {
@@ -35,7 +36,8 @@ function contentsBody(m: Markup, calibrations: Map<number, Calibration>, display
   const cal = calibrations.get(m.page);
   // angles are scale-free — they never need calibration
   if (m.type === 'angle') return `${m.label}: ${markupAngle(m).toFixed(1)}°`;
-  if (!cal) return m.label;
+  if (m.type === 'note') return m.label; // the note IS the text
+  if (!cal) return m.type === 'count' ? `${m.label}: 1` : m.label;
   if (m.type === 'count') return `${m.label}: 1`;
   let v: string;
   if (m.type === 'perimeter') {
@@ -131,6 +133,8 @@ export async function buildAnnotatedPdf(opts: AnnotateOptions): Promise<Uint8Arr
         IC: COLOR_HEX[m.type],
       });
     } else {
+      // count and note share FreeText; counts always carry ': 1' so the
+      // reader can tell them apart on round-trip
       const [x, y] = [m.points[0].x, m.points[0].y];
       addAnnot(pi, {
         ...common(m),

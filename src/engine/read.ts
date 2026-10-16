@@ -28,8 +28,11 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     if (title !== ANNOTATION_AUTHOR) continue;
     const subtype = String(a.subtype ?? '');
     const contentsRaw = strOf(a.contentsObj) ?? (typeof a.contents === 'string' ? a.contents : '');
-    const statusMatch = contentsRaw.match(/\[(check|confirmed)\]\s*$/);
-    const contents = statusMatch ? contentsRaw.slice(0, statusMatch.index).trimEnd() : contentsRaw;
+    const layerMatch = contentsRaw.match(/\[layer:([^\]]+)\]\s*$/);
+    const statusMatch = contentsRaw.match(/\[(check|confirmed)\](?:\s*\[layer:[^\]]+\])?\s*$/);
+    const contents = (statusMatch || layerMatch)
+      ? contentsRaw.slice(0, (statusMatch ?? layerMatch)!.index!).trimEnd()
+      : contentsRaw;
     const label = contents.includes(':') ? contents.split(':')[0].trim() : contents || 'Restored';
 
     const toPt = (x: number, y: number): { x: number; y: number } => ({ x, y });
@@ -86,6 +89,7 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
       createdAt: Date.now() + startIndex + found.length,
       ...(depth !== undefined ? { depth } : {}),
       ...(statusMatch ? { status: statusMatch[1] as 'check' | 'confirmed' } : {}),
+      ...(layerMatch ? { layer: layerMatch[1] } : {}),
     });
   }
   return found;

@@ -14,6 +14,7 @@ import { initLibrary, renderLibrary } from './library';
 import { startSession, stopSession, sessionActive, getPeers } from './session';
 import { loadPresets, loadColumns } from './persistence';
 import { initColumns, renderColumns } from './columns';
+import { initLayers, renderLayers } from './layers';
 import { scheduleSave, restoreSession } from './persistence';
 import {
   compareState,
@@ -49,6 +50,7 @@ initCompare(canvas, pageEl);
 initPageStrip(document.getElementById('pageStrip')!);
 initLibrary();
 initColumns();
+initLayers();
 void loadPresets().then((presets) => {
   state.presets = presets;
   renderLibrary();
@@ -368,6 +370,7 @@ subscribe(() => {
 
   renderMarkups();
   renderTable();
+  renderLayers(); // counts + active layer follow the takeoff
   renderLibrary(); // active-chip highlight follows tool/preset changes
   scheduleSave(); // debounced persistence of markups + calibrations
 });

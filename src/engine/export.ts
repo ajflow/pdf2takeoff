@@ -75,7 +75,7 @@ export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: Di
 /** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
 export function buildMatrix(d: TakeoffData): Matrix {
   const cols = d.columns ?? [];
-  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Status', ...cols.map((c) => c.name)];
+  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Status', 'Layer', ...cols.map((c) => c.name)];
   const rows: Matrix = [header];
   const round = (n: number) => Math.round(n * 10000) / 10000;
   for (const m of d.markups) {
@@ -85,7 +85,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
       const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: 1 });
       return out === null ? 'ERR' : round(out);
     });
-    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '', ...extras]);
+    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '', m.layer ?? '', ...extras]);
   }
   const gs = groupsOf(d.markups);
   if (gs.length) {
@@ -113,7 +113,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
         const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: g.items.length });
         return out === null ? 'ERR' : round(out);
       });
-      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '', ...extras]);
+      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '', '', ...extras]);
     }
   }
   return rows;

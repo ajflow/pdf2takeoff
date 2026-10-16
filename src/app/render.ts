@@ -7,6 +7,7 @@ import { markupsLayer, previewLayer, pdfToView } from './viewer';
 import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';
 import { markupAngle } from '../engine/geometry';
+import { isVisibleLayer } from './layers';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -74,7 +75,7 @@ export function countNumberFor(m: Markup): number {
 export function renderMarkups(): void {
   markupsLayer.replaceChildren();
   const page = state.pageNum;
-  for (const m of state.markups.filter((x) => x.page === page)) {
+  for (const m of state.markups.filter((x) => x.page === page && isVisibleLayer(x))) {
     markupsLayer.appendChild(renderMarkup(m));
   }
 }

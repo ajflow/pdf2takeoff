@@ -327,6 +327,15 @@
           <div id="columnRows"></div>
           <button class="btn" id="columnAdd" title="Add a computed column (appears in totals and every export)">+ Column</button>
         </details>
+        <details class="columns-box" id="layersBox">
+          <summary>Layers</summary>
+          <p class="columns-hint">Click a layer to place on it; click the eye to hide it while you measure the next trade.</p>
+          <div id="layerList" class="layer-list"></div>
+          <div class="lib-add">
+            <input type="text" id="layerNewName" placeholder="New layer, e.g. Electrical" autocomplete="off" aria-label="New layer name" />
+            <button class="btn" id="layerNewBtn">+ Layer</button>
+          </div>
+        </details>
         <h2>Markups</h2>
         <div id="markupTotals"></div>
         <div class="list-tools">

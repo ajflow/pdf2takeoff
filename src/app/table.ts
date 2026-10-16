@@ -15,6 +15,7 @@ import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
 import { columnValuesFor } from './columns';
+import { isVisibleLayer } from './layers';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -110,6 +111,7 @@ function filteredMarkups() {
   const text = f.text.trim().toLowerCase();
   let rows = state.markups.filter(
     (m) =>
+      isVisibleLayer(m) &&
       (f.status === 'all' || (f.status === 'none' ? !m.status : m.status === f.status)) &&
       (!text || m.label.toLowerCase().includes(text)),
   );
@@ -152,7 +154,7 @@ export function renderTable(): void {
 
 function renderTotals(): void {
   totalsEl.replaceChildren();
-  const gs = groupsOf(state.markups);
+  const gs = groupsOf(state.markups.filter(isVisibleLayer));
   if (gs.length === 0) {
     totalsEl.innerHTML = `<div class="totals-empty">Totals appear once you measure something.</div>`;
     return;

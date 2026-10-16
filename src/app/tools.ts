@@ -7,6 +7,7 @@ import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
+import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { ocrPage } from './ocr';
 import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
 import { dynamicFill } from '../engine/dynamicfill';
@@ -184,6 +185,7 @@ function onPointerDown(e: PointerEvent): void {
         id: nextId('mk'),
         page: state.pageNum,
         type: 'count',
+        layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
         label: state.activePreset?.type === 'count' ? state.activePreset.label : defaultLabel('count'),
         points: [p],
         createdAt: Date.now(),
@@ -200,6 +202,7 @@ function onPointerDown(e: PointerEvent): void {
         id: nextId('mk'),
         page: state.pageNum,
         type: 'note',
+        layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
         label: state.activePreset?.type === 'note' ? state.activePreset.label : 'Note',
         points: [p],
         createdAt: Date.now(),
@@ -286,6 +289,7 @@ async function runFill(p: Pt): Promise<void> {
       id: nextId('mk'),
       page: state.pageNum,
       type: 'area',
+      layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
       label: state.activePreset?.type === 'area' ? state.activePreset.label : 'Filled area',
       points: result.points,
       createdAt: Date.now(),
@@ -330,6 +334,7 @@ async function runScan(p: Pt): Promise<void> {
       id: nextId('mk'),
       page: state.pageNum,
       type: 'count',
+      layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
       label: hit.label ?? fallbackLabel,
       points: [{ x: hit.x, y: hit.y }],
       createdAt: Date.now(),
@@ -377,6 +382,7 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
     points: [...draft],
     createdAt: Date.now(),
     ...(depth !== undefined ? { depth } : {}),
+    ...(getActiveLayer() !== DEFAULT_LAYER ? { layer: getActiveLayer() } : {}),
   });
   state.lastAction = null;
   syncUpsertMarkup(state.markups[state.markups.length - 1]);

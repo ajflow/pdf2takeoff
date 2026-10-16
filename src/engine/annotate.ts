@@ -27,9 +27,12 @@ function pdfDate(): string {
 }
 
 function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {
-  const tag = m.status ? ` [${m.status}]` : '';
+  const tags = [
+    ...(m.status ? [`[${m.status}]`] : []),
+    ...(m.layer ? [`[layer:${m.layer}]`] : []),
+  ];
   const body = contentsBody(m, calibrations, displayUnit);
-  return body + tag;
+  return tags.length ? `${body} ${tags.join(' ')}` : body;
 }
 
 function contentsBody(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit): string {

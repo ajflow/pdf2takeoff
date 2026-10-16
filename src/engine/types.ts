@@ -16,6 +16,8 @@ export interface Markup {
   depth?: number;
   /** Review status: 'check' = needs verification, 'confirmed' = verified. */
   status?: 'check' | 'confirmed';
+  /** Layer name; absent = the default layer. */
+  layer?: string;
 }
 
 export interface Calibration {

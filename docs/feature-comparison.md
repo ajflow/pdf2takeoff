@@ -82,7 +82,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Changes-only fade | — | ✅ | Greys everything unchanged |
 | Alignment nudge & auto-fit | Complete (Auto-Align) | ✅ | 1 pt nudge + fit; full auto-align planned |
 | Batch compare across sets | Complete | ✅ | CLI + MCP: two folders, sheets paired by filename, added/removed listed, per-pair overlays (interactive UI compare stays single-sheet for now) |
-| Quantity diff between revisions | — | 🔜 | Headless H4; nobody in this space ships it |
+| Quantity diff between revisions | — (none) | ✅ | `run takeoff.yaml --prev` — regenerate on a new revision and diff quantities; nobody in this space ships it |
 | Sets / slip-sheeting | Revu Sets | 🔜 | Revision grouping by sheet number |
 
 ## Document management
@@ -112,7 +112,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Private, no-upload AI | — | ⭐ | Nothing uploads — ever; Bluebeam's Max AI is cloud-connected |
 | Agent API (MCP) | Max (AU$979) | 🔜 | Headless H3 — free, local, open source |
 | Cross-platform CLI & scripting | Complete (Windows scripting) | 🔜 | Headless H2 — Node CLI, runs anywhere |
-| Takeoff-as-code in CI | — | 🔜 | Headless H4 — committed spec regenerates quantities per revision |
+| Takeoff-as-code in CI | — | ✅ | Committed `takeoff.yaml` + `run` regenerate quantities per revision; CI-smoked |
 | Cloud AI drawing review | Max (Smart Review) | ➖ | Data-loop first; revisit once the model ships |
 
 ## Platform & integrations

@@ -9,11 +9,11 @@ import { readMarkups, scanDocAt, compareDocs, compareFolders } from './ops.ts';
 import { statSync, mkdirSync } from 'node:fs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
-import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
+import { buildMatrix, toDelimited, xlsxBytes, groupsOf } from '../engine/export.ts';
 import { nextId, defaultLabel } from '../engine/geometry.ts';
 import type { DisplayUnit } from '../engine/units.ts';
 import type { Calibration, Markup } from '../engine/types.ts';
-import { parseSpec, parseScaleSpec } from './spec.ts';
+import { parseSpec, parseScaleSpec, parseRunSpec } from './spec.ts';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
@@ -34,6 +34,10 @@ Usage:
       csv/tsv print to stdout without -o; xlsx requires -o.
   pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]
       Write spec-defined markups into the PDF as standard annotations.
+  pdf2takeoff run <takeoff.yaml> [--prev previous-summary.json]
+      Takeoff-as-code: calibrate, scan-count every symbol type in the spec,
+      write the exports (csv / xlsx / annotated-pdf / summary JSON).
+      --prev diffs quantities against a previous run — the revision loop.
   pdf2takeoff mcp
       Start the MCP server on stdio (for AI agents; see specs/headless-engine.md).
 
@@ -188,6 +192,89 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
   return { output, markups: markups.length, scale: spec.scale ?? null };
 }
 
+/** Execute a takeoff spec: calibrate, scan-count each symbol type, write exports. */
+async function cmdRun(specPath: string, prevPath: string | undefined): Promise<unknown> {
+  const spec = parseRunSpec(readFileSync(specPath, 'utf8'), specPath);
+  const bytes = readPdf(spec.source);
+  const doc = await openPdf(bytes);
+  const calibrations = new Map<number, Calibration>();
+  if (spec.scale) {
+    const metersPerPt = parseScaleSpec(spec.scale);
+    for (let p = 1; p <= doc.numPages; p++) calibrations.set(p, { metersPerPt, source: `spec scale ${spec.scale}` });
+  }
+  const markups: Markup[] = [];
+
+  for (const c of spec.counts) {
+    const page = c.page ?? 1;
+    const result = await scanDocAt(doc, page, { x: c.at[0], y: c.at[1] });
+    if ('error' in result) {
+      throw new Error(`counts "${c.label}": ${result.error} (tune its at: point — run scan --json once to find the symbol)`);
+    }
+    if (result.hits.length === 0) throw new Error(`counts "${c.label}": the scan found no symbols`);
+    for (const hit of result.hits) {
+      markups.push({
+        id: nextId('run'),
+        page,
+        type: 'count',
+        label: c.label,
+        points: [{ x: hit.x, y: hit.y }],
+        createdAt: Date.now(),
+      });
+    }
+  }
+
+  const unit = (spec.unit ?? 'm') as DisplayUnit;
+  const matrix = buildMatrix({ markups, calibrations, displayUnit: unit });
+  const totals = groupsOf(markups).map((g) => ({
+    label: g.label,
+    type: g.type,
+    items: g.items.length,
+  }));
+
+  const summary: Record<string, unknown> = {
+    spec: specPath,
+    source: spec.source,
+    scale: spec.scale ?? null,
+    ranAt: new Date().toISOString(),
+    totals,
+    counts: spec.counts.map((c) => ({
+      label: c.label,
+      page: c.page ?? 1,
+      found: markups.filter((m) => m.label === c.label).length,
+    })),
+  };
+
+  // --prev: quantity diff against a previous run's summary
+  if (prevPath) {
+    const prev = JSON.parse(readFileSync(prevPath, 'utf8')) as { totals?: { label: string; type: string; items: number }[] };
+    const key = (x: { label: string; type: string }) => `${x.type}|${x.label}`;
+    const prevMap = new Map((prev.totals ?? []).map((x) => [key(x), x.items]));
+    const nowMap = new Map(totals.map((x) => [key(x), x.items]));
+    const diff: { label: string; type: string; before: number | null; after: number | null; delta: number }[] = [];
+    for (const k of new Set([...prevMap.keys(), ...nowMap.keys()])) {
+      const before = prevMap.get(k) ?? null;
+      const after = nowMap.get(k) ?? null;
+      if (before === after) continue;
+      const [type, label] = k.split('|');
+      diff.push({ label, type, before, after, delta: (after ?? 0) - (before ?? 0) });
+    }
+    diff.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    summary.diff = diff;
+  }
+
+  for (const e of spec.exports) {
+    if (e.format === 'csv') writeFileSync(e.out, '\ufeff' + toDelimited(matrix, ','));
+    else if (e.format === 'xlsx') writeFileSync(e.out, xlsxBytes(matrix));
+    else if (e.format === 'annotated-pdf') {
+      writeFileSync(e.out, await buildAnnotatedPdf({ bytes, markups, calibrations, displayUnit: unit }));
+    } else if (e.format === 'summary') {
+      writeFileSync(e.out, JSON.stringify(summary, null, 2) + '\n');
+    }
+  }
+
+  return summary;
+}
+
 export async function run(argv: string[]): Promise<void> {
   const [cmd, ...rest] = argv;
   try {
@@ -249,6 +336,16 @@ export async function run(argv: string[]): Promise<void> {
       });
       if (positionals.length !== 1 || !values.spec) throw new Error('usage: pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]');
       process.stdout.write(JSON.stringify(await cmdAnnotate(positionals[0], values.spec, values.o), null, 2) + '\n');
+      return;
+    }
+    if (cmd === 'run') {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { prev: { type: 'string' } },
+      });
+      if (positionals.length !== 1) throw new Error('usage: pdf2takeoff run <takeoff.yaml> [--prev previous-summary.json]');
+      process.stdout.write(JSON.stringify(await cmdRun(positionals[0], values.prev), null, 2) + '\n');
       return;
     }
     if (cmd === 'mcp') {

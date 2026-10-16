@@ -1,30 +1,47 @@
 # pdf2takeoff
 
-> pdf2takeoff is a free, open-source (Apache-2.0) PDF takeoff and markup tool that runs entirely in the browser. Calibrate a drawing's scale from any printed dimension, measure lengths, areas and counts, export the markups list to CSV for Excel, and save the markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat. Files are processed locally and never uploaded.
+> pdf2takeoff is a free, open-source (Apache-2.0) PDF takeoff and markup tool that runs entirely in the browser, plus a headless Node CLI and MCP server built on the same engine. Calibrate a drawing's scale (typed, preset, or auto-read from the sheet with OCR), measure lengths, areas, perimeters, volumes and angles, auto-count repeated symbols, export the markups list to CSV/Excel, and save markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat. Files are processed locally and never uploaded — in the browser, at the terminal, or driven by an AI agent.
 
 Key facts:
 - Price: free, no account, no file limits, no paid tier
 - Licence: Apache-2.0 open source
-- Privacy: 100% client-side; PDFs never leave the user's machine; works offline once loaded
-- Measurements: lengths (segmented runs), areas with totals, counts; metric and imperial units
-- Scale calibration: draw along any known printed dimension, or pick presets (1:50 … 1:500, 1/8"=1'-0", 1/4"=1'-0", 1"=10'/20'/30'); each page keeps its own scale
-- Export: CSV download, TSV clipboard for Excel, a real Excel workbook (.xlsx), a printable quantity report (marked-up sheets + group totals, print/save as PDF), and annotation round-trip into the PDF
+- Privacy: 100% local. In the browser nothing uploads and it works offline once loaded; the CLI and MCP server make zero network calls; the only runtime fetch is the OCR language pack (about 4 MB from a CDN, on first use, then cached)
+- Measurements: lengths (segmented runs), areas, perimeters, volumes (area × depth), angles (scale-free), counts; metric and imperial units
+- Scale calibration: draw along any known printed dimension, pick presets (1:50 … 1:500, 1/8"=1'-0", 1/4"=1'-0", 1"=10'/20'/30'), or click Auto-read and let OCR read the printed dimension or title-block scale (e.g. "SCALE 1:100") off the sheet
+- Scan (auto-count): click one instance of a repeated symbol and the scan counts every match on the page in about 100 ms using local computer vision; best on isolated symbols in vector drawings
+- Tool library: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"); clicking the chip pre-labels every placement and scan hit
+- Markups list: statuses (flag for checking / confirmed) that round-trip inside the PDF, search, status filters, sorting, group totals, one-click Clear
+- Export: CSV download, TSV clipboard, a real Excel workbook (.xlsx), a printable quantity report, and annotation round-trip into the PDF
 - Annotation compatibility: Line, PolyLine, Polygon and FreeText annotations with measurement values in the comment, authored as "pdf2takeoff"
-- Revision overlay compare: overlay two revisions of a drawing; red = only in revision A (removed), blue = only in revision B (added), dark = unchanged; auto fit-to-page plus 1pt nudge alignment, and a "changes only" mode that fades unchanged linework to grey
-- Scan (auto-count): click one instance of a repeated symbol and the scan counts every match on the page in about 100 ms using local computer vision, no model download, nothing uploaded; best on isolated symbols in vector drawings
+- Revision compare: overlay two revisions in the browser (red = removed, blue = added, dark = unchanged); from the CLI, compare two PDFs or batch-compare two revision folders (sheets paired by filename, added/removed sheets listed, overlay PNG per changed pair)
+- Headless CLI (Node ≥ 22.6): info, scan, compare (files or folders), export, annotate, run, mcp — deterministic JSON output, no network calls
+- Takeoff-as-code: a committed takeoff.yaml (scale + click-point counts + exports) regenerates quantities via `pdf2takeoff run`; run with --prev to diff quantities against the previous revision's run
+- MCP server: eleven local stdio tools (open_document, render_page, set_scale, measure, scan_symbol, compare_revisions, list_markups, set_status, delete_markup, export, save_annotated) so AI agents can run a full takeoff and hand back a marked-up PDF for human review
 - Limitations today: no live multi-user sessions yet; the in-browser ONNX detector for cluttered sheets (symbols touching lines) is wired up and waiting on a trained model; until one ships, the scan uses classic CV
-- Stack: PDF.js (Apache-2.0) for rendering, pdf-lib (MIT) for writing annotations; no backend, deployable as a static site
+- Stack: PDF.js (Apache-2.0) for rendering, pdf-lib (MIT) for writing annotations, tesseract.js (Apache-2.0) for OCR; no backend, deployable as a static site
 
 Main page: https://pdf2takeoff.com/
 Revision compare page: https://pdf2takeoff.com/compare-drawing-revisions
 Symbol auto-count page: https://pdf2takeoff.com/count-symbols-in-pdf-drawing
 Sample drawing: https://pdf2takeoff.com/examples/sample-floor-plan.pdf (revision A)
 Sample revision B: https://pdf2takeoff.com/examples/sample-floor-plan-rev-b.pdf
+Source code: https://github.com/ajflow/pdf2takeoff
 
 ## How to do a takeoff from a PDF
 
 1. Open the drawing (drag and drop any PDF).
-2. Calibrate: click both ends of a printed dimension, type its real length, or choose a standard scale.
-3. Measure: trace lengths, outline areas, click count marks. Totals update live, grouped by label.
+2. Calibrate: click both ends of a printed dimension and Auto-read it with OCR, type its real length, or choose a standard scale.
+3. Measure: trace lengths, outline areas and volumes, take perimeters and angles, click count marks — or Scan to auto-count a repeated symbol. Totals update live, grouped by label.
 4. Export the markups list to CSV or paste directly into Excel.
 5. Save into the PDF; the annotated file opens in Bluebeam and Acrobat.
+
+## How to run a takeoff headlessly (CLI or CI)
+
+1. Write takeoff.yaml next to the drawing set: the scale, one click-point per symbol type to count, and the exports you want.
+2. Run `pdf2takeoff run takeoff.yaml` — it scans, totals, and writes the Excel/CSV/annotated PDF outputs.
+3. On a new revision, run again with `--prev` pointing at the previous run's summary to see exactly which quantities changed.
+4. AI agents: point any MCP client at `pdf2takeoff mcp` and let it open, look at, measure and export — locally, with the marked-up PDF left for human verification.
+
+## How AI agents use pdf2takeoff (MCP)
+
+Register the MCP server, then the agent can: open a local PDF, render any sheet to PNG to look at it, set the scale, measure, scan-count symbols, compare two revisions or folders, mark proposals for checking, and export quantities plus an annotated PDF — every step on the user's machine, nothing uploaded anywhere.

@@ -27,17 +27,21 @@
         "url": "https://pdf2takeoff.com/",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Any (web browser)",
-        "description": "Free, open-source PDF takeoff and markup tool. Calibrate drawing scales, measure lengths, areas and counts, export quantities to CSV, and save markups back into the PDF as standard annotations. Files are processed entirely in the browser and never uploaded.",
+        "description": "Free, open-source PDF takeoff and markup tool. Calibrate drawing scales (or auto-read them with OCR), measure lengths, areas, perimeters, volumes and angles, auto-count repeated symbols, export quantities to CSV/Excel, and save markups back into the PDF as standard annotations. Runs entirely in the browser; a Node CLI and MCP server let scripts and AI agents run the same takeoffs headlessly. Files are never uploaded.",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "isAccessibleForFree": true,
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "featureList": [
           "Open and view construction PDF drawings",
-          "Calibrate scale from a known dimension or standard presets",
-          "Measure lengths, areas and counts",
-          "Markups list with group totals",
-          "Export to CSV / clipboard for Excel",
-          "Save markups into the PDF as standard annotations",
+          "Calibrate scale from a known dimension, standard presets, or OCR auto-read",
+          "Measure lengths, areas, perimeters, volumes and angles",
+          "Scan: click one repeated symbol to count every match",
+          "Tool library: save tool + label presets",
+          "Markups list with statuses, search, filters and group totals",
+          "Export to CSV / Excel / printable report",
+          "Save markups into the PDF as standard annotations (Bluebeam/Acrobat round-trip)",
+          "Revision overlay compare, and batch compare across folders",
+          "Node CLI and MCP server for scripts and AI agents",
           "No account, no upload, works offline once loaded"
         ]
       }
@@ -81,7 +85,12 @@
           {
             "@type": "Question",
             "name": "What measurements can it do?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Lengths (including segmented runs), areas with perimeter, and counts, on any page you calibrate. Metric and imperial units are both supported." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Lengths (including segmented runs), areas, perimeters, volumes (area × depth) and angles, plus counts and click-to-teach symbol auto-counting. Metric and imperial units are both supported; angles need no calibration." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can scripts or AI agents use it without the browser?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The same engine ships as a Node CLI (scan, compare, export, annotate) and a local MCP server with eleven tools, so agents like Claude can open a drawing, look at sheets, scan symbols and export quantities — everything running on your machine, nothing uploaded. Bluebeam's equivalent (MCP in Revu Max) costs AU$979 per user per year; ours is free and open source." }
           },
           {
             "@type": "Question",
@@ -404,9 +413,10 @@
         <h2>What is pdf2takeoff?</h2>
         <p class="lead">
           pdf2takeoff is a free, open-source tool that turns construction PDF drawings into measured
-          quantities. Calibrate the scale from any printed dimension, measure lengths, areas and
-          counts, then export the list to Excel or save it back into the PDF. It runs entirely in
-          your browser, so drawings are never uploaded.
+          quantities. Auto-read the scale with OCR, measure lengths, areas, perimeters, volumes and
+          angles, auto-count repeated symbols, then export to Excel or save markups back into the
+          PDF. It runs entirely in your browser — and the same engine ships as a CLI and MCP server,
+          so scripts and AI agents can run takeoffs too. Drawings are never uploaded.
         </p>
 
         <div class="feature-grid">
@@ -416,14 +426,16 @@
           <div class="feature-card"><span class="ic">&#128202;</span><h3>Excel, CSV &amp; report</h3><p>Quantities grouped by label with totals, a printable report, or copy straight into your estimate.</p></div>
           <div class="feature-card"><span class="ic">&#128260;</span><h3>Bluebeam round-trip</h3><p>Markups save as standard PDF annotations, so the annotated file opens cleanly in Revu and Acrobat.</p></div>
           <div class="feature-card"><span class="ic">&#9889;</span><h3>Scan auto-count</h3><p>Click one symbol and every match on the sheet is counted in about a tenth of a second, fully local.</p></div>
+          <div class="feature-card"><span class="ic">&#129302;</span><h3>Agents &amp; scripts welcome</h3><p>A Node CLI and a local MCP server expose the same engine: AI agents can scan, measure, compare revisions and export — free where Bluebeam charges AU$979/seat for MCP.</p></div>
+          <div class="feature-card"><span class="ic">&#128269;</span><h3>Revision compare</h3><p>Overlay two revisions with red/blue changes, or batch-compare whole folders from the CLI to see exactly which sheets moved.</p></div>
         </div>
 
         <p class="eyebrow" aria-hidden="true">Workflow</p>
         <h2>How to do a takeoff from a PDF, free</h2>
         <ol class="steps-grid">
           <li class="step"><span class="n" aria-hidden="true">1</span><strong>Open the drawing.</strong> Drag any PDF into the window. Rendering happens on your machine; nothing is sent to a server.</li>
-          <li class="step"><span class="n" aria-hidden="true">2</span><strong>Calibrate the scale.</strong> Click both ends of a printed dimension, type its real length, or pick a standard scale like 1:100 or 1/4&Prime; = 1&prime;-0&Prime;.</li>
-          <li class="step"><span class="n" aria-hidden="true">3</span><strong>Measure.</strong> Trace wall runs with the Length tool, outline rooms and slabs with Area, and click Count for fixtures, columns and sockets. Each page keeps its own scale.</li>
+          <li class="step"><span class="n" aria-hidden="true">2</span><strong>Calibrate the scale.</strong> Click both ends of a printed dimension and hit <em>Auto-read</em> — OCR fills in the value straight off the sheet — or pick a standard scale like 1:100.</li>
+          <li class="step"><span class="n" aria-hidden="true">3</span><strong>Measure.</strong> Trace wall runs with Length, outline rooms with Area, take Perimeter and Volume (area × depth), click Count for fixtures — or press Scan to count every instance of a symbol at once. Each page keeps its own scale.</li>
           <li class="step"><span class="n" aria-hidden="true">4</span><strong>Export quantities.</strong> The markups list groups by label with running totals. Copy it into Excel or download the CSV.</li>
           <li class="step"><span class="n" aria-hidden="true">5</span><strong>Save into the PDF.</strong> Markups are written as standard PDF annotations, so the annotated file opens cleanly in Bluebeam Revu, Adobe Acrobat and every other PDF app.</li>
         </ol>
@@ -432,8 +444,9 @@
           <p class="quote">Estimators shouldn't need a per-seat licence to count light fixtures.</p>
           <p>
             An open core means builders and developers can add trade-specific tools (HVAC, rebar,
-            electrical) and AI takeoff helpers without asking permission. The roadmap includes
-            revision overlay compare, live multi-user sessions, and a plugin API for auto-counting.
+            electrical) and AI takeoff helpers without asking permission. The headless engine, CLI
+            and MCP agent API already ship; next on the roadmap are live multi-user sessions and a
+            trained in-browser symbol detector.
           </p>
         </div>
 
@@ -453,7 +466,11 @@
         </details>
         <details>
           <summary>What can't it do yet?</summary>
-          <p>Live multi-user sessions and ML detection for cluttered sheets are on the roadmap. Today it covers calibrated measurement of lengths, areas and counts, CSV export, annotation round-tripping, revision <a href="/compare-drawing-revisions">overlay compare</a>, and a click-to-teach <strong>Scan</strong> that auto-counts repeated symbols locally in about a tenth of a second.</p>
+          <p>Live multi-user sessions and ML detection for cluttered sheets are on the roadmap. Today it covers lengths, areas, perimeters, volumes and angles, OCR scale reading, CSV/Excel export, annotation round-tripping, revision <a href="/compare-drawing-revisions">overlay compare</a>, batch folder compare, and a click-to-teach <strong>Scan</strong> that auto-counts repeated symbols locally in about a tenth of a second.</p>
+        </details>
+        <details>
+          <summary>Can AI agents or CI pipelines use it without the browser?</summary>
+          <p>Yes — that's the headless half. <code>pdf2takeoff</code> on Node gives you <code>scan</code>, <code>compare</code> (files or whole folders), <code>export</code> and <code>annotate</code>; a committed <code>takeoff.yaml</code> regenerates quantities on every revision; and the local MCP server lets agents like Claude drive full takeoffs and hand you a marked-up PDF to verify. All local, Apache-2.0, no uploads — where Bluebeam's Max tier charges AU$979/user/yr for MCP integration.</p>
         </details>
         <details>
           <summary>Does it work offline?</summary>

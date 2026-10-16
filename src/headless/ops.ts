@@ -209,3 +209,17 @@ export async function compareFolders(
     notes,
   };
 }
+
+/** Scan a symbol across every page; pages without it count 0. */
+export async function scanDocAllPages(doc: PDFDocumentProxy, at: Pt) {
+  const pages: { page: number; count: number }[] = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    try {
+      const result = await scanDocAt(doc, p, at);
+      pages.push({ page: p, count: 'error' in result ? 0 : result.hits.length });
+    } catch {
+      pages.push({ page: p, count: 0 });
+    }
+  }
+  return { pages, total: pages.reduce((s, x) => s + x.count, 0) };
+}

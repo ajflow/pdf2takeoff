@@ -18,7 +18,7 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, compareDocs, compareFolders } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
@@ -281,10 +281,30 @@ export async function runMcpServer(): Promise<void> {
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point on the symbol to teach from, PDF points'),
         label: z.string().optional().describe('label for the count markups'),
+        all_pages: z.boolean().default(false).describe('scan every sheet and return a per-page schedule (counts added per page)'),
       },
     },
-    async ({ id, page, at, label }) => {
+    async ({ id, page, at, label, all_pages }) => {
       const d = getDoc(id);
+      if (all_pages) {
+        const schedule = await scanDocAllPages(d.doc, { x: at[0], y: at[1] });
+        for (const p of schedule.pages) {
+          if (p.count === 0) continue;
+          const result = await scanDocAt(d.doc, p.page, { x: at[0], y: at[1] });
+          if ('error' in result) continue;
+          for (const hit of result.hits) {
+            d.markups.push({
+              id: nextId('mcp'),
+              page: p.page,
+              type: 'count',
+              label: label ?? 'Scanned symbol',
+              points: [{ x: hit.x, y: hit.y }],
+              createdAt: Date.now(),
+            });
+          }
+        }
+        return text({ schedule, label: label ?? 'Scanned symbol' });
+      }
       const result = await scanDocAt(d.doc, page, { x: at[0], y: at[1] });
       if ('error' in result) throw new Error(result.error);
       const fallback = label ?? 'Scanned symbol';

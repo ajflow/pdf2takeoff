@@ -62,6 +62,28 @@ npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 returns the same hits the web Scan tool finds. This is the substrate for the
 agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
 
+## Agent API (MCP)
+
+`pdf2takeoff mcp` starts a local MCP server on stdio with ten tools —
+`open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
+`set_scale`, `measure`, `scan_symbol`, `compare_revisions`, `list_markups`,
+`delete_markup`, `export`, `save_annotated` — so an AI agent can run a whole
+takeoff and hand the marked-up PDF to a human for review. Local process,
+local files, nothing uploaded.
+
+Register it with any MCP client (ZCode, Claude Desktop, Cursor):
+
+```json
+{
+  "mcpServers": {
+    "pdf2takeoff": {
+      "command": "node",
+      "args": ["/path/to/pdf2takeoff/bin/pdf2takeoff.js", "mcp"]
+    }
+  }
+}
+```
+
 ## Architecture
 
 - **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and, upcoming, headless in Node (CLI + MCP — see [specs/headless-engine.md](specs/headless-engine.md)).

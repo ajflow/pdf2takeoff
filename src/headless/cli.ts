@@ -4,14 +4,11 @@
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
-import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
-import { cvScan } from '../engine/scan-cv.ts';
-import { RASTER_SCALE } from '../engine/ports.ts';
+import { renderRasterNode } from './raster-node.ts';
+import { readMarkups, scanDocAt, compareDocs } from './ops.ts';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
-import { blendOverlay } from '../engine/compare.ts';
-import { diffMask, maskRegions } from '../engine/diff.ts';
 import { nextId, defaultLabel } from '../engine/geometry.ts';
 import type { DisplayUnit } from '../engine/units.ts';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -33,6 +30,8 @@ Usage:
       csv/tsv print to stdout without -o; xlsx requires -o.
   pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]
       Write spec-defined markups into the PDF as standard annotations.
+  pdf2takeoff mcp
+      Start the MCP server on stdio (for AI agents; see specs/headless-engine.md).
 
 Everything runs locally; drawings never leave the machine.
 `;
@@ -45,17 +44,12 @@ function readPdf(path: string): Uint8Array {
 
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
   const doc = await openPdf(readPdf(file));
-  const markups: Markup[] = [];
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const annots = await page.getAnnotations({ intent: 'display' });
-    markups.push(...parseMarkups(annots as unknown as AnnotationLike[], p, markups.length));
-  }
-  return { doc, markups };
+  return { doc, markups: await readMarkups(doc) };
 }
 
 async function cmdInfo(file: string): Promise<unknown> {
-  const { doc, markups } = await readMarkupsFromPdf(file);
+  const doc = await openPdf(readPdf(file));
+  const markups = await readMarkups(doc);
   let other = 0;
   const pages: { page: number; widthPt: number; heightPt: number }[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
@@ -82,8 +76,7 @@ async function cmdScan(file: string, pageArg: string, atArg: string): Promise<un
     throw new Error('--at must be "x,y" in PDF points');
   }
   const doc = await openPdf(readPdf(file));
-  const raster = await renderRasterNode(doc, page, RASTER_SCALE);
-  const result = cvScan(raster, { x: xy[0], y: xy[1] });
+  const result = await scanDocAt(doc, page, { x: xy[0], y: xy[1] });
   if ('error' in result) throw new Error(result.error);
   return {
     file,
@@ -98,72 +91,16 @@ async function cmdScan(file: string, pageArg: string, atArg: string): Promise<un
   };
 }
 
-/** A sheet counts as changed above this fraction of changed pixels. */
-const CHANGED_SHEET_FRACTION = 0.0005;
-const COMPARE_SCALE = 2; // raster px per PDF point for diffing
-
 async function cmdCompare(fileA: string, fileB: string, png: string | undefined, threshold: number): Promise<unknown> {
   const docA = await openPdf(readPdf(fileA));
   const docB = await openPdf(readPdf(fileB));
-  const sheets: unknown[] = [];
-  const changedSheets: number[] = [];
-  const pairs = Math.min(docA.numPages, docB.numPages);
-
-  for (let p = 1; p <= pairs; p++) {
-    const pageA = await docA.getPage(p);
-    const vp1 = pageA.getViewport({ scale: 1 });
-    const w = Math.max(1, Math.round(vp1.width * COMPARE_SCALE));
-    const h = Math.max(1, Math.round(vp1.height * COMPARE_SCALE));
-    const ra = await rasterizeToNode(docA, p, w, h);
-    const rb = await rasterizeToNode(docB, p, w, h);
-    const { mask, changedPx } = diffMask(ra, rb, { threshold });
-    const fraction = changedPx / Math.max(1, w * h);
-    const changed = fraction > CHANGED_SHEET_FRACTION;
-    const regions = changed
-      ? maskRegions(mask, w, h, 16 * COMPARE_SCALE).map((r) => ({
-          xPt: Math.round(r.x / COMPARE_SCALE),
-          yPt: Math.round(r.y / COMPARE_SCALE),
-          wPt: Math.round(r.w / COMPARE_SCALE),
-          hPt: Math.round(r.h / COMPARE_SCALE),
-        }))
-      : [];
-    sheets.push({
-      page: p,
-      widthPt: Math.round(vp1.width),
-      heightPt: Math.round(vp1.height),
-      changedFraction: Math.round(fraction * 10000) / 10000,
-      changed,
-      regions,
-    });
-    if (changed) changedSheets.push(p);
-
-    if (png && changedSheets.length === 1) {
-      const { createCanvas } = await import('@napi-rs/canvas');
-      const out = new Uint8ClampedArray(ra.width * ra.height * 4);
-      blendOverlay(ra, rb, 0, 0, false, out);
-      const cnv = createCanvas(ra.width, ra.height);
-      const ctx = cnv.getContext('2d');
-      const img = ctx.createImageData(ra.width, ra.height);
-      img.data.set(out);
-      ctx.putImageData(img, 0, 0);
-      writeFileSync(png, cnv.toBuffer('image/png'));
-    }
-  }
-
+  const result = await compareDocs(docA, docB, { png, threshold });
   return {
     a: fileA,
     b: fileB,
     sheetCountA: docA.numPages,
     sheetCountB: docB.numPages,
-    comparedSheets: pairs,
-    changedSheets,
-    summary: {
-      changed: changedSheets.length,
-      unchanged: pairs - changedSheets.length,
-      onlyInA: docA.numPages > pairs ? docA.numPages - pairs : 0,
-      onlyInB: docB.numPages > pairs ? docB.numPages - pairs : 0,
-    },
-    sheets,
+    ...result,
   };
 }
 
@@ -297,6 +234,11 @@ export async function run(argv: string[]): Promise<void> {
       });
       if (positionals.length !== 1 || !values.spec) throw new Error('usage: pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]');
       process.stdout.write(JSON.stringify(await cmdAnnotate(positionals[0], values.spec, values.o), null, 2) + '\n');
+      return;
+    }
+    if (cmd === 'mcp') {
+      const { runMcpServer } = await import('./mcp.ts');
+      await runMcpServer();
       return;
     }
     throw new Error(`unknown command "${cmd}" — run "pdf2takeoff help"`);

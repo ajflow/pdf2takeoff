@@ -24,6 +24,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
 - **Tool library**: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"), then click the chip to measure pre-labelled — every placement and scan hit carries the label; presets persist locally across sessions
 - **Multi-sheet sets**: page filmstrip with lazily rendered thumbnails and per-page calibration badges; the bundled sample carries two sheets at different scales (1:100 and 1:50) to show per-page scales
+- **Live sessions (experimental)**: hit **Live** and other tabs/windows with the same drawing sync takeoffs in real time — placements, deletions, calibrations and presence (Yjs CRDT over BroadcastChannel; cross-machine relay is the next phase). Known gap: edits to existing markups (rename/status/drag) don't propagate between tabs yet
 - **Sessions persist**: markups and calibrations autosave to IndexedDB keyed by the file's hash, so a refresh or re-open restores your takeoff (PDF annotations still take precedence when present); the PDF itself is never stored or uploaded
 - **Save into the PDF**: markups are written as standard Line / PolyLine / Polygon / FreeText annotations (pdf-lib) with the measurement in the comment, and they round-trip: reopen the file and your takeoff comes back
 - **Revision overlay compare**: pick two revisions of a sheet; red exists only in A (removed), blue only in B (added), dark ink is unchanged. Auto fit-to-page, 1 pt nudge alignment, and a *Changes only* mode that fades everything unchanged to grey. Try it with `sample-floor-plan.pdf` vs `sample-floor-plan-rev-b.pdf`.
@@ -117,7 +118,7 @@ Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 1. ~~Viewer + scale calibration~~ ✅
 2. ~~Length / area / count + markups list + CSV export~~ ✅
 3. ~~Revision overlay compare (colour-blend the difference between two revisions)~~ ✅
-4. Live multi-user sessions (Yjs CRDT, the Studio Sessions equivalent)
+4. ~~Live multi-user sessions~~ phase 1 shipped (same-machine, experimental — see above); next: cross-machine relay + edit propagation
 5. Plugin API: AI takeoff, ML symbol detection (ONNX Runtime Web / WebGPU), quote generation as add-ons anyone can write
 
 ## Why open source?

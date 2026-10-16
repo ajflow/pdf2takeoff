@@ -1656,3 +1656,24 @@ table.demo-results td.mono {
 }
 .status-btn.st-check { color: #fbbf24; }
 .status-btn.st-confirmed { color: #34d399; }
+
+/* --- live session --- */
+.peers {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.peer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(45, 212, 191, 0.12);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  color: #5eead4;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-family: var(--mono, monospace);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.peer-chip .pg { opacity: 0.75; }

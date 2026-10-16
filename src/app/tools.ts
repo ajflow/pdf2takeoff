@@ -6,6 +6,7 @@ import { eventToView, viewToPdf, isTypingTarget } from './viewer';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
+import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { ocrPage } from './ocr';
 import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
 import { scanDeps } from './adapters';
@@ -185,6 +186,7 @@ function onPointerDown(e: PointerEvent): void {
       };
       state.markups.push(m);
       state.lastAction = null;
+      syncUpsertMarkup(m);
       renderMarkups();
       emit();
       break;
@@ -217,6 +219,7 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
       m.points = before.map((p) => ({ x: p.x + dx, y: p.y + dy }));
     }
     renderMarkups();
+    syncUpsertMarkup(m);
   };
   const up = () => {
     window.removeEventListener('pointermove', move);
@@ -264,14 +267,16 @@ async function runScan(p: Pt): Promise<void> {
   }
   const fallbackLabel = state.activePreset?.type === 'count' ? state.activePreset.label : 'Scanned symbol';
   for (const hit of hits) {
-    state.markups.push({
+    const scanned: Markup = {
       id: nextId('mk'),
       page: state.pageNum,
       type: 'count',
       label: hit.label ?? fallbackLabel,
       points: [{ x: hit.x, y: hit.y }],
       createdAt: Date.now(),
-    });
+    };
+    state.markups.push(scanned);
+    syncUpsertMarkup(scanned);
   }
   state.lastAction = null;
   setTool('pan');
@@ -315,6 +320,7 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
     ...(depth !== undefined ? { depth } : {}),
   });
   state.lastAction = null;
+  syncUpsertMarkup(state.markups[state.markups.length - 1]);
 }
 
 function refreshPreview(): void {
@@ -349,7 +355,10 @@ function closeCalibModal(): void {
 function applyScaleToPages(metersPerPt: number, source: string): void {
   const all = (document.getElementById('calibAllPages') as HTMLInputElement | null)?.checked;
   const pages = all ? Array.from({ length: state.pageCount }, (_, i) => i + 1) : [state.pageNum];
-  for (const p of pages) state.calibrations.set(p, { metersPerPt, source });
+  for (const p of pages) {
+    state.calibrations.set(p, { metersPerPt, source });
+    syncCalibration(p, { metersPerPt, source });
+  }
 }
 
 // --- volume depth modal ---
@@ -501,8 +510,10 @@ function onKeyDown(e: KeyboardEvent): void {
     }
   }
   if ((k === 'delete' || k === 'backspace') && state.selectedId) {
+    const deleted = state.selectedId;
     state.markups = state.markups.filter((m) => m.id !== state.selectedId);
     state.selectedId = null;
+    if (deleted) syncDeleteMarkup(deleted);
     renderMarkups();
     emit();
     return;
@@ -517,6 +528,7 @@ function onKeyDown(e: KeyboardEvent): void {
       if (moved) {
         moved.points = state.lastAction.before;
         state.lastAction = null;
+        syncUpsertMarkup(moved);
         renderMarkups();
         emit();
         return;
@@ -526,6 +538,7 @@ function onKeyDown(e: KeyboardEvent): void {
       const newest = state.markups.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
       state.markups = state.markups.filter((m) => m.id !== newest.id);
       if (state.selectedId === newest.id) state.selectedId = null;
+      syncDeleteMarkup(newest.id);
       renderMarkups();
       emit();
     }

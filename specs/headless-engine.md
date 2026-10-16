@@ -383,3 +383,15 @@ the moment `symbols.onnx` lands (H4 prep).
    (recommended — one code path) or after H2?
 3. MCP tool granularity: current table is verb-level; revisit if agent
   transcripts show repeated multi-call patterns worth wrapping.
+
+## 14. Phase 4a status (live sessions, same-machine) — experimental
+
+Shipped: Yjs CRDT over BroadcastChannel per file-hash channel. Verified
+syncing both directions: placements, deletions, clear, calibrations,
+presence + bye. Known issue: EDITS to existing markups (rename, status,
+drag — i.e. Y.Map value replacements) apply to the remote doc (recv/
+apply/observe all fire, verified by counters) but the rebuilt state
+reads the pre-edit value — reproduces in neither isolated Node (same
+yjs version, same pattern) nor in-tab; suspected in the bundled build's
+update encoding for value replaces. Next session: root-cause that, then
+4b = Cloudflare Durable Object relay for cross-machine sessions.

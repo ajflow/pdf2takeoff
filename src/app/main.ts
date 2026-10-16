@@ -11,6 +11,7 @@ import { playDemo, stopDemo } from './demo';
 import { exportXlsx } from './table';
 import { initPageStrip } from './pagestrip';
 import { initLibrary, renderLibrary } from './library';
+import { startSession, stopSession, sessionActive, getPeers } from './session';
 import { loadPresets } from './persistence';
 import { scheduleSave, restoreSession } from './persistence';
 import {
@@ -64,6 +65,7 @@ setStatusHint((text) => {
 
 async function openBytes(bytes: Uint8Array, name: string): Promise<void> {
   exitCompare();
+  stopSession(); // a new drawing starts a fresh channel
   $('loading').classList.remove('hidden');
   try {
     await loadPdf(bytes, name);
@@ -206,6 +208,11 @@ $('scaleBadge').addEventListener('click', () => setTool('calibrate'));
 
 // --- overlay compare ---
 
+$('sessionBtn').addEventListener('click', () => {
+  if (sessionActive()) stopSession();
+  else startSession();
+});
+
 $('compareBtn').addEventListener('click', async () => {
   if (compareState.active) {
     exitCompare();
@@ -277,6 +284,26 @@ subscribe(() => {
     btn.classList.toggle('active', btn.dataset.tool === state.tool);
     btn.disabled = (btn.dataset.tool !== 'pan' && !hasDoc()) || compareState.active;
   });
+
+  // live session UI
+  $('sessionBtn').classList.toggle('active', sessionActive());
+  $('sessionBtn').textContent = sessionActive() ? 'Live ✓' : 'Live';
+  const peersEl = $('sessionPeers');
+  const live = getPeers();
+  peersEl.classList.toggle('hidden', !sessionActive() || live.length === 0);
+  peersEl.replaceChildren(
+    ...live.map((p) => {
+      const chip = document.createElement('span');
+      chip.className = 'peer-chip';
+      chip.textContent = '';
+      chip.append(p.name + ' ');
+      const pg = document.createElement('span');
+      pg.className = 'pg';
+      pg.textContent = 'p' + p.page;
+      chip.append(pg);
+      return chip;
+    }),
+  );
 
   // compare mode UI
   $('compareBar').classList.toggle('hidden', !compareState.active);

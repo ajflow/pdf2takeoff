@@ -13,6 +13,7 @@ import {
 import { defaultLabel, markupLength, markupArea, markupPerimeter, markupVolume } from '../engine/geometry';
 import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
+import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -28,6 +29,7 @@ export function initTable(): void {
       if (m) {
         // cycle none -> check -> confirmed -> none
         m.status = m.status === 'check' ? 'confirmed' : m.status === 'confirmed' ? undefined : 'check';
+        syncUpsertMarkup(m);
         emit();
       }
       return;
@@ -37,6 +39,7 @@ export function initTable(): void {
       const id = del.getAttribute('data-del')!;
       state.markups = state.markups.filter((m) => m.id !== id);
       if (state.selectedId === id) state.selectedId = null;
+      syncDeleteMarkup(id);
       emit();
       return;
     }
@@ -57,6 +60,7 @@ export function initTable(): void {
       const m = state.markups.find((x) => x.id === input.dataset.labelFor);
       if (m) {
         m.label = input.value.trim() || defaultLabel(m.type);
+        syncUpsertMarkup(m);
         emit();
       }
     }
@@ -71,6 +75,7 @@ export function initTable(): void {
     if (!window.confirm(`Remove all ${state.markups.length} measurements in this takeoff?`)) return;
     state.markups = [];
     state.selectedId = null;
+    syncClearMarkups();
     emit();
   });
 

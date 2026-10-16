@@ -6,6 +6,7 @@ import { state, takeoffData } from './state';
 import { getPageAnnotations } from './viewer';
 import { buildAnnotatedPdf } from '../engine/annotate';
 import { parseMarkups, type AnnotationLike } from '../engine/read';
+import { syncUpsertMarkup } from './session';
 import type { Markup } from '../engine/types';
 
 export async function saveAnnotatedPdf(): Promise<void> {
@@ -33,6 +34,7 @@ export async function importMarkups(): Promise<number> {
   }
   if (found.length) {
     state.markups = found;
+    for (const m of found) syncUpsertMarkup(m);
   }
   return found.length;
 }

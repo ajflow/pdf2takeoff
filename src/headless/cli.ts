@@ -2,11 +2,11 @@
 // no telemetry. Deterministic JSON on stdout; errors on stderr with exit 1.
 
 import { parseArgs } from 'node:util';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
-import { statSync, mkdirSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { buildMatrix, toDelimited, xlsxBytes, groupsOf } from '../engine/export.ts';
@@ -14,12 +14,16 @@ import { nextId, defaultLabel } from '../engine/geometry.ts';
 import type { DisplayUnit } from '../engine/units.ts';
 import type { Calibration, Markup } from '../engine/types.ts';
 import { parseSpec, parseScaleSpec, parseRunSpec } from './spec.ts';
+import { PDFDocument } from 'pdf-lib';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
 Usage:
   pdf2takeoff info <file.pdf>
       Pages, page sizes, and annotation counts as JSON.
+  pdf2takeoff set <folder> -o current-issue.pdf
+      Slip-sheet: walk the folder, keep the newest file per sheet name
+      (by modified time), merge into one sorted multi-sheet PDF.
   pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
       Two PDFs: per-sheet change fractions and changed regions.
       Two folders: batch compare — sheets paired by filename across the
@@ -343,6 +347,16 @@ export async function run(argv: string[]): Promise<void> {
       process.stdout.write(JSON.stringify(await cmdAnnotate(positionals[0], values.spec, values.o), null, 2) + '\n');
       return;
     }
+    if (cmd === 'set') {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { o: { type: 'string' } },
+      });
+      if (positionals.length !== 1 || !values.o) throw new Error('usage: pdf2takeoff set <folder> -o current-issue.pdf');
+      process.stdout.write(JSON.stringify(await cmdSet(positionals[0], values.o), null, 2) + '\n');
+      return;
+    }
     if (cmd === 'run') {
       const { values, positionals } = parseArgs({
         args: rest,
@@ -363,6 +377,54 @@ export async function run(argv: string[]): Promise<void> {
     process.stderr.write(`pdf2takeoff: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   }
+}
+
+/** Slip-sheet a folder of per-sheet PDFs into one current-issue set:
+ *  sheets pair by filename, the newest file (mtime) wins, output is sorted. */
+async function cmdSet(dir: string, out: string): Promise<unknown> {
+  const byBase = new Map<string, { file: string; mtime: number }>();
+  const walk = (d: string) => {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.toLowerCase().endsWith('.pdf')) {
+        const mtime = statSync(full).mtimeMs;
+        const key = basename(entry.name);
+        const prev = byBase.get(key);
+        if (!prev || mtime > prev.mtime) byBase.set(key, { file: full, mtime });
+      }
+    }
+  };
+  walk(dir);
+  if (byBase.size === 0) throw new Error(`no PDFs found under ${dir}`);
+  const merged = await PDFDocument.create();
+  merged.setProducer('pdf2takeoff 0.1.0');
+  const sheets: { sheet: string; from: string; superseded: number }[] = [];
+  for (const sheet of [...byBase.keys()].sort()) {
+    const { file } = byBase.get(sheet)!;
+    const src = await PDFDocument.load(readFileSync(file));
+    const count = await merged.copyPages(src, src.getPageIndices());
+    for (const page of count) merged.addPage(page);
+    // count how many files shared this sheet name (superseded = losers)
+    let dupes = 0;
+    const recount = (d: string) => {
+      for (const entry of readdirSync(d, { withFileTypes: true })) {
+        const full = join(d, entry.name);
+        if (entry.isDirectory()) recount(full);
+        else if (basename(entry.name) === sheet && full !== file) dupes++;
+      }
+    };
+    recount(dir);
+    sheets.push({ sheet, from: file, superseded: dupes });
+  }
+  writeFileSync(out, await merged.save());
+  return {
+    dir,
+    output: out,
+    sheets: sheets.length,
+    supersededFiles: sheets.reduce((s, x) => s + x.superseded, 0),
+    sheetsDetail: sheets,
+  };
 }
 
 // direct invocation (node --experimental-strip-types src/headless/cli.ts …)

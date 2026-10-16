@@ -25,6 +25,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps leak — gap-closing is on the list)
 - **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
 - **Notes**: pin a note anywhere (T); round-trips through the PDF
+- **Layers**: place per trade and hide layers while measuring the next; layer names ride inside the PDF
 - **Tool library**: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"), then click the chip to measure pre-labelled — every placement and scan hit carries the label; presets persist locally across sessions
 - **Multi-sheet sets**: page filmstrip with lazily rendered thumbnails and per-page calibration badges; the bundled sample carries two sheets at different scales (1:100 and 1:50) to show per-page scales
 - **Live sessions**: hit **Live** and every tab/window with the same drawing shares the takeoff in real time — placements, edits (rename/status/drag), deletions, calibrations and presence (Yjs CRDT over BroadcastChannel; cross-machine relay is the next phase)
@@ -64,6 +65,7 @@ npm run cli -- scan drawing.pdf --page 1 --at 88,271 # click-point auto-count, J
 npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantities CSV
 npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantities
+npm run cli -- set tender/ -o current-issue.pdf     # slip-sheet: newest per sheet, sorted
 ```
 
 `run` is takeoff-as-code: the spec names the scale, one click-point per

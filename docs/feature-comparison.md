@@ -71,7 +71,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Filter & sort | Basics | ✅ | Search by label, status pills, sort by label/page |
 | Custom statuses | Basics | ✅ | Flag / confirm cycle; rides in the PDF comment so it survives round-trips; agents can set it via MCP | |
 | Saved tool presets | Basics (Tool Chest) | ✅ | Our name: tool library — chips apply type + label to every placement and scan hit; persist locally |
-| Markup layers | Basics | 🔜 | |
+| Markup layers | Basics | ✅ | Place per trade, eye toggles hide canvas/table/totals; names ride in the PDF comment | |
 | Note / callout tool | Basics | ✅ | Pin a note (T); round-trips through FreeText with counts disambiguated by ': 1' |
 
 ## Compare & revisions
@@ -83,7 +83,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Alignment nudge & auto-fit | Complete (Auto-Align) | ✅ | 1 pt nudge + fit; full auto-align planned |
 | Batch compare across sets | Complete | ✅ | CLI + MCP: two folders, sheets paired by filename, added/removed listed, per-pair overlays (interactive UI compare stays single-sheet for now) |
 | Quantity diff between revisions | — (none) | ✅ | `run takeoff.yaml --prev` — regenerate on a new revision and diff quantities; nobody in this space ships it |
-| Sets / slip-sheeting | Revu Sets | 🔜 | Revision grouping by sheet number |
+| Sets / slip-sheeting | Revu Sets | ✅ | CLI `set`: walk a folder, newest file per sheet name, merge into one sorted current-issue PDF |
 
 ## Document management
 

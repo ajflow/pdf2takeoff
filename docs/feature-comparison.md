@@ -45,8 +45,8 @@ pdf2takeoff runs in any modern browser on any OS.
 | Volume | Core | ✅ | Area × depth with a depth prompt; depth stored in the annotation comment |
 | Angle | Core | ✅ | 3-click angle at a vertex; scale-free — works before calibration |
 | Multi-scale viewports on one page | Core | 🔜 | Per-region scales for detail views |
-| Dynamic Fill (flood-fill areas) | Complete | 🔜 | Click inside walls → bounded area |
-| Formulas & custom columns | Complete | 🔜 | Waste factors, cost/length, unit conversion |
+| Dynamic Fill (flood-fill areas) | Complete | ✅ | Click inside a room → area off the walls in ~150 ms; door-gap closing is the follow-up |
+| Formulas & custom columns | Complete | ✅ | Safe formula columns (value/count vars) in totals + every export + MCP; waste, rates |
 
 ## Auto-count & symbol search
 
@@ -72,7 +72,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Custom statuses | Basics | ✅ | Flag / confirm cycle; rides in the PDF comment so it survives round-trips; agents can set it via MCP | |
 | Saved tool presets | Basics (Tool Chest) | ✅ | Our name: tool library — chips apply type + label to every placement and scan hit; persist locally |
 | Markup layers | Basics | 🔜 | |
-| Note / callout tool | Basics | 🔜 | FreeText annotations already round-trip |
+| Note / callout tool | Basics | ✅ | Pin a note (T); round-trips through FreeText with counts disambiguated by ': 1' |
 
 ## Compare & revisions
 

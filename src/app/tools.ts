@@ -9,6 +9,8 @@ import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { ocrPage } from './ocr';
 import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
+import { dynamicFill } from '../engine/dynamicfill';
+import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
 import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from '../engine/units';
 
@@ -36,6 +38,7 @@ const HINTS: Record<string, string> = {
   volume: 'Click each corner of the area · double-click or Enter to finish, then enter the depth',
   angle: 'Click the corner vertex, then one point on each ray',
   note: 'Click where the note belongs, then type the text in the list (rename)',
+  fill: 'Click inside a room or slab — the fill reads its area off the walls',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
 };
 
@@ -209,6 +212,9 @@ function onPointerDown(e: PointerEvent): void {
       hint('Note placed · type its text in the Label column of the list');
       break;
     }
+    case 'fill':
+      void runFill(p);
+      break;
     case 'scan':
       void runScan(p);
       break;
@@ -263,6 +269,41 @@ function onDoubleClick(e: MouseEvent): void {
       draft.pop();
     }
     finishDraft();
+  }
+}
+
+async function runFill(p: Pt): Promise<void> {
+  hint('Filling…');
+  const t0 = performance.now();
+  try {
+    const raster = await renderRaster(state.pageNum, 3);
+    const result = dynamicFill(raster, p);
+    if ('error' in result) {
+      hint(result.error);
+      return;
+    }
+    const m: Markup = {
+      id: nextId('mk'),
+      page: state.pageNum,
+      type: 'area',
+      label: state.activePreset?.type === 'area' ? state.activePreset.label : 'Filled area',
+      points: result.points,
+      createdAt: Date.now(),
+    };
+    state.markups.push(m);
+    state.lastAction = null;
+    syncUpsertMarkup(m);
+    setTool('pan');
+    renderMarkups();
+    emit();
+    const cal = state.calibrations.get(state.pageNum);
+    if (cal) {
+      hint(`Fill area added (${Math.round(performance.now() - t0)} ms) · drag vertices to adjust`);
+    } else {
+      hint('Fill area added · calibrate the scale to see its value');
+    }
+  } catch (err) {
+    hint(`Fill failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -500,6 +541,7 @@ function onKeyDown(e: KeyboardEvent): void {
     o: 'volume',
     g: 'angle',
     t: 'note',
+    d: 'fill',
     s: 'scan',
   };
   const k = e.key.toLowerCase();

@@ -22,6 +22,9 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
+- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps leak — gap-closing is on the list)
+- **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
+- **Notes**: pin a note anywhere (T); round-trips through the PDF
 - **Tool library**: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"), then click the chip to measure pre-labelled — every placement and scan hit carries the label; presets persist locally across sessions
 - **Multi-sheet sets**: page filmstrip with lazily rendered thumbnails and per-page calibration badges; the bundled sample carries two sheets at different scales (1:100 and 1:50) to show per-page scales
 - **Live sessions (experimental)**: hit **Live** and other tabs/windows with the same drawing sync takeoffs in real time — placements, deletions, calibrations and presence (Yjs CRDT over BroadcastChannel; cross-machine relay is the next phase). Known gap: edits to existing markups (rename/status/drag) don't propagate between tabs yet
@@ -103,7 +106,7 @@ Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 
 | Key | Action |
 | --- | --- |
-| `V` / `C` / `L` / `A` / `N` / `P` / `O` / `G` / `S` | pan · calibrate · length · area · count · perimeter · volume · angle · scan |
+| `V` / `C` / `L` / `A` / `N` / `P` / `O` / `G` / `T` / `D` / `S` | pan · calibrate · length · area · count · perimeter · volume · angle · note · fill · scan |
 | `F` | fit width |
 | `+` / `−` | zoom |
 | `←` / `→` | previous / next page |

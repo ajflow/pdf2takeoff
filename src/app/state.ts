@@ -11,6 +11,11 @@ export { markupLength, markupArea, distPt, defaultLabel, nextId } from '../engin
 
 export type ToolId = 'pan' | 'calibrate' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'scan';
 
+export interface ToolPreset {
+  type: MarkupType;
+  label: string;
+}
+
 export interface AppState {
   fileName: string;
   fileBytes: Uint8Array | null; // original bytes, kept for save-with-annotations
@@ -25,6 +30,8 @@ export interface AppState {
   selectedId: string | null;
   /** last reversible action, so Ctrl+Z can restore a drag before falling back to delete-newest */
   lastAction: { kind: 'move'; id: string; before: Pt[] } | null;
+  presets: ToolPreset[];
+  activePreset: ToolPreset | null;
 }
 
 export const state: AppState = {
@@ -40,6 +47,8 @@ export const state: AppState = {
   markups: [],
   selectedId: null,
   lastAction: null,
+  presets: [],
+  activePreset: null,
 };
 
 type Listener = () => void;

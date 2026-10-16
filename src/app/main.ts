@@ -10,6 +10,8 @@ import { saveAnnotatedPdf, importMarkups } from './pdfio';
 import { playDemo, stopDemo } from './demo';
 import { exportXlsx } from './table';
 import { initPageStrip } from './pagestrip';
+import { initLibrary, renderLibrary } from './library';
+import { loadPresets } from './persistence';
 import { scheduleSave, restoreSession } from './persistence';
 import {
   compareState,
@@ -43,6 +45,11 @@ initTools(overlay);
 initTable();
 initCompare(canvas, pageEl);
 initPageStrip(document.getElementById('pageStrip')!);
+initLibrary();
+void loadPresets().then((presets) => {
+  state.presets = presets;
+  renderLibrary();
+});
 
 // the workspace fills the viewport; keep reloads from restoring a mid-page offset
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -327,6 +334,7 @@ subscribe(() => {
 
   renderMarkups();
   renderTable();
+  renderLibrary(); // active-chip highlight follows tool/preset changes
   scheduleSave(); // debounced persistence of markups + calibrations
 });
 

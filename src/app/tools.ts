@@ -18,6 +18,11 @@ function hint(text: string): void {
   onStatusHint?.(text);
 }
 
+/** One-off hint from other modules (library, etc.). */
+export function showHint(text: string): void {
+  hint(text);
+}
+
 const HINTS: Record<string, string> = {
   pan: 'Drag to pan · Ctrl+wheel to zoom · click a markup to select it',
   calibrate: 'Click two ends of a known dimension to calibrate the scale',
@@ -94,6 +99,15 @@ export function initTools(overlay: SVGSVGElement): void {
 
 export function setTool(tool: typeof state.tool): void {
   state.tool = tool;
+  // manual tool switching drops an active preset unless the type still matches;
+  // a count preset survives the scan tool so scan hits come out pre-labelled
+  if (
+    state.activePreset &&
+    state.activePreset.type !== tool &&
+    !(tool === 'scan' && state.activePreset.type === 'count')
+  ) {
+    state.activePreset = null;
+  }
   draft = [];
   calibFirst = null;
   pendingCalib = null;
@@ -161,7 +175,7 @@ function onPointerDown(e: PointerEvent): void {
         id: nextId('mk'),
         page: state.pageNum,
         type: 'count',
-        label: defaultLabel('count'),
+        label: state.activePreset?.type === 'count' ? state.activePreset.label : defaultLabel('count'),
         points: [p],
         createdAt: Date.now(),
       };
@@ -244,7 +258,7 @@ async function runScan(p: Pt): Promise<void> {
     );
     return;
   }
-  const fallbackLabel = 'Scanned symbol';
+  const fallbackLabel = state.activePreset?.type === 'count' ? state.activePreset.label : 'Scanned symbol';
   for (const hit of hits) {
     state.markups.push({
       id: nextId('mk'),
@@ -261,7 +275,7 @@ async function runScan(p: Pt): Promise<void> {
   emit();
   const label = hits[0].label ?? fallbackLabel;
   hint(
-    label !== fallbackLabel
+    label !== 'Scanned symbol'
       ? `Scan counted ${hits.length} × ${label} in ${ms} ms`
       : `Scan found ${hits.length} symbols in ${ms} ms; rename "Scanned symbol" in the list to group them`,
   );
@@ -291,7 +305,7 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
     id: nextId('mk'),
     page: state.pageNum,
     type,
-    label: defaultLabel(type),
+    label: state.activePreset?.type === type ? state.activePreset.label : defaultLabel(type),
     points: [...draft],
     createdAt: Date.now(),
     ...(depth !== undefined ? { depth } : {}),

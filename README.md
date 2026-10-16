@@ -21,6 +21,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Markups list**: rename labels, jump to page, delete; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
+- **Tool library**: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"), then click the chip to measure pre-labelled — every placement and scan hit carries the label; presets persist locally across sessions
 - **Multi-sheet sets**: page filmstrip with lazily rendered thumbnails and per-page calibration badges; the bundled sample carries two sheets at different scales (1:100 and 1:50) to show per-page scales
 - **Sessions persist**: markups and calibrations autosave to IndexedDB keyed by the file's hash, so a refresh or re-open restores your takeoff (PDF annotations still take precedence when present); the PDF itself is never stored or uploaded
 - **Save into the PDF**: markups are written as standard Line / PolyLine / Polygon / FreeText annotations (pdf-lib) with the measurement in the comment, and they round-trip: reopen the file and your takeoff comes back

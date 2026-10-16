@@ -292,6 +292,14 @@
       </main>
 
       <aside id="sidebar">
+        <div class="library">
+          <h2>Tool library</h2>
+          <div class="lib-add">
+            <input type="text" id="presetLabel" placeholder="Label, e.g. Skirting" autocomplete="off" aria-label="Preset label" />
+            <button class="btn" id="presetSave" title="Save the current tool + this label as a reusable preset">+ Save</button>
+          </div>
+          <div id="presetList" class="preset-list" aria-label="Saved tool presets"></div>
+        </div>
         <h2>Markups</h2>
         <div id="markupTotals"></div>
         <div class="markup-table-wrap">

@@ -2,20 +2,26 @@
 // bytes. Markups and calibrations survive refreshes and re-opens; the PDF
 // itself is never stored or uploaded anywhere.
 
-import { state, type Markup, type Calibration } from './state';
+import { state, type Markup, type Calibration, type ToolPreset } from './state';
 import { fileHash } from '../engine/export';
 
 const DB_NAME = 'pdf2takeoff-sessions';
 const STORE = 'sessions';
+const PRESET_STORE = 'presets';
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve) => {
     try {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, 2);
       req.onupgradeneeded = () => {
-        req.result.createObjectStore(STORE);
+        // guard BOTH stores: re-creating an existing one throws inside the
+        // upgrade transaction and silently kills all persistence
+        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+        if (!req.result.objectStoreNames.contains(PRESET_STORE)) {
+          req.result.createObjectStore(PRESET_STORE);
+        }
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
@@ -77,6 +83,38 @@ export async function restoreSession(bytes: Uint8Array): Promise<number> {
       req.onerror = () => resolve(0);
     } catch {
       resolve(0);
+    }
+  });
+}
+
+// --- tool library (global, not per-file) ---
+
+const PRESET_KEY = 'default';
+
+export async function savePresets(presets: ToolPreset[]): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(PRESET_STORE, 'readwrite');
+    tx.objectStore(PRESET_STORE).put(presets, PRESET_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export async function loadPresets(): Promise<ToolPreset[]> {
+  const db = await openDb();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    try {
+      const req = db.transaction(PRESET_STORE, 'readonly').objectStore(PRESET_STORE).get(PRESET_KEY);
+      req.onsuccess = () => {
+        const list = req.result as ToolPreset[] | undefined;
+        resolve(Array.isArray(list) ? list.filter((p) => p && typeof p.label === 'string') : []);
+      };
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
     }
   });
 }

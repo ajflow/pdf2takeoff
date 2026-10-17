@@ -4,6 +4,7 @@
 
 import type { Pt } from './types.ts';
 import type { Unit } from './units.ts';
+import { scaleVotesFromWords, type ScaleVote } from './scale.ts';
 
 export interface OcrWord {
   text: string;
@@ -20,40 +21,24 @@ export interface ScaleHit {
   source: string;
 }
 
-// the colon is required: a bare "1200" or "1050" is far more often a
-// dimension than a ratio whose colon got lost
-const RATIO_WORD_RE = /^1\s*:\s*(\d{2,4})$/;
-
 /**
- * Find a drawing ratio (1:N) in the recognized text. Individual words are
- * checked ("1:100"), adjacent triples joined ("1 : 100"), and hits nearest a
- * scale/frequency keyword ("SCALE", "@ A1") win — detail viewports often
- * print secondary ratios that would mislead. `origin` names where the words
- * came from in the hit's source (the recognizer, or a PDF text layer).
+ * Find the drawing scale in the recognized text. Every scale note is parsed
+ * into a vote (scale.ts: ratios, imperial notes, keyword-gated guesses for a
+ * dropped colon); notes printed next to a SCALE keyword or label win, since
+ * detail viewports often print secondary ratios that would mislead, then
+ * full-weight notes beat guesses, then recognizer confidence. `origin`
+ * names where the words came from in the hit's source (the recognizer, or a
+ * PDF text layer).
  */
 export function findScaleRatio(words: OcrWord[], origin = 'OCR'): ScaleHit | null {
-  const hits: { ratio: number; word: OcrWord }[] = [];
-  const clean = words.map((w) => ({ ...w, text: w.text.trim() })).filter((w) => w.text);
-  for (const w of clean) {
-    const m = w.text.match(RATIO_WORD_RE);
-    if (m) hits.push({ ratio: parseInt(m[1], 10), word: w });
-  }
-  // "1 : 100" split across tokens: join each word with its next two neighbours
-  for (let i = 0; i + 2 < clean.length; i++) {
-    const joined = `${clean[i].text} ${clean[i + 1].text} ${clean[i + 2].text}`.replace(/\s+/g, ' ');
-    const m = joined.match(/^1 ?: ?(\d{2,4})$/);
-    if (m) hits.push({ ratio: parseInt(m[1], 10), word: clean[i + 1] });
-  }
-  const valid = hits.filter((h) => h.ratio >= 10 && h.ratio <= 5000);
-  if (valid.length === 0) return null;
-  const scaleWords = clean.filter((w) => /scale|@/i.test(w.text));
-  const score = (h: { word: OcrWord }) => {
-    if (scaleWords.length === 0) return 1;
-    const nearest = Math.min(...scaleWords.map((s) => Math.hypot(s.xPt - h.word.xPt, s.yPt - h.word.yPt)));
-    return nearest < 150 ? 0 : 1; // near a SCALE label wins
-  };
-  valid.sort((a, b) => score(a) - score(b) || b.word.conf - a.word.conf);
-  return { ratio: valid[0].ratio, source: `${origin} 1:${valid[0].ratio}` };
+  const { votes } = scaleVotesFromWords(words, origin);
+  if (votes.length === 0) return null;
+  const scaleWords = words.filter((w) => /scale|@/i.test(w.text));
+  // printed right after SCALE beats merely near a SCALE label beats neither
+  const rank = (v: ScaleVote) =>
+    v.keyword ? 2 : v.at !== undefined && scaleWords.some((s) => Math.hypot(s.xPt - v.at!.x, s.yPt - v.at!.y) < 150) ? 1 : 0;
+  const best = [...votes].sort((a, b) => rank(b) - rank(a) || b.weight - a.weight || (b.conf ?? 0) - (a.conf ?? 0))[0];
+  return { ratio: best.ratio, source: best.source };
 }
 
 /** A printed dimension value near a clicked line. */

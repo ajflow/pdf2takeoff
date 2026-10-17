@@ -23,8 +23,11 @@ import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
-import { toMeters } from '../engine/units.ts';
-import { findScaleRatio, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
+import { METERS_PER_PT, toMeters } from '../engine/units.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
+import { dynamicFill } from '../engine/dynamicfill.ts';
+import { RASTER_SCALE } from '../engine/ports.ts';
+import { scaleVotesFromWords, scaleConsensus, type ScaleVote } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -98,6 +101,19 @@ const ptTuple = z.tuple([z.number(), z.number()]);
 
 export async function runMcpServer(): Promise<void> {
   const server = new McpServer({ name: 'pdf2takeoff', version: '0.1.0' });
+
+  // provenance attached to every numeric result: where the number came from
+  const scaleProvenance = (cal: Calibration | undefined) =>
+    cal ? { ratio: round(cal.metersPerPt / METERS_PER_PT, 2), source: cal.source } : null;
+  const bboxOf = (pts: { x: number; y: number }[]) =>
+    pts.length
+      ? [
+          round(Math.min(...pts.map((p) => p.x))),
+          round(Math.min(...pts.map((p) => p.y))),
+          round(Math.max(...pts.map((p) => p.x))),
+          round(Math.max(...pts.map((p) => p.y))),
+        ]
+      : null;
 
   server.registerTool(
     'open_document',
@@ -211,6 +227,8 @@ export async function runMcpServer(): Promise<void> {
           )
         : words;
       const scaleHit = findScaleRatio(clipped, 'text layer');
+      const { votes, nts } = scaleVotesFromWords(clipped, 'text layer');
+      const consensus = scaleConsensus(votes, nts);
       return text({
         page,
         wordCount: clipped.length,
@@ -221,6 +239,14 @@ export async function runMcpServer(): Promise<void> {
         scaleRatio: scaleHit
           ? { ratio: scaleHit.ratio, source: scaleHit.source, hint: `set_scale with ratio "1:${scaleHit.ratio}"` }
           : null,
+        // every scale note found and whether they agree; a conflict usually
+        // means viewports at different scales (clip with region) or a misread
+        scaleNotes: {
+          status: consensus.status,
+          nts: consensus.nts,
+          notes: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source, weight: v.weight, at: v.at })),
+          rivals: consensus.rivals,
+        },
       });
     },
   );
@@ -265,7 +291,81 @@ export async function runMcpServer(): Promise<void> {
       }
       const pages = all_pages ? Array.from({ length: d.doc.numPages }, (_, i) => i + 1) : [page];
       for (const p of pages) d.calibrations.set(p, { metersPerPt, source });
-      return text({ set: pages, metersPerPt: round(metersPerPt, 8), source });
+      // cross-check against the sheet's own scale notes (text layer)
+      const tc = await (await d.doc.getPage(page)).getTextContent();
+      const words = (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
+        wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
+      );
+      const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+      const setVote: ScaleVote = { ratio: metersPerPt / METERS_PER_PT, source, weight: 1, kind: from_points ? 'dimension' : 'ratio', keyword: false };
+      const check = votes.length ? scaleConsensus([setVote, ...votes], nts) : null;
+      const disagrees = check && check.status === 'conflict';
+      return text({
+        set: pages,
+        metersPerPt: round(metersPerPt, 8),
+        ratio: round(metersPerPt / METERS_PER_PT, 2),
+        source,
+        sheetCheck: check
+          ? {
+              status: check.status,
+              sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
+              ...(disagrees
+                ? { warning: `the sheet's notes disagree with this scale${check.rivals[0]?.likely ? `: likely ${check.rivals[0].likely}` : ''}. Check before measuring` }
+                : {}),
+            }
+          : { status: nts ? 'sheet marked NTS' : 'no scale note on this sheet' },
+      });
+    },
+  );
+
+  server.registerTool(
+    'fill_area',
+    {
+      description:
+        'Measure a room by clicking inside it (Dynamic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value) and room labels from the text layer to stop at doorways. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).default(1),
+        at: ptTuple.describe('a point inside the room, PDF points'),
+        label: z.string().optional(),
+      },
+    },
+    async ({ id, page, at, label }) => {
+      const d = getDoc(id);
+      if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
+      const raster = await renderRasterNode(d.doc, page, RASTER_SCALE);
+      const items = (await (await d.doc.getPage(page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+      const labels = roomLabelPoints(items);
+      const cal = d.calibrations.get(page);
+      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
+      if ('error' in result) throw new Error(result.error);
+      const markup: Markup = {
+        id: nextId('mcp'),
+        page,
+        type: 'area',
+        label: label ?? 'Filled area',
+        points: result.points,
+        createdAt: Date.now(),
+      };
+      d.markups.push(markup);
+      const gapPt = result.gapPx ? result.gapPx / RASTER_SCALE : 0;
+      return text({
+        markupId: markup.id,
+        label: markup.label,
+        value: cal ? round(markupArea(markup, cal.metersPerPt), 4) : null,
+        unit: 'm2',
+        calibrated: !!cal,
+        vertices: result.points.length,
+        provenance: {
+          method: 'dynamic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces',
+          page,
+          scale: scaleProvenance(cal),
+          bbox: bboxOf(result.points),
+          gapClosedPt: round(gapPt, 1),
+          ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}),
+          roomLabelsOnSheet: labels.length,
+        },
+      });
     },
   );
 
@@ -323,6 +423,12 @@ export async function runMcpServer(): Promise<void> {
         value: value === null ? null : round(value, 4),
         unit: type === 'count' ? 'each' : type === 'angle' ? 'deg' : type === 'length' || type === 'perimeter' ? 'm' : type === 'volume' ? 'm3' : 'm2',
         calibrated: type === 'angle' || type === 'count' ? true : !!cal,
+        provenance: {
+          method: 'geometry of the points you gave',
+          page,
+          scale: type === 'angle' || type === 'count' ? null : scaleProvenance(cal),
+          bbox: bboxOf(markup.points),
+        },
       });
     },
   );
@@ -379,6 +485,13 @@ export async function runMcpServer(): Promise<void> {
         provider: result.provider,
         label: result.hits[0]?.label ?? fallback,
         hits: result.hits.map((h) => ({ x: round(h.x), y: round(h.y) })),
+        provenance: {
+          method: result.provider === 'detector' ? 'trained symbol detector' : 'template match of the clicked symbol',
+          page,
+          bbox: bboxOf(result.hits),
+          ...(result.note ? { note: result.note } : {}),
+          ...('truncated' in result && result.truncated ? { truncated: true } : {}),
+        },
       });
     },
   );

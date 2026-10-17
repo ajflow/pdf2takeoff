@@ -36,6 +36,10 @@ export type FillResult = { points: Pt[]; gapPx?: number } | { error: string };
 
 /** Widest doorway closed automatically once the page scale is known (m). */
 const DOOR_MAX_M = 1.0;
+/** Ink at least this thick (PDF pt) counts as a heavy (wall-weight) line. */
+const HEAVY_PT = 0.9;
+/** Ink pieces spanning less than this (PDF pt) are marks, not structure (~1.3 m at 1:100). */
+const STRUCT_PT = 36;
 /** Label probes sit this far (PDF pt) around a label's centre. */
 const LABEL_PROBE_PT = 4;
 
@@ -77,25 +81,76 @@ const WALL_END_REACH = 64;
  * longer than thick). A door gap sits between two wall ends. The strip
  * between a wall face and a parallel bench line is bounded by the sides of
  * lines, and the short gap from a bench's end to a side wall has a wall
- * face on one side, so neither closes and the floor area is kept. With equal
- * line weights a door hard against a corner (no return nib) looks the same
- * as that bench gap and is not bridged.
+ * face on one side, so neither closes and the floor area is kept.
+ *
+ * Line weight separates the one case that rule alone gets wrong, a doorway
+ * hard against a corner (a wall end facing the side of another wall):
+ * walls are drawn heavier than furniture, so a run also closes when one end
+ * is a HEAVY wall end (at least heavyPx thick) and the other is heavy ink
+ * too. Thin bench and fixture lines never qualify.
+ *
+ * Either kind of end must belong to STRUCTURAL ink: a connected ink piece
+ * spanning at least structPx. Symbols, text glyphs and other small marks
+ * (a downlight's flat top edge looks like a short heavy wall end) are
+ * isolated pieces, so they never anchor a closing.
  */
-function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
+function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number): Uint8Array {
   const thr = new Uint8Array(w * h).fill(NEVER);
+  // structural-ink cache: 0 unknown, 1 part of a piece spanning structPx, 2 a small piece
+  const piece = new Uint8Array(w * h);
+  const queue: number[] = [];
+  const structural = (start: number): boolean => {
+    if (piece[start]) return piece[start] === 1;
+    queue.length = 0;
+    queue.push(start);
+    piece[start] = 3; // visiting
+    let x0 = start % w;
+    let x1 = x0;
+    let y0 = (start / w) | 0;
+    let y1 = y0;
+    let big = false;
+    for (let q = 0; q < queue.length && !big; q++) {
+      const i = queue[q];
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (x1 - x0 >= structPx || y1 - y0 >= structPx) big = true;
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+        if (j < 0 || j >= w * h || !ink[j]) continue;
+        if (piece[j] === 1) big = true;
+        if (piece[j]) continue;
+        piece[j] = 3;
+        queue.push(j);
+      }
+    }
+    const mark = big ? 1 : 2;
+    for (const i of queue) piece[i] = mark;
+    return big;
+  };
   /** consecutive ink from i stepping by d, at most WALL_END_REACH (inBounds guards the axis) */
   const runFrom = (i: number, d: number, steps: number): number => {
     let n = 0;
     for (let k = 0; k < Math.min(steps, WALL_END_REACH) && ink[i + k * d]; k++) n++;
     return n;
   };
-  // end ink at (x, y) continuing in direction (dx, dy): along length vs its thickness across
-  const wallEnd = (x: number, y: number, dx: number, dy: number): boolean => {
+  // end ink at (x, y) continuing in direction (dx, dy): its length along the
+  // run's axis and its thickness across it
+  const endInk = (x: number, y: number, dx: number, dy: number) => {
     const i = y * w + x;
     const along = dx > 0 ? runFrom(i, 1, w - x) : dx < 0 ? runFrom(i, -1, x + 1) : dy > 0 ? runFrom(i, w, h - y) : runFrom(i, -w, y + 1);
     const across = dx !== 0 ? runFrom(i, w, h - y) + runFrom(i, -w, y + 1) - 1 : runFrom(i, 1, w - x) + runFrom(i, -1, x + 1) - 1;
-    return along >= Math.min(WALL_END_REACH, 2 * across);
+    const solid = structural(i);
+    return { along, across, solid, wallEnd: solid && along >= Math.min(WALL_END_REACH, 2 * across) };
   };
+  type EndInk = ReturnType<typeof endInk>;
+  // two wall ends, or a heavy wall end facing heavy ink (a doorway at a corner)
+  const bridgeable = (a: EndInk, b: EndInk): boolean =>
+    (a.wallEnd && b.wallEnd) ||
+    (a.wallEnd && a.across >= heavyPx && b.solid && Math.min(b.along, b.across) >= heavyPx) ||
+    (b.wallEnd && b.across >= heavyPx && a.solid && Math.min(a.along, a.across) >= heavyPx);
   const mark = (L: number, before: boolean, after: boolean, wallEnded: () => boolean): number => {
     const t = before && after ? (wallEnded() ? Math.ceil(L / 2) : NEVER) : before || after ? L : NEVER;
     return Math.min(t, NEVER);
@@ -113,7 +168,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
       const a = x;
       while (x < w && !ink[row + x]) x++;
       const b = x;
-      const t = mark(b - a, a > 0, b < w, () => wallEnd(a - 1, y, -1, 0) && wallEnd(b, y, 1, 0));
+      const t = mark(b - a, a > 0, b < w, () => bridgeable(endInk(a - 1, y, -1, 0), endInk(b, y, 1, 0)));
       if (t < NEVER) for (let i = row + a; i < row + b; i++) thr[i] = t;
     }
   }
@@ -122,7 +177,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
   const runStart = new Int32Array(w).fill(-1);
   const flush = (x: number, end: number) => {
     const a = runStart[x];
-    const t = mark(end - a, a > 0, end < h, () => wallEnd(x, a - 1, 0, -1) && wallEnd(x, end, 0, 1));
+    const t = mark(end - a, a > 0, end < h, () => bridgeable(endInk(x, a - 1, 0, -1), endInk(x, end, 0, 1)));
     if (t < NEVER) for (let y = a, i = a * w + x; y < end; y++, i += w) if (t < thr[i]) thr[i] = t;
     runStart[x] = -1;
   };
@@ -164,8 +219,8 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // is a leak, however far it would run.
   const cap = MAX_FILL_FRACTION * w * h;
   const mask = new Uint8Array(w * h);
-  const thr = closingThresholds(ink, w, h);
   const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
+  const thr = closingThresholds(ink, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt));
   // a known scale puts the doorway rung on the ladder and starts there:
   // every smaller rung only closes a subset of what it closes
   const doorR = hints.metersPerPt ? Math.min(NEVER - 1, Math.ceil(((DOOR_MAX_M / hints.metersPerPt) * pxPerPt) / 2)) : 0;

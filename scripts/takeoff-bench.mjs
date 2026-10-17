@@ -116,6 +116,24 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
   }
 }
 
+// Page 1b: heavy-wall plan where the partition stops 1 m short of the outer
+// wall (a doorway hard against a corner), with a row of downlights that must
+// not be chained into a wall.
+{
+  const page = sheet(doc);
+  const ox = 60;
+  const oy = 300;
+  page.drawRectangle({ x: ox, y: oy, width: 8 * M, height: 5 * M, borderColor: BLACK, borderWidth: 2.4 });
+  page.drawLine({ start: pt(ox, oy, 3, 1), end: pt(ox, oy, 3, 5), thickness: 1.6, color: BLACK });
+  for (const x of [4.2, 5.4, 6.6]) page.drawCircle({ x: ox + x * M, y: oy + 2.5 * M, size: 6, borderColor: BLACK, borderWidth: 1.1, color: rgb(1, 1, 1) });
+  page.drawText('STORE', { x: ox + 1.1 * M, y: oy + 3.2 * M, size: 8, font });
+  page.drawText('OFFICE', { x: ox + 5 * M, y: oy + 3.6 * M, size: 8, font });
+  const left = ((3 * M - 1.2 - 0.8) * (5 * M - 2.4)) / (M * M);
+  const right = ((5 * M - 1.2 - 0.8) * (5 * M - 2.4)) / (M * M);
+  cases.push({ id: 'fill/corner-doorway-left', kind: 'fill', page: doc.getPageCount(), at: pt(ox, oy, 1.5, 3), expectM2: left });
+  cases.push({ id: 'fill/corner-doorway-downlight-row', kind: 'fill', page: doc.getPageCount(), at: pt(ox, oy, 5, 1.5), expectM2: right });
+}
+
 // Page 2: symbol counts. 12 downlight-style symbols (circle + cross) on an
 // open floor, plus 3 touching a wall line (the CV scan's declared blind spot).
 {
@@ -131,8 +149,8 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
   page.drawLine({ start: { x: 80, y: 150 }, end: { x: 600, y: 150 }, thickness: 1.2, color: BLACK });
   const onWall = [[200, 155.5], [320, 155.5], [440, 155.5]];
   onWall.forEach(([x, y]) => sym(x, y));
-  cases.push({ id: 'count/open-floor', kind: 'count', page: 2, at: { x: open[0][0], y: open[0][1] }, expect: open.length, accept: [open.length, open.length + onWall.length] });
-  cases.push({ id: 'count/touching-walls', kind: 'count', page: 2, at: { x: open[0][0], y: open[0][1] }, expect: open.length + onWall.length, known: 'P17' });
+  cases.push({ id: 'count/open-floor', kind: 'count', page: doc.getPageCount(), at: { x: open[0][0], y: open[0][1] }, expect: open.length, accept: [open.length, open.length + onWall.length] });
+  cases.push({ id: 'count/touching-walls', kind: 'count', page: doc.getPageCount(), at: { x: open[0][0], y: open[0][1] }, expect: open.length + onWall.length, known: 'P17' });
 }
 
 // Pages 3+: scale notes in the text layer, one sheet each.
@@ -141,9 +159,11 @@ const scaleSheets = [
   { id: 'scale/ratio-spaced', lines: ['SCALE', '1 : 50'], expect: 50 },
   { id: 'scale/dimension-not-a-scale', lines: ['1200', '3600'], expect: null },
   { id: 'scale/nts', lines: ['SCALE: NTS'], expect: null },
-  { id: 'scale/imperial-architectural', lines: ['SCALE: 1/4" = 1\'-0"'], expect: 48, known: 'P14' },
-  { id: 'scale/imperial-engineering', lines: ['SCALE: 1" = 20\''], expect: 240, known: 'P14' },
-  { id: 'scale/colon-dropped-after-keyword', lines: ['SCALE 1;100'], expect: 100, known: 'P14' },
+  { id: 'scale/imperial-architectural', lines: ['SCALE: 1/4" = 1\'-0"'], expect: 48 },
+  { id: 'scale/imperial-engineering', lines: ['SCALE: 1" = 20\''], expect: 240 },
+  { id: 'scale/colon-dropped-after-keyword', lines: ['SCALE 1;100'], expect: 100 },
+  { id: 'scale/keyword-beats-detail-ratio', lines: ['DETAIL A 1:20', 'SCALE 1:100'], expect: 100 },
+  { id: 'scale/full-size', lines: ['SCALE: FULL SIZE'], expect: 1 },
 ];
 for (const s of scaleSheets) {
   const page = sheet(doc);

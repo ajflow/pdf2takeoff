@@ -10,11 +10,12 @@ import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
-import { findScaleRatio, nearestDimensionValue, roomLabelPoints } from '../engine/ocr';
+import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
+import { scaleVotesFromWords, scaleConsensus } from '../engine/scale';
 import { dynamicFill } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
-import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from '../engine/units';
+import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -593,11 +594,28 @@ function applyCalibration(): void {
   }
   const ptDist = distPt(pendingCalib.a, pendingCalib.b);
   const meters = toMeters(value, unit);
-  applyScaleToPages(meters / ptDist, `measured ${calibInput.value.trim()} ${unit}`);
+  const metersPerPt = meters / ptDist;
+  applyScaleToPages(metersPerPt, `measured ${calibInput.value.trim()} ${unit}`);
   closeCalibModal();
   renderMarkups();
   emit();
   hint('Scale set · press L for length, A for area, N to count');
+  void warnIfSheetDisagrees(state.pageNum, metersPerPt);
+}
+
+/** Compare a measured scale with the sheet's printed scale notes; hint on a mismatch. */
+async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<void> {
+  const items = await getPageTextItems(page).catch(() => []);
+  const words = items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));
+  const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+  if (votes.length === 0) return;
+  const measured = metersPerPt / METERS_PER_PT;
+  const c = scaleConsensus([{ ratio: measured, source: 'measured', weight: 1, kind: 'dimension', keyword: false }, ...votes], nts);
+  if (c.status !== 'conflict') return;
+  const printed = votes.find((v) => Math.abs(v.ratio / measured - 1) > 0.02);
+  if (!printed) return;
+  const why = c.rivals[0]?.likely ? `, likely ${c.rivals[0].likely}` : '';
+  hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(printed.ratio)}${why}. Check the dimension you used.`);
 }
 
 // --- keyboard ---

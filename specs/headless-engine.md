@@ -210,10 +210,11 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 |---|---|---|
 | `open_document` | `path` | doc id, page count, page sizes, existing annotation count |
 | `render_page` | `doc, page, dpi?` | PNG content block + width/height/page-space note — **the agent's eyes** |
-| `read_text` | `doc, page, region?` | positioned words (PDF pts) + any `1:N` scale found — **the agent's reading path**; numbers come from tools, never off the PNG |
-| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point |
-| `measure` | `doc, page, type: length\|area\|count, points[], label?` | value (formatted + raw), markup id |
-| `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count |
+| `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
+| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's own scale notes (a conflict carries a likely cause) |
+| `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
+| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale and room labels), markup id, `provenance` with the gap closed |
+| `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |
 | `compare_revisions` | `path_a, path_b` | changed sheets, changed regions, summary |
 | `list_markups` / `delete_markup` | `doc` / `doc, id` | markups table / confirmation |
 | `export` | `doc, format: csv\|xlsx, out_path` | written file path |
@@ -224,6 +225,13 @@ Design rules:
 - Tools are **small and composable**, mirroring the UI verbs — an agent can
   reproduce anything a human clicks.
 - Every tool returns units and coordinate frame explicitly in its description.
+- **Only tool calls create quantities.** Agents plan and choose points; every
+  number they report comes from a tool result. Numeric results carry
+  `provenance`: the method, the page, the scale used (ratio and source) and
+  the bounding box of the evidence, so a reviewer can trace each figure.
+  Benchmarks of current vision-language models (counting doors and windows,
+  reading scales, spotting revision changes) are why: models fail exactly
+  the operations takeoff runs on (patch-plan-2, research report).
 - Write operations (`export`, `save_annotated`) write **only** to paths the
   caller provides; the server never uploads, never phones home.
 - Human verification loop is built in: `save_annotated` output opens in the

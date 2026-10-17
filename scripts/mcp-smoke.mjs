@@ -73,8 +73,8 @@ console.log('ok: initialize');
 
 const tools = await request('tools/list', {});
 const names = tools.tools.map((t) => t.name);
-check('tools/list has all 12 tools', [
-  'open_document', 'render_page', 'read_text', 'set_scale', 'measure', 'scan_symbol',
+check('tools/list has all 13 tools', [
+  'open_document', 'render_page', 'read_text', 'set_scale', 'measure', 'fill_area', 'scan_symbol',
   'compare_revisions', 'list_markups', 'set_status', 'delete_markup', 'export', 'save_annotated',
 ].every((n) => names.includes(n)), `got: ${names.join(', ')}`);
 
@@ -94,8 +94,13 @@ const read = textOf(await call('read_text', { id: docId, page: 1 }));
 check('read_text: finds the printed scale 1:100', read.scaleRatio?.ratio === 100, JSON.stringify(read.scaleRatio));
 check('read_text: sample text present', read.words.some((wd) => wd.text === '12.00') || read.words.some((wd) => /^(12\.00|8\.00)$/.test(wd.text)), `wordCount ${read.wordCount}`);
 
+check('read_text: scale notes agree', read.scaleNotes?.status === 'agreed', JSON.stringify(read.scaleNotes));
+
+const wrong = textOf(await call('set_scale', { id: docId, ratio: '1:50' }));
+check('set_scale: a scale the sheet contradicts is flagged', wrong.sheetCheck?.status === 'conflict' && /reduced/.test(wrong.sheetCheck?.warning ?? ''), JSON.stringify(wrong.sheetCheck));
 const scale = textOf(await call('set_scale', { id: docId, ratio: '1:100', all_pages: true }));
 check('set_scale: applied to all pages', scale.set.length === 2);
+check('set_scale: the sheet agrees with 1:100', scale.sheetCheck?.status === 'agreed', JSON.stringify(scale.sheetCheck));
 
 const scanned = textOf(await call('scan_symbol', { id: docId, page: 1, at: [88.35, 271.42] }));
 check('scan_symbol: 8 downlights (matches browser)', scanned.count === 8, `got ${scanned.count}`);
@@ -108,6 +113,14 @@ const wallId = measured.markupId;
 
 const listed = textOf(await call('list_markups', { id: docId }));
 check('list_markups: 9 rows', listed.markups.length === 9, `got ${listed.markups.length}`);
+
+// the office (4 x 8 m, inner faces ~31.06 m²) is open to the meeting room
+// through a 1 m gap at the corner; fill must stop there
+const office = textOf(await call('fill_area', { id: docId, page: 1, at: [100, 200], label: 'Office' }));
+check('fill_area: office fills on its own (~31.06 m²)', Math.abs(office.value - 31.06) / 31.06 < 0.03, JSON.stringify({ value: office.value, provenance: office.provenance }));
+check('fill_area: provenance names the scale and the gap closed', office.provenance?.scale?.ratio === 100 && office.provenance?.gapClosedM > 0.9, JSON.stringify(office.provenance));
+check('measure: provenance carries the scale source', measured.provenance?.scale?.ratio === 100 && Array.isArray(measured.provenance?.bbox), JSON.stringify(measured.provenance));
+await call('delete_markup', { id: docId, markup_id: office.markupId });
 
 const statusSet = textOf(await call('set_status', { id: docId, markup_id: wallId, status: 'check' }));
 check('set_status: marked for checking', statusSet.status === 'check');

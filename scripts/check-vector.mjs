@@ -72,6 +72,10 @@ async function vec(bytes) {
   const t0 = performance.now();
   const r = vectorScan(v, { x: 106, y: 106 });
   check(`A1: vector scan finds all 300 symbols among 20k crossing lines in ${(performance.now() - t0).toFixed(0)} ms`, r?.hits.length === 300, `got ${r?.hits.length}`);
+  const t1 = performance.now();
+  doorBridges(v, 28.35);
+  const bms = performance.now() - t1;
+  check(`A1: doorway bridge search in ${bms.toFixed(0)} ms (< 5000; all-pairs took ~60 s)`, bms < 5000);
 }
 
 // vector scan: an asymmetric switch-like symbol (circle + tail to the right)

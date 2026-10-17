@@ -243,18 +243,39 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
     }
     counts.push({ page, label, a: g.length, b, delta: b - g.length });
   }
+  // everything a re-fill needs from a B sheet, prepared once per sheet
+  const sheets = new Map<number, Promise<Parameters<typeof dynamicFill>[3] & { raster: Awaited<ReturnType<typeof renderRasterNode>> }>>();
+  const sheet = (page: number) => {
+    let s = sheets.get(page);
+    if (!s) {
+      s = (async () => {
+        const [raster, items, vec, mppB, mppA] = await Promise.all([
+          renderRasterNode(docB, page, RASTER_SCALE),
+          docB.getPage(page).then((pg) => pg.getTextContent()),
+          vectorDocPage(docB, page),
+          sheetMetersPerPt(docB, page),
+          sheetMetersPerPt(docA, page),
+        ]);
+        const metersPerPt = mppB ?? mppA;
+        return {
+          raster,
+          labels: roomLabelPoints(items.items as { str?: string; transform?: number[]; width?: number; height?: number }[]),
+          bridges: doorBridgesFor(vec, metersPerPt),
+          ...(metersPerPt ? { metersPerPt } : {}),
+        };
+      })();
+      sheets.set(page, s);
+    }
+    return s;
+  };
   for (const m of markups.filter((x) => x.type === 'area')) {
     const aPt2 = polyAreaPt2(m.points);
     if (m.page > docB.numPages) {
       areas.push({ page: m.page, label: m.label, aPt2, bPt2: null, changePct: null, note: 'sheet missing in B' });
       continue;
     }
-    const c = interiorPoint(m.points);
-    const metersPerPt = (await sheetMetersPerPt(docB, m.page)) ?? (await sheetMetersPerPt(docA, m.page));
-    const raster = await renderRasterNode(docB, m.page, RASTER_SCALE);
-    const items = (await (await docB.getPage(m.page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
-    const bridges = doorBridgesFor(await vectorDocPage(docB, m.page), metersPerPt);
-    const r = dynamicFill(raster, c, undefined, { labels: roomLabelPoints(items), bridges, ...(metersPerPt ? { metersPerPt } : {}) });
+    const { raster, ...hints } = await sheet(m.page);
+    const r = dynamicFill(raster, interiorPoint(m.points), undefined, hints);
     if ('error' in r) {
       areas.push({ page: m.page, label: m.label, aPt2, bPt2: null, changePct: null, note: r.error });
       continue;

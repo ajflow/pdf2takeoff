@@ -70,12 +70,42 @@ export function doorBridges(vec: VecPage, maxGapPt: number): Bridge[] {
 
   const bridges: Bridge[] = [];
   const used = new Set<End>();
+  // spatial grid (cell = door width) so each end only meets nearby ends and
+  // walls instead of every one on the sheet
+  const cell = Math.max(maxGapPt, 1);
+  const cellOf = (v: number) => Math.floor(v / cell);
+  const endGrid = new Map<string, End[]>();
+  for (const e of ends) {
+    const k = `${cellOf(e.x)},${cellOf(e.y)}`;
+    const list = endGrid.get(k);
+    if (list) list.push(e);
+    else endGrid.set(k, [e]);
+  }
+  const heavyGrid = new Map<string, VecSeg[]>();
+  for (const w of walls) {
+    if (w.lineWidth < HEAVY_PT) continue;
+    for (let gx = cellOf(Math.min(w.x1, w.x2)); gx <= cellOf(Math.max(w.x1, w.x2)); gx++) {
+      for (let gy = cellOf(Math.min(w.y1, w.y2)); gy <= cellOf(Math.max(w.y1, w.y2)); gy++) {
+        const k = `${gx},${gy}`;
+        const list = heavyGrid.get(k);
+        if (list) list.push(w);
+        else heavyGrid.set(k, [w]);
+      }
+    }
+  }
+  const near = <T>(grid: Map<string, T[]>, x: number, y: number): T[] => {
+    const out: T[] = [];
+    const cx = cellOf(x);
+    const cy = cellOf(y);
+    for (let gx = cx - 1; gx <= cx + 1; gx++) for (let gy = cy - 1; gy <= cy + 1; gy++) out.push(...(grid.get(`${gx},${gy}`) ?? []));
+    return out;
+  };
   // 1. free end facing free end
   for (const a of ends) {
     if (used.has(a)) continue;
     let best: End | null = null;
     let bestD = Infinity;
-    for (const b of ends) {
+    for (const b of near(endGrid, a.x, a.y)) {
       if (b === a || b.seg === a.seg || used.has(b)) continue;
       const gx = b.x - a.x;
       const gy = b.y - a.y;
@@ -97,8 +127,8 @@ export function doorBridges(vec: VecPage, maxGapPt: number): Bridge[] {
   for (const a of ends) {
     if (used.has(a) || a.seg.lineWidth < HEAVY_PT) continue;
     let bestT = Infinity;
-    for (const w of walls) {
-      if (w === a.seg || w.lineWidth < HEAVY_PT) continue;
+    for (const w of new Set(near(heavyGrid, a.x, a.y))) {
+      if (w === a.seg) continue;
       // ray a + t·d against segment w
       const ex = w.x2 - w.x1;
       const ey = w.y2 - w.y1;
@@ -121,7 +151,18 @@ export function doorBridges(vec: VecPage, maxGapPt: number): Bridge[] {
 /** Widest doorway bridged without a scale (pt): the raster ladder's top rung at 3 px/pt. */
 const UNCALIBRATED_GAP_PT = 30;
 
-/** doorBridges with the door width taken from the scale (1.0 m), or a raster-equivalent default. */
+const bridgeCache = new WeakMap<VecPage, Map<number, Bridge[]>>();
+
+/**
+ * doorBridges with the door width taken from the scale (1.0 m), or a
+ * raster-equivalent default. Cached per page geometry and door width, so
+ * repeated fills on one sheet don't redo the search.
+ */
 export function doorBridgesFor(vec: VecPage, metersPerPt?: number): Bridge[] {
-  return doorBridges(vec, metersPerPt ? 1.0 / metersPerPt : UNCALIBRATED_GAP_PT);
+  const gap = metersPerPt ? 1.0 / metersPerPt : UNCALIBRATED_GAP_PT;
+  let byGap = bridgeCache.get(vec);
+  if (!byGap) bridgeCache.set(vec, (byGap = new Map()));
+  let out = byGap.get(gap);
+  if (!out) byGap.set(gap, (out = doorBridges(vec, gap)));
+  return out;
 }

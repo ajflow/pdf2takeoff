@@ -289,11 +289,15 @@ async function runFill(p: Pt): Promise<void> {
   hint('Filling…');
   const t0 = performance.now();
   try {
-    const raster = await renderRaster(state.pageNum, 3);
-    // room labels, the scale at the click and vector doorway bridges let the fill stop at doorways
-    const labels = roomLabelPoints(await getPageTextItems(state.pageNum).catch(() => []));
+    // room labels, the scale at the click and vector doorway bridges let the
+    // fill stop at doorways; page text and geometry are cached per page
+    const [raster, items, vec] = await Promise.all([
+      renderRaster(state.pageNum, 3),
+      getPageTextItems(state.pageNum).catch(() => []),
+      getPageVector(state.pageNum).catch(() => null),
+    ]);
+    const labels = roomLabelPoints(items);
     const clickCal = calibrationForMarkup({ id: '', page: state.pageNum, type: 'area', label: '', points: [p], createdAt: 0 });
-    const vec = await getPageVector(state.pageNum).catch(() => null);
     const bridges = vec ? doorBridgesFor(vec, clickCal?.metersPerPt) : [];
     const result = dynamicFill(raster, p, undefined, { labels, bridges, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
     if ('error' in result) {

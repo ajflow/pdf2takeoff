@@ -28,62 +28,61 @@ const GAP_HALF = [0, 8, 16, 28, 44];
 
 export type FillResult = { points: Pt[] } | { error: string };
 
+/** Threshold for pixels no closing on the ladder ever turns into wall. */
+const NEVER = 255;
+
 /**
- * Binary closing with a line structuring element (dilate then erode along
- * one axis, half-length r) in O(pixels): each stage is two running scans.
- * Extensive: bridges gaps ≤ 2r in the wall runs perpendicular to the axis,
- * leaves every existing wall pixel and face untouched.
+ * For every pixel, the smallest half-length r at which a binary closing with
+ * an axis-aligned line structuring element (dilate then erode, half-length
+ * r) along either axis turns it into wall: 0 for ink, NEVER when no rung
+ * reaches it. Closing along one axis fills exactly the ink-free runs of
+ * length L ≤ 2r that have ink at both ends (L ≤ r for a run that ends at the
+ * page edge) and touches nothing else — so every rung of the ladder is a
+ * single threshold test on one precomputed array, with no wall pixel or face
+ * ever moved.
  */
-function closeLine(mask: Uint8Array, w: number, h: number, r: number, vertical: boolean): Uint8Array {
-  const n = w * h;
-  const step = vertical ? w : 1;
-  const runs = vertical ? w : h; // number of independent columns/rows
-  const len = vertical ? h : w;
-  if (r <= 0) return mask.slice();
-
-  // dilate: distance to nearest 1 within the run (up and down)
-  const dist = new Int32Array(n);
-  const FAR = len + r + 1;
-  for (let i = 0; i < n; i++) dist[i] = mask[i] ? 0 : FAR;
-  for (let start = 0; start < runs; start++) {
-    let d = FAR;
-    for (let k = 0; k < len; k++) {
-      const i = start + k * step;
-      if (mask[i]) d = 0;
-      else if (d < FAR) d++;
-      dist[i] = d;
-    }
-    for (let k = len - 1; k >= 0; k--) {
-      const i = start + k * step;
-      if (mask[i]) d = 0;
-      else if (d < FAR) d++;
-      if (d < dist[i]) dist[i] = d;
+function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
+  const thr = new Uint8Array(w * h).fill(NEVER);
+  const mark = (L: number, before: boolean, after: boolean): number => {
+    const t = before && after ? Math.ceil(L / 2) : before || after ? L : NEVER;
+    return Math.min(t, NEVER);
+  };
+  // rows
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let x = 0;
+    while (x < w) {
+      if (ink[row + x]) {
+        thr[row + x] = 0;
+        x++;
+        continue;
+      }
+      const a = x;
+      while (x < w && !ink[row + x]) x++;
+      const t = mark(x - a, a > 0, x < w);
+      if (t < NEVER) for (let i = row + a; i < row + x; i++) thr[i] = t;
     }
   }
-  const dil = new Uint8Array(n);
-  for (let i = 0; i < n; i++) dil[i] = dist[i] <= r ? 1 : 0;
-
-  // erode: every pixel within r along the run must be dilated, i.e. the
-  // distance to the nearest non-dilated pixel stays beyond r
-  for (let i = 0; i < n; i++) dist[i] = dil[i] ? FAR : 0;
-  for (let start = 0; start < runs; start++) {
-    let d = FAR;
-    for (let k = 0; k < len; k++) {
-      const i = start + k * step;
-      if (!dil[i]) d = 0;
-      else if (d < FAR) d++;
-      dist[i] = d;
-    }
-    for (let k = len - 1; k >= 0; k--) {
-      const i = start + k * step;
-      if (!dil[i]) d = 0;
-      else if (d < FAR) d++;
-      if (d < dist[i]) dist[i] = d;
+  // columns, swept row by row (one open-run start per column) so reads stay
+  // sequential; only the backfill of a closed run walks a column
+  const runStart = new Int32Array(w).fill(-1);
+  const flush = (x: number, end: number) => {
+    const a = runStart[x];
+    const t = mark(end - a, a > 0, end < h);
+    if (t < NEVER) for (let y = a, i = a * w + x; y < end; y++, i += w) if (t < thr[i]) thr[i] = t;
+    runStart[x] = -1;
+  };
+  for (let y = 0, i = 0; y < h; y++) {
+    for (let x = 0; x < w; x++, i++) {
+      if (ink[i]) {
+        if (runStart[x] >= 0) flush(x, y);
+      } else if (runStart[x] < 0) {
+        runStart[x] = y;
+      }
     }
   }
-  const out = new Uint8Array(n);
-  for (let i = 0; i < n; i++) out[i] = dil[i] && dist[i] > r ? 1 : 0;
-  return out;
+  for (let x = 0; x < w; x++) if (runStart[x] >= 0) flush(x, h);
+  return thr;
 }
 
 export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): FillResult {
@@ -106,40 +105,42 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
   });
 
   // flood fill (4-connectivity keeps the boundary tight), boundary = ink with
-  // gaps up to 2r closed; escalate only while the fill leaks
+  // gaps up to 2r closed; escalate only while the fill leaks. A fill stops
+  // the moment it passes the cap: a leak is a leak, however far it would run.
+  const cap = MAX_FILL_FRACTION * w * h;
+  const mask = new Uint8Array(w * h);
+  const thr = closingThresholds(ink, w, h);
   let filled: Uint8Array | null = null;
   let count = 0;
-  let boundary = ink;
+  const stack: number[] = [];
+  // lowest threshold among pixels the last leaking fill reached: a rung below
+  // it blocks none of them, so its fill would retrace the same leak exactly
+  let reachedMin = 0;
   for (const r of GAP_HALF) {
-    if (r > 0) {
-      const closedV = closeLine(ink, w, h, r, true);
-      const closedH = closeLine(ink, w, h, r, false);
-      boundary = new Uint8Array(w * h);
-      for (let i = 0; i < boundary.length; i++) boundary[i] = closedV[i] | closedH[i] | ink[i];
-    }
-    const mask = new Uint8Array(w * h);
-    const stack = [sy * w + sx];
-    mask[stack[0]] = 1;
+    if (r < reachedMin) continue;
+    mask.fill(0);
+    stack.length = 0;
+    const seedIdx = sy * w + sx;
+    if (thr[seedIdx] <= r) continue; // the closing swallowed the click point
+    stack.push(seedIdx);
+    mask[seedIdx] = 1;
+    reachedMin = thr[seedIdx];
     let n = 1;
-    while (stack.length) {
+    const visit = (i: number) => {
+      mask[i] = 1;
+      n++;
+      if (thr[i] < reachedMin) reachedMin = thr[i];
+      stack.push(i);
+    };
+    while (stack.length && n <= cap) {
       const idx = stack.pop()!;
       const x = idx % w;
-      const y = (idx / w) | 0;
-      for (const [nx, ny] of [
-        [x - 1, y],
-        [x + 1, y],
-        [x, y - 1],
-        [x, y + 1],
-      ] as const) {
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const nidx = ny * w + nx;
-        if (mask[nidx] || boundary[nidx]) continue;
-        mask[nidx] = 1;
-        n++;
-        stack.push(nidx);
-      }
+      if (x > 0 && !mask[idx - 1] && thr[idx - 1] > r) visit(idx - 1);
+      if (x < w - 1 && !mask[idx + 1] && thr[idx + 1] > r) visit(idx + 1);
+      if (idx >= w && !mask[idx - w] && thr[idx - w] > r) visit(idx - w);
+      if (idx + w < w * h && !mask[idx + w] && thr[idx + w] > r) visit(idx + w);
     }
-    if (n <= MAX_FILL_FRACTION * w * h) {
+    if (n <= cap) {
       filled = mask;
       count = n;
       break;
@@ -169,39 +170,41 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
   const boundaryPts: { x: number; y: number }[] = [];
   let cx = startIdx % w;
   let cy = (startIdx / w) | 0;
-  let dir = 0; // entered heading east
+  let dir = 0; // entered heading east (nothing lies above or left of start)
   const startX = cx;
   const startY = cy;
-  let guard = 0;
-  do {
-    boundaryPts.push({ x: cx, y: cy });
-    let found = false;
-    for (let k2 = 1; k2 <= 8; k2++) {
-      const d = (dir + 7 + k2) % 8; // turn clockwise from backtrack
-      const nx = cx + dirs[d][0];
-      const ny = cy + dirs[d][1];
-      if (at(nx, ny)) {
-        cx = nx;
-        cy = ny;
-        dir = d;
-        found = true;
+  let firstDir = -1;
+  for (let guard = 0; guard < 4 * filled.length; guard++) {
+    // search clockwise starting 90° left of the heading, so the trace hugs
+    // the outside and follows concave corners instead of cutting across them
+    let d = -1;
+    for (let k = 0; k < 8; k++) {
+      const c = (dir + 6 + k) % 8;
+      if (at(cx + dirs[c][0], cy + dirs[c][1])) {
+        d = c;
         break;
       }
     }
-    if (!found) break; // single-pixel region
-    guard++;
-  } while ((cx !== startX || cy !== startY) && guard < 10 * (w + h));
+    // Jacob's stopping criterion: back at the start, leaving the way we first left
+    if (d >= 0 && cx === startX && cy === startY && d === firstDir) break;
+    boundaryPts.push({ x: cx, y: cy });
+    if (d < 0) break; // single-pixel region
+    if (firstDir < 0) firstDir = d;
+    cx += dirs[d][0];
+    cy += dirs[d][1];
+    dir = d;
+  }
   if (boundaryPts.length < 8) return { error: 'that region is too small to fill' };
 
   const simplified = douglasPeucker(boundaryPts, 1.5);
   if (simplified.length < 3) return { error: 'that region is too small to fill' };
 
-  // plausibility: a traced pixel boundary's polygon area must be within a
-  // loose band of the filled pixel count (gross deviation = corrupted trace,
-  // e.g. a guard-truncated loop) — thin regions legitimately run well under
-  // count, since the polygon runs through the centres of boundary pixels
+  // plausibility: the polygon runs through the centres of the boundary
+  // pixels, so its area sits at roughly count minus half the perimeter (more
+  // when ink islands inside the room are excluded from count). Well under
+  // count minus the full perimeter means the trace cut across the region.
   const area = shoelace(simplified);
-  if (area < 0.35 * count || area > 5 * count) return unbounded();
+  if (area < 0.8 * (count - boundaryPts.length) || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
   return { points };

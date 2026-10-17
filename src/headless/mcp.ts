@@ -223,7 +223,7 @@ export async function runMcpServer(): Promise<void> {
               wd.yPt <= Math.max(region.y0, region.y1),
           )
         : words;
-      const scaleHit = findScaleRatio(clipped);
+      const scaleHit = findScaleRatio(clipped, 'text layer');
       return text({
         page,
         wordCount: clipped.length,

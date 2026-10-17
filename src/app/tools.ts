@@ -9,7 +9,7 @@ import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
-import { ocrPage } from './ocr';
+import { ocrPage, ocrCorridor } from './ocr';
 import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
 import { dynamicFill } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
@@ -490,6 +490,20 @@ async function runOcrRead(): Promise<void> {
   btn.disabled = true;
   btn.textContent = 'Reading… (first run fetches the OCR pack)';
   try {
+    // with a clicked dimension, a rotated corridor crop along it is the most
+    // direct read: upright text, no line work, a fraction of the area to scan
+    if (pendingCalib) {
+      const corridor = await ocrCorridor(state.pageNum, pendingCalib.a, pendingCalib.b);
+      const dim = nearestDimensionValue(corridor, pendingCalib.a, pendingCalib.b);
+      if (dim) {
+        calibInput.value = String(dim.value);
+        calibUnitSel.value = dim.unit;
+        calibInput.classList.remove('invalid');
+        hint(`Read "${dim.text}" next to your dimension — check it, then Apply scale`);
+        return;
+      }
+    }
+
     const words = await ocrPage(state.pageNum);
     const scaleHit = findScaleRatio(words);
 

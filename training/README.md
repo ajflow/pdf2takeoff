@@ -21,20 +21,27 @@ auto-upgrades to the detector; no code changes, no rebuild for re-trains.
 ## Synthetic dataset
 
 ```bash
-node scripts/generate-synthetic-dataset.mjs --count 200 --seed 42 --debug
+node scripts/generate-synthetic-dataset.mjs --count 200 --seed 42 --debug [--degrade 0.5]
 ```
 
 - 1280×905 PNG sheets, randomized: wall layouts with door gaps, faint grids,
   dimension lines, title blocks, line weights and ink densities
 - 5 symbol classes: `downlight, gpo, switch, smoke, diffuser`
-- 14–42 symbols per sheet placed clear of walls and each other (rejection
-  sampled), size-jittered
+- 14–42 symbols per sheet, size-jittered; most are rejection-sampled clear of
+  walls and each other, but a per-sheet quota (15–35%) is parked on wall lines
+  so the detector trains on symbols touching linework — the tier-1 CV scan's
+  declared blind spot
+- Scan-simulation: `--degrade` (default 0.5) marks that fraction of sheets
+  with one SESYD-style artifact each — blur, speckle noise, contrast/gamma,
+  ±0.6° rotation (labels remapped to match), photocopy (edge shadow +
+  contrast + dust) — never stacked, so the detector meets each artifact in
+  isolation
 - YOLO-format labels (`cls cx cy w h`, normalised), emitted from the same
   coordinates the renderer drew — labels are exact by construction, no
   labelling effort
 - 85/15 train/val split, `dataset.yaml` included
-- `--debug` also writes overlay images with the label boxes drawn, so label
-  quality can be verified by eye (verified for seed 42)
+- `--debug` also writes overlay images with the label boxes drawn (recipe
+  tagged in the filename), so label quality can be verified by eye
 
 Output is **gitignored** (7 MB for 200 sheets) — regenerate on demand or in
 the training notebook. 200 sheets ≈ 5,500 labelled instances; scale `--count`

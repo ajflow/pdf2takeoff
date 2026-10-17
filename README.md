@@ -22,7 +22,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
-- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps leak — gap-closing is on the list)
+- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps are bridged automatically with escalating morphological closing — wide openings and diagonal gaps can still leak)
 - **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
 - **Notes**: pin a note anywhere (T); round-trips through the PDF
 - **Layers**: place per trade and hide layers while measuring the next; layer names ride inside the PDF
@@ -79,9 +79,11 @@ agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
 
 ## Agent API (MCP)
 
-`pdf2takeoff mcp` starts a local MCP server on stdio with ten tools —
+`pdf2takeoff mcp` starts a local MCP server on stdio with twelve tools —
 `open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
-`set_scale`, `measure`, `scan_symbol`, `compare_revisions`, `list_markups`,
+`read_text` (the sanctioned way to read printed scales/dimensions/labels —
+exact, positioned, never off the rendered image), `set_scale`, `measure`,
+`scan_symbol`, `compare_revisions`, `list_markups`, `set_status`,
 `delete_markup`, `export`, `save_annotated` — so an AI agent can run a whole
 takeoff and hand the marked-up PDF to a human for review. Local process,
 local files, nothing uploaded.

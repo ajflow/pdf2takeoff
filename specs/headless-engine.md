@@ -210,6 +210,7 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 |---|---|---|
 | `open_document` | `path` | doc id, page count, page sizes, existing annotation count |
 | `render_page` | `doc, page, dpi?` | PNG content block + width/height/page-space note — **the agent's eyes** |
+| `read_text` | `doc, page, region?` | positioned words (PDF pts) + any `1:N` scale found — **the agent's reading path**; numbers come from tools, never off the PNG |
 | `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value (formatted + raw), markup id |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count |

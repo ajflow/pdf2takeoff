@@ -24,6 +24,7 @@ import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, d
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { toMeters } from '../engine/units.ts';
+import { findScaleRatio } from '../engine/ocr.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -170,6 +171,74 @@ export async function runMcpServer(): Promise<void> {
   );
 
   server.registerTool(
+    'read_text',
+    {
+      description:
+        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).default(1),
+        region: z
+          .object({
+            x0: z.number().describe('left edge, PDF points'),
+            y0: z.number().describe('bottom edge, PDF points'),
+            x1: z.number().describe('right edge, PDF points'),
+            y1: z.number().describe('top edge, PDF points'),
+          })
+          .optional()
+          .describe('clip to this rectangle (e.g. a title block you located on the rendered page)'),
+      },
+    },
+    async ({ id, page, region }) => {
+      const d = getDoc(id);
+      if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
+      const pdfPage = await d.doc.getPage(page);
+      const tc = await pdfPage.getTextContent();
+      // text items → whitespace-split words in PDF-point space. The text
+      // layer is exact (born-digital), so confidence is 100 — the point of
+      // this tool vs OCR-ing the render is that these numbers are trustworthy.
+      const words: { text: string; conf: number; xPt: number; yPt: number; wPt: number; hPt: number }[] = [];
+      for (const item of tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]) {
+        const str = typeof item.str === 'string' ? item.str : '';
+        if (!str.trim()) continue;
+        const t = item.transform ?? [1, 0, 0, 1, 0, 0];
+        const x = t[4];
+        const y = t[5];
+        const w = Math.abs(item.width ?? 0) || str.length * 3;
+        const h = Math.abs(item.height ?? 0) || 8;
+        const parts = str.split(/\s+/).filter(Boolean);
+        let offset = 0;
+        for (const part of parts) {
+          const pw = (part.length / str.length) * w;
+          words.push({ text: part, conf: 100, xPt: x + offset + pw / 2, yPt: y + h / 2, wPt: pw, hPt: h });
+          offset += pw + (1 / Math.max(str.length, 1)) * w;
+        }
+      }
+      const clipped = region
+        ? words.filter(
+            (wd) =>
+              wd.xPt >= Math.min(region.x0, region.x1) &&
+              wd.xPt <= Math.max(region.x0, region.x1) &&
+              wd.yPt >= Math.min(region.y0, region.y1) &&
+              wd.yPt <= Math.max(region.y0, region.y1),
+          )
+        : words;
+      const scaleHit = findScaleRatio(clipped);
+      return text({
+        page,
+        wordCount: clipped.length,
+        ...(clipped.length > 200
+          ? { note: 'long text layer — pass a region to clip; only the first 200 words are listed' }
+          : {}),
+        words: clipped.slice(0, 200),
+        scaleRatio: scaleHit
+          ? { ratio: scaleHit.ratio, source: scaleHit.source, hint: `set_scale with ratio "1:${scaleHit.ratio}"` }
+          : null,
+      });
+    },
+  );
+
+  server.registerTool(
     'set_scale',
     {
       description:
@@ -217,7 +286,7 @@ export async function runMcpServer(): Promise<void> {
     'measure',
     {
       description:
-        'Record a measurement on a sheet and get its real-world value (length/area/perimeter/volume need set_scale first; count and angle are scale-free). Points are PDF points, bottom-left origin. length: 2+ points (polyline run); area/perimeter/volume: 3+ points (polygon, volume also needs depth in metres); angle: exactly 3 points (vertex first); count: exactly 1 point.',
+        'Record a measurement on a sheet and get its real-world value (length/area/perimeter/volume need set_scale first; count and angle are scale-free). Points are PDF points, bottom-left origin. length: 2+ points (polyline run); area/perimeter/volume: 3+ points (polygon, volume also needs depth in metres); angle: exactly 3 points (vertex first); count: exactly 1 point. Every numeric value you report must come from this tool\'s result (or export/list_markups) — never from your own reading of the rendered image.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),

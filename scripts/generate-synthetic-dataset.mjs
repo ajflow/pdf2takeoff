@@ -3,13 +3,20 @@
 // YOLO-format labels — no labelling, no dependencies (pure Node + built-in
 // zlib for PNG encoding, a tiny raster renderer for line art).
 //
-//   node scripts/generate-synthetic-dataset.mjs --count 200 --seed 42 [--debug]
+//   node scripts/generate-synthetic-dataset.mjs --count 200 --seed 42 [--debug] [--degrade 0.5]
 //
 // Output (gitignored; regenerate on demand or inside the training notebook):
 //   training/synthetic/images/{train,val}/sheet-NNNN.png
 //   training/synthetic/labels/{train,val}/sheet-NNNN.txt   (YOLO: cls cx cy w h, normalised)
 //   training/synthetic/dataset.yaml
 //   training/synthetic/debug/overlay-NNNN.png              (--debug: labels drawn as boxes)
+//
+// Sheets mix two regimes: crisp vector-style art and scan-like degraded art
+// (--degrade sets the fraction, one recipe per sheet — blur, speckle,
+// contrast, slight rotation, photocopy — never stacked, so the detector
+// meets each artifact in isolation). A quota of symbols is parked on wall
+// lines so the detector trains on symbols touching linework, the declared
+// blind spot of the tier-1 CV scan.
 
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -27,6 +34,7 @@ const arg = (name, dflt) => {
 const COUNT = Number(arg('count', 200));
 const SEED = Number(arg('seed', 42));
 const VAL_FRAC = Number(arg('val-frac', 0.15));
+const DEGRADE = Number(arg('degrade', 0.5));
 const DEBUG = args.includes('--debug');
 const OUT = join(ROOT, 'training', 'synthetic');
 
@@ -220,10 +228,12 @@ function generateSheet(index) {
   // interior walls with door gaps
   const vWalls = randInt(1, 3);
   const wallXs = [];
+  const wallGaps = []; // { wx, y0, y1 } — the doorway opening in each wall
   for (let i = 0; i < vWalls; i++) {
     const wx = Math.round(bx + ((i + 1) * bw) / (vWalls + 1) + rand(-30, 30));
     wallXs.push(wx);
     const gapY = rand(by + 40, by + bh - 140);
+    wallGaps.push({ wx, y0: gapY, y1: gapY + 100 });
     r.line(wx, by, wx, gapY, wallInk, thick);
     r.line(wx, gapY + 100, wx, by + bh, wallInk, thick);
   }
@@ -242,39 +252,175 @@ function generateSheet(index) {
     r.line(W - tbW - 24, yy, W - tbW + 60 + i * 18, yy, lineInk, 1);
   }
 
-  // symbols: rejection-sample inside the building, clear of walls and each other
+  // symbols: a quota parks on wall lines (ink crossing the bbox — the tier-1
+  // CV scan's blind spot and a reason tier-2 exists), the rest are placed
+  // clear of walls and each other as before
   const target = randInt(14, 42);
+  const overlapQuota = Math.min(Math.floor(target * rand(0.15, 0.35)), 10);
+  const walls = [
+    { wx: bx, gap: null },
+    { wx: bx + bw, gap: null },
+    ...wallGaps.map((g) => ({ wx: g.wx, gap: g })),
+  ];
   const placed = [];
   let attempts = 0;
-  while (placed.length < target && attempts < 900) {
-    attempts++;
+  const tryPlace = (mayTouchWall) => {
     const cls = randInt(0, CLASSES.length - 1);
     const s = Math.round(rand(9, 21)); // half-extent px
-    const cx = rand(bx + 24, bx + bw - 24);
-    const cy = rand(by + 24, by + bh - 24);
-    if (wallXs.some((wx) => Math.abs(cx - wx) < s + 14)) continue;
-    if (placed.some((p) => Math.hypot(p.cx - cx, p.cy - cy) < p.s + s + 12)) continue;
-    placed.push({ cls, cx, cy, s });
+    let cx, cy;
+    if (mayTouchWall) {
+      const w = pick(walls);
+      cx = w.wx + rand(-6, 6);
+      let ok = false;
+      for (let t = 0; t < 40 && !ok; t++) {
+        cy = rand(by + 24, by + bh - 24);
+        ok = !(w.gap && cy > w.gap.y0 - 24 && cy < w.gap.y1 + 24); // not floating in the doorway
+      }
+      if (!ok) return null;
+    } else {
+      cx = rand(bx + 24, bx + bw - 24);
+      cy = rand(by + 24, by + bh - 24);
+      if (wallXs.some((wx) => Math.abs(cx - wx) < s + 14)) return null;
+    }
+    if (placed.some((p) => Math.hypot(p.cx - cx, p.cy - cy) < p.s + s + 12)) return null;
+    return { cls, cx, cy, s };
+  };
+  while (placed.length < target && attempts < 1200) {
+    attempts++;
+    const p = tryPlace(placed.length < overlapQuota);
+    if (!p) continue;
+    placed.push(p);
     const ink = randInt(20, 70);
-    const box = drawSymbol(r, cls, cx, cy, s, ink, randInt(1, 2));
-    labels.push(`${cls} ${(box.x + box.w / 2) / W} ${(box.y + box.h / 2) / H} ${box.w / W} ${box.h / H}`);
+    const box = drawSymbol(r, p.cls, p.cx, p.cy, p.s, ink, randInt(1, 2));
+    labels.push({ cls: p.cls, box });
   }
 
-  return { png: encodePNG(r), labels, raster: r, placed };
+  return { raster: r, labels, placed };
+}
+
+// ---------- degradation (SESYD-style scan simulation) ----------
+// One recipe per sheet, chosen by the seeded RNG. The photocopy recipe is a
+// deliberate composite (edge shadow + contrast + dust); everything else is a
+// single artifact so the detector can attribute its errors.
+
+function boxBlur(r, radius) {
+  const { w, h, px } = r;
+  for (let pass = 0; pass < 2; pass++) {
+    const src = Uint8Array.from(px);
+    const div = 2 * radius + 1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let dy = -radius; dy <= radius; dy++) {
+          const yy = Math.min(h - 1, Math.max(0, y + dy));
+          const row = yy * w;
+          for (let dx = -radius; dx <= radius; dx++) {
+            const xx = Math.min(w - 1, Math.max(0, x + dx));
+            sum += src[row + xx];
+          }
+        }
+        px[y * w + x] = Math.round(sum / (div * div));
+      }
+    }
+  }
+}
+
+function speckle(r, density, dark) {
+  const { w, h, px } = r;
+  const n = Math.round(w * h * density);
+  for (let i = 0; i < n; i++) {
+    const x = Math.floor(rng() * w);
+    const y = Math.floor(rng() * h);
+    px[y * w + x] = dark ? randInt(0, 70) : randInt(200, 255);
+  }
+}
+
+function contrast(r, k, bias) {
+  for (let i = 0; i < r.px.length; i++) {
+    const v = 128 + (r.px[i] - 128) * k + bias;
+    r.px[i] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+  }
+}
+
+function edgeShadow(r) {
+  const { w, h, px } = r;
+  const side = randInt(0, 3); // top / right / bottom / left
+  const band = randInt(50, 110);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const d = side === 0 ? y : side === 1 ? w - 1 - x : side === 2 ? h - 1 - y : x;
+      if (d >= band) continue;
+      px[y * w + x] = Math.round(px[y * w + x] * (0.72 + 0.28 * (d / band)));
+    }
+  }
+}
+
+/** Rotate about the sheet centre and remap the label boxes to match. */
+function rotateSheet(r, deg, labels) {
+  const { w, h } = r;
+  const a = (deg * Math.PI) / 180;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  const cx0 = w / 2, cy0 = h / 2;
+  const src = Uint8Array.from(r.px);
+  r.px.fill(255);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // destination ← source (inverse of the label-space forward map)
+      const dx = x - cx0, dy = y - cy0;
+      const sx = Math.round(cos * dx + sin * dy + cx0);
+      const sy = Math.round(-sin * dx + cos * dy + cy0);
+      if (sx >= 0 && sy >= 0 && sx < w && sy < h) r.px[y * w + x] = src[sy * w + sx];
+    }
+  }
+  const fwd = (x, y) => ({
+    x: cos * (x - cx0) - sin * (y - cy0) + cx0,
+    y: sin * (x - cx0) + cos * (y - cy0) + cy0,
+  });
+  for (const l of labels) {
+    const { x, y, w: bw, h: bh } = l.box;
+    const pts = [fwd(x, y), fwd(x + bw, y), fwd(x, y + bh), fwd(x + bw, y + bh)];
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    l.box = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  }
+}
+
+function degradeSheet(r, labels) {
+  const recipe = pick(['blur', 'noise', 'contrast', 'rotate', 'photocopy']);
+  switch (recipe) {
+    case 'blur':
+      boxBlur(r, 1);
+      break;
+    case 'noise':
+      speckle(r, rand(0.004, 0.02), true);
+      speckle(r, rand(0.001, 0.004), false);
+      break;
+    case 'contrast':
+      contrast(r, rand(0.6, 1.6), rand(-16, 16));
+      break;
+    case 'rotate':
+      rotateSheet(r, rand(-0.6, 0.6), labels);
+      break;
+    case 'photocopy':
+      edgeShadow(r);
+      contrast(r, rand(1.1, 1.5), rand(-8, 8));
+      speckle(r, rand(0.002, 0.008), true);
+      break;
+  }
+  return recipe;
 }
 
 // ---------- debug overlay ----------
 function drawOverlay(sheet) {
   const r = new Raster(W, H);
   r.px.set(sheet.raster.px);
-  for (const p of sheet.placed) {
-    const box = { x: p.cx - p.s - 3, y: p.cy - p.s - 3, w: 2 * (p.s + 3), h: 2 * (p.s + 3) };
+  for (const l of sheet.labels) {
+    const { x, y, w: bw, h: bh } = l.box;
     // red-ish box (grayscale renderer → draw in mid-gray dashes)
     const v = 120;
-    r.line(box.x, box.y, box.x + box.w, box.y, v, 1);
-    r.line(box.x, box.y + box.h, box.x + box.w, box.y + box.h, v, 1);
-    r.line(box.x, box.y, box.x, box.y + box.h, v, 1);
-    r.line(box.x + box.w, box.y, box.x + box.w, box.y + box.h, v, 1);
+    r.line(x, y, x + bw, y, v, 1);
+    r.line(x, y + bh, x + bw, y + bh, v, 1);
+    r.line(x, y, x, y + bh, v, 1);
+    r.line(x + bw, y, x + bw, y + bh, v, 1);
   }
   return encodePNG(r);
 }
@@ -291,18 +437,29 @@ for (const d of [trainDirI, valDirI, trainDirL, valDirL, join(OUT, 'debug')]) {
 let nTrain = 0;
 let nVal = 0;
 let nSymbols = 0;
+let nDegraded = 0;
+const recipes = {};
 for (let i = 0; i < COUNT; i++) {
   const sheet = generateSheet(i);
+  let recipe = null;
+  if (rng() < DEGRADE) {
+    recipe = degradeSheet(sheet.raster, sheet.labels);
+    nDegraded++;
+    recipes[recipe] = (recipes[recipe] ?? 0) + 1;
+  }
   nSymbols += sheet.labels.length;
   const isVal = rng() < VAL_FRAC;
   const dirI = isVal ? valDirI : trainDirI;
   const dirL = isVal ? valDirL : trainDirL;
   const name = `sheet-${String(i).padStart(4, '0')}`;
-  writeFileSync(join(dirI, `${name}.png`), sheet.png);
-  writeFileSync(join(dirL, `${name}.txt`), sheet.labels.join('\n') + '\n');
+  const labelLines = sheet.labels.map(
+    (l) => `${l.cls} ${(l.box.x + l.box.w / 2) / W} ${(l.box.y + l.box.h / 2) / H} ${l.box.w / W} ${l.box.h / H}`,
+  );
+  writeFileSync(join(dirI, `${name}.png`), encodePNG(sheet.raster));
+  writeFileSync(join(dirL, `${name}.txt`), labelLines.join('\n') + '\n');
   if (isVal) nVal++;
   else nTrain++;
-  if (DEBUG && i < 5) writeFileSync(join(OUT, 'debug', `overlay-${name}.png`), drawOverlay(sheet));
+  if (DEBUG && i < 5) writeFileSync(join(OUT, 'debug', `overlay-${name}${recipe ? `-${recipe}` : ''}.png`), drawOverlay(sheet));
 }
 
 writeFileSync(
@@ -317,5 +474,7 @@ ${CLASSES.map((c, idx) => `  ${idx}: ${c}`).join('\n')}
 );
 
 console.log(
-  `generated ${COUNT} sheets (${nTrain} train / ${nVal} val), ${nSymbols} labelled symbols → ${OUT}`,
+  `generated ${COUNT} sheets (${nTrain} train / ${nVal} val, ${nDegraded} degraded: ` +
+    `${Object.entries(recipes).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'}), ` +
+    `${nSymbols} labelled symbols → ${OUT}`,
 );

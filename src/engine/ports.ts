@@ -53,8 +53,10 @@ export interface DetectorSession {
    * band the model was trained on. pxPerPt is the effective pixels-per-point
    * AT MODEL INPUT, so training must present symbols at the same rate (see
    * specs/detector-tiling.md). Absent ⇒ legacy whole-page letterbox.
+   * maxSymbolPt is the largest symbol in PDF points (default 30); the
+   * overlap is raised to 1.25x it so no symbol is only ever seen cut off.
    */
-  tile?: { pxPerPt: number; overlapPx: number };
+  tile?: { pxPerPt: number; overlapPx: number; maxSymbolPt?: number };
   /** Run one [1,3,size,size] float input; return the raw output tensor. */
   run(input: Float32Array, size: number): Promise<{ data: Float32Array; dims: number[] }>;
 }

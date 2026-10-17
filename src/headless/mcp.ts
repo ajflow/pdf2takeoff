@@ -18,7 +18,7 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta } from './ops.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
@@ -503,13 +503,14 @@ export async function runMcpServer(): Promise<void> {
     'compare_revisions',
     {
       description:
-        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added).',
+        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
       inputSchema: {
         a: z.string().describe('path to the older revision (file or folder)'),
         b: z.string().describe('path to the newer revision (file or folder)'),
+        quantities: z.boolean().default(false).describe('files only: re-run the takeoff saved in A on B and report quantity deltas'),
       },
     },
-    async ({ a, b }) => {
+    async ({ a, b, quantities }) => {
       const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
       if (isDir(a) || isDir(b)) {
         if (!isDir(a) || !isDir(b)) throw new Error('folder comparison needs two folders');
@@ -519,7 +520,8 @@ export async function runMcpServer(): Promise<void> {
       const docA = await openPdf(new Uint8Array(readFileSync(a)));
       const docB = await openPdf(new Uint8Array(readFileSync(b)));
       const result = await compareDocs(docA, docB);
-      return text({ a: basename(a), b: basename(b), ...result });
+      const delta = quantities ? await quantityDelta(docA, docB) : undefined;
+      return text({ a: basename(a), b: basename(b), ...result, ...(delta ? { quantities: delta } : {}) });
     },
   );
 

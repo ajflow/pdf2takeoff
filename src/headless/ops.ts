@@ -61,10 +61,10 @@ export interface CompareSheetResult {
   changedFraction: number;
   changed: boolean;
   regions: { xPt: number; yPt: number; wPt: number; hPt: number }[];
-  /** exact geometry diff when both sheets are vector (born-digital) */
-  vector?: VectorDiff;
-  /** text-layer diff: printed values changed in place, words added or removed */
-  text?: TextDiff;
+  /** exact geometry diff when both sheets are vector (born-digital); lists capped, totals full */
+  vector?: VectorDiff & { totals: { moved: number; regions: number } };
+  /** text-layer diff: printed values changed in place, words added or removed; lists capped, totals full */
+  text?: TextDiff & { totals: { changed: number; added: number; removed: number } };
 }
 
 /** Text-layer words of a page (empty for scans). */
@@ -75,7 +75,7 @@ async function pageWords(doc: PDFDocumentProxy, page: number) {
   );
 }
 
-/** Keep diff listings readable: first n entries plus a count of the rest. */
+/** Keep diff listings readable: the first n entries (totals are reported beside them). */
 function capList<T>(list: T[], n = 40): T[] {
   return list.slice(0, n);
 }
@@ -127,8 +127,19 @@ export async function compareDocs(
       changedFraction: Math.round(fraction * 10000) / 10000,
       changed,
       regions,
-      ...(vector ? { vector: { ...vector, moved: capList(vector.moved), regions: capList(vector.regions) } } : {}),
-      ...(text ? { text: { changed: capList(text.changed), added: capList(text.added), removed: capList(text.removed) } } : {}),
+      ...(vector
+        ? { vector: { ...vector, moved: capList(vector.moved), regions: capList(vector.regions), totals: { moved: vector.moved.length, regions: vector.regions.length } } }
+        : {}),
+      ...(text
+        ? {
+            text: {
+              changed: capList(text.changed),
+              added: capList(text.added),
+              removed: capList(text.removed),
+              totals: { changed: text.changed.length, added: text.added.length, removed: text.removed.length },
+            },
+          }
+        : {}),
     });
     if (changed) changedSheets.push(p);
 

@@ -58,6 +58,21 @@ if ('error' in scan || 'error' in fill) {
   check('quantities: lengths listed as not re-measured', q.notReMeasured.some((n) => n.type === 'length' && n.markups === 1));
 }
 
+// many separate changes stay fast and each becomes its own region
+{
+  const { vectorDiff } = await import('../src/engine/revdiff.ts');
+  const segs = [];
+  for (let i = 0; i < 20000; i++) {
+    const x = (i % 200) * 20;
+    const y = Math.floor(i / 200) * 20;
+    segs.push({ x1: x, y1: y, x2: x + 3, y2: y + (i % 7), lineWidth: 0.35, stroked: true, filled: false, dashed: false, curve: false, path: i, form: -1 });
+  }
+  const t0 = performance.now();
+  const d = vectorDiff({ segs, paths: [], forms: 0, layers: 0 }, { segs: [], paths: [], forms: 0, layers: 0 });
+  const ms = performance.now() - t0;
+  check(`vector: 20k scattered removals -> 20k regions in ${ms.toFixed(0)} ms (< 3000)`, d.regions.length === 20000 && ms < 3000);
+}
+
 // a vertical dimension changed in place reads as a change, not remove + add
 {
   const { PDFDocument, StandardFonts, degrees } = await import('pdf-lib');

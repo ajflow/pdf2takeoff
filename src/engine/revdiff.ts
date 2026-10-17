@@ -40,37 +40,59 @@ function segKey(s: VecSeg, dx = 0, dy = 0): string {
   return `${a[0]},${a[1]},${b[0]},${b[1]},${Math.round(s.lineWidth * 10)}`;
 }
 
-/** Cluster segments by bbox proximity into regions. */
+/**
+ * Cluster segments into regions: segments whose boxes come within
+ * REGION_JOIN_PT join, transitively (union-find over a spatial grid, so a
+ * large rework stays near-linear and chains of overlap always merge).
+ */
 function cluster(segs: VecSeg[]): VecSeg[][] {
-  const groups: { x0: number; y0: number; x1: number; y1: number; segs: VecSeg[] }[] = [];
-  for (const s of segs) {
-    const x0 = Math.min(s.x1, s.x2);
-    const y0 = Math.min(s.y1, s.y2);
-    const x1 = Math.max(s.x1, s.x2);
-    const y1 = Math.max(s.y1, s.y2);
-    const hit = groups.filter(
-      (g) => x0 - REGION_JOIN_PT <= g.x1 && g.x0 - REGION_JOIN_PT <= x1 && y0 - REGION_JOIN_PT <= g.y1 && g.y0 - REGION_JOIN_PT <= y1,
-    );
-    if (hit.length === 0) {
-      groups.push({ x0, y0, x1, y1, segs: [s] });
-      continue;
+  const parent = segs.map((_, i) => i);
+  const find = (a: number): number => {
+    while (parent[a] !== a) {
+      parent[a] = parent[parent[a]];
+      a = parent[a];
     }
-    const into = hit[0];
-    for (const g of hit.slice(1)) {
-      into.segs.push(...g.segs);
-      into.x0 = Math.min(into.x0, g.x0);
-      into.y0 = Math.min(into.y0, g.y0);
-      into.x1 = Math.max(into.x1, g.x1);
-      into.y1 = Math.max(into.y1, g.y1);
-      groups.splice(groups.indexOf(g), 1);
+    return a;
+  };
+  const cell = 4 * REGION_JOIN_PT;
+  const grid = new Map<string, number[]>();
+  const box = segs.map((s) => ({
+    x0: Math.min(s.x1, s.x2) - REGION_JOIN_PT / 2,
+    y0: Math.min(s.y1, s.y2) - REGION_JOIN_PT / 2,
+    x1: Math.max(s.x1, s.x2) + REGION_JOIN_PT / 2,
+    y1: Math.max(s.y1, s.y2) + REGION_JOIN_PT / 2,
+  }));
+  box.forEach((b, i) => {
+    for (let gx = Math.floor(b.x0 / cell); gx <= Math.floor(b.x1 / cell); gx++) {
+      for (let gy = Math.floor(b.y0 / cell); gy <= Math.floor(b.y1 / cell); gy++) {
+        const k = `${gx},${gy}`;
+        const list = grid.get(k);
+        if (list) list.push(i);
+        else grid.set(k, [i]);
+      }
     }
-    into.segs.push(s);
-    into.x0 = Math.min(into.x0, x0);
-    into.y0 = Math.min(into.y0, y0);
-    into.x1 = Math.max(into.x1, x1);
-    into.y1 = Math.max(into.y1, y1);
+  });
+  for (const list of grid.values()) {
+    for (let a = 0; a < list.length; a++) {
+      const p = box[list[a]];
+      for (let c = a + 1; c < list.length; c++) {
+        const q = box[list[c]];
+        if (p.x0 <= q.x1 && q.x0 <= p.x1 && p.y0 <= q.y1 && q.y0 <= p.y1) {
+          const ra = find(list[a]);
+          const rb = find(list[c]);
+          if (ra !== rb) parent[ra] = rb;
+        }
+      }
+    }
   }
-  return groups.map((g) => g.segs);
+  const groups = new Map<number, VecSeg[]>();
+  segs.forEach((s, i) => {
+    const r = find(i);
+    const g = groups.get(r);
+    if (g) g.push(s);
+    else groups.set(r, [s]);
+  });
+  return [...groups.values()];
 }
 
 const bbox = (segs: VecSeg[]) => {

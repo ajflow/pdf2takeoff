@@ -58,6 +58,25 @@ if ('error' in scan || 'error' in fill) {
   check('quantities: lengths listed as not re-measured', q.notReMeasured.some((n) => n.type === 'length' && n.markups === 1));
 }
 
+// a vertical dimension changed in place reads as a change, not remove + add
+{
+  const { PDFDocument, StandardFonts, degrees } = await import('pdf-lib');
+  const { textDiff } = await import('../src/engine/revdiff.ts');
+  const { wordsFromTextItem } = await import('../src/engine/ocr.ts');
+  const sheet = async (value) => {
+    const d = await PDFDocument.create();
+    const page = d.addPage([400, 400]);
+    const font = await d.embedFont(StandardFonts.Helvetica);
+    page.drawText(value, { x: 200, y: 180, size: 8, font, rotate: degrees(90) }); // starts at y = 180, reads upward
+    page.drawText('PLAN', { x: 50, y: 50, size: 8, font });
+    const doc = await openPdf(await d.save());
+    const tc = await (await doc.getPage(1)).getTextContent();
+    return tc.items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));
+  };
+  const td = textDiff(await sheet('900'), await sheet('1200'));
+  check('text: vertical dimension 900 → 1200 reads as changed', td.changed.some((c) => c.from === '900' && c.to === '1200') && td.added.length === 0 && td.removed.length === 0, JSON.stringify(td));
+}
+
 // an unchanged L-shaped room re-measures unchanged: its vertex mean sits on
 // the inner corner, outside the room, so the re-fill must start inside it
 {

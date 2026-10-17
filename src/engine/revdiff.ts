@@ -175,16 +175,31 @@ export function textDiff(a: OcrWord[], b: OcrWord[], tolPt = 2): TextDiff {
     if (j >= 0) usedB.add(j);
     else pending.push(wa);
   }
+  // a changed value keeps its start (centred text moves by half the width
+  // change), measured along the word's own baseline so rotated and vertical
+  // values match too
+  const dir = (w: OcrWord) => {
+    const a = (((w as { angleDeg?: number }).angleDeg ?? 0) * Math.PI) / 180;
+    return { ux: Math.cos(a), uy: Math.sin(a), deg: (w as { angleDeg?: number }).angleDeg ?? 0 };
+  };
+  const start = (w: OcrWord) => {
+    const d = dir(w);
+    return { x: w.xPt - (d.ux * w.wPt) / 2, y: w.yPt - (d.uy * w.wPt) / 2, ...d };
+  };
   for (const wa of pending) {
-    // a changed value keeps its start position; centres shift with width
+    const sa = start(wa);
     const similar = (t: string) => Math.abs(t.length - wa.text.length) <= Math.max(2, 0.5 * wa.text.length);
-    const j = b.findIndex(
-      (wb, k) =>
-        !usedB.has(k) &&
-        similar(wb.text) &&
-        Math.abs(wb.yPt - wa.yPt) <= tolPt &&
-        Math.abs(wb.xPt - wb.wPt / 2 - (wa.xPt - wa.wPt / 2)) <= Math.max(tolPt, 0.25 * Math.max(wa.wPt, wb.wPt)),
-    );
+    const j = b.findIndex((wb, k) => {
+      if (usedB.has(k) || !similar(wb.text)) return false;
+      const sb = start(wb);
+      const turn = Math.abs(((sb.deg - sa.deg + 540) % 360) - 180);
+      if (turn > 5) return false;
+      const dx = sb.x - sa.x;
+      const dy = sb.y - sa.y;
+      const along = dx * sa.ux + dy * sa.uy;
+      const across = -dx * sa.uy + dy * sa.ux;
+      return Math.abs(across) <= tolPt && Math.abs(along) <= Math.max(tolPt, 0.25 * Math.max(wa.wPt, wb.wPt));
+    });
     if (j >= 0) {
       usedB.add(j);
       changed.push({ atPt: at(wa), from: wa.text, to: b[j].text });

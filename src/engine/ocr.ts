@@ -20,15 +20,18 @@ export interface ScaleHit {
   source: string;
 }
 
-const RATIO_WORD_RE = /^1[:\s]?(\d{2,4})$/;
+// the colon is required: a bare "1200" or "1050" is far more often a
+// dimension than a ratio whose colon got lost
+const RATIO_WORD_RE = /^1\s*:\s*(\d{2,4})$/;
 
 /**
  * Find a drawing ratio (1:N) in the recognized text. Individual words are
  * checked ("1:100"), adjacent triples joined ("1 : 100"), and hits nearest a
  * scale/frequency keyword ("SCALE", "@ A1") win — detail viewports often
- * print secondary ratios that would mislead.
+ * print secondary ratios that would mislead. `origin` names where the words
+ * came from in the hit's source (the recognizer, or a PDF text layer).
  */
-export function findScaleRatio(words: OcrWord[]): ScaleHit | null {
+export function findScaleRatio(words: OcrWord[], origin = 'OCR'): ScaleHit | null {
   const hits: { ratio: number; word: OcrWord }[] = [];
   const clean = words.map((w) => ({ ...w, text: w.text.trim() })).filter((w) => w.text);
   for (const w of clean) {
@@ -50,7 +53,7 @@ export function findScaleRatio(words: OcrWord[]): ScaleHit | null {
     return nearest < 150 ? 0 : 1; // near a SCALE label wins
   };
   valid.sort((a, b) => score(a) - score(b) || b.word.conf - a.word.conf);
-  return { ratio: valid[0].ratio, source: `OCR 1:${valid[0].ratio}` };
+  return { ratio: valid[0].ratio, source: `${origin} 1:${valid[0].ratio}` };
 }
 
 /** A printed dimension value near a clicked line. */

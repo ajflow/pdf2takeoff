@@ -16,7 +16,8 @@
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",
     "sample": "node scripts/make-sample.mjs",
-    "soak": "node scripts/make-soak.mjs"
+    "soak": "node scripts/make-soak.mjs",
+    "bench": "node --experimental-strip-types scripts/takeoff-bench.mjs"
   },
   "keywords": [
     "pdf",

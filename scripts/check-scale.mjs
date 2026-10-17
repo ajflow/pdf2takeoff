@@ -3,7 +3,7 @@
 // notation coverage, keyword gating of colon-less guesses, NTS, and the
 // consensus statuses with their diagnosis of common misreads.
 
-import { scaleVotesFromWords, scaleConsensus, dimensionVote, diagnoseFactor } from '../src/engine/scale.ts';
+import { scaleVotesFromWords, scaleConsensus, dimensionVote, diagnoseFactor, checkAgainstSheet } from '../src/engine/scale.ts';
 import { metersPerPtForRatio } from '../src/engine/units.ts';
 
 let failed = false;
@@ -65,6 +65,23 @@ const dv = dimensionVote(paperPt, 3.6);
 check('dimension vote recovers 1:50', dv && Math.abs(dv.ratio - 50) < 1e-6, JSON.stringify(dv));
 c = scaleConsensus([v(100), dv]);
 check('title-block 1:100 vs measured 1:50 conflicts as a reduced print', c.status === 'conflict' && /reduced/.test(c.rivals[0]?.likely ?? ''), JSON.stringify(c));
+
+// checking a set scale against the sheet: the title-block scale decides
+{
+  const sheet = scaleVotesFromWords([
+    { text: 'DETAIL', conf: 90, xPt: 100, yPt: 400, wPt: 20, hPt: 8 },
+    { text: '1:20', conf: 90, xPt: 130, yPt: 400, wPt: 20, hPt: 8 },
+    { text: 'SCALE', conf: 90, xPt: 700, yPt: 40, wPt: 20, hPt: 8 },
+    { text: '1:100', conf: 90, xPt: 730, yPt: 40, wPt: 20, hPt: 8 },
+  ]);
+  check('sheet check: correct 1:100 with a 1:20 detail agrees', checkAgainstSheet(100, sheet.votes, sheet.nts, 0.02).status === 'agrees');
+  check('sheet check: hand-measured 1:97.4 agrees within 5%', checkAgainstSheet(97.4, sheet.votes, sheet.nts, 0.05).status === 'agrees');
+  const wrong = checkAgainstSheet(50, sheet.votes, sheet.nts, 0.02);
+  check('sheet check: 1:50 disagrees with the title block, reduced print', wrong.status === 'disagrees' && wrong.sheetRatio === 100 && /reduced/.test(wrong.likely ?? ''), JSON.stringify(wrong));
+  const loose = scaleVotesFromWords(words('1:100', 'DETAIL', '1:20'));
+  check('sheet check: two unlabelled ratios and neither matches is ambiguous, not a warning', checkAgainstSheet(50, loose.votes, loose.nts).status === 'ambiguous');
+  check('sheet check: no note to check against', checkAgainstSheet(100, [], false).status === 'none');
+}
 
 if (failed) process.exit(1);
 console.log('PASS: scale parsing and consensus');

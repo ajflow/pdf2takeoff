@@ -211,7 +211,7 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `open_document` | `path` | doc id, page count, page sizes, existing annotation count |
 | `render_page` | `doc, page, dpi?` | PNG content block + width/height/page-space note — **the agent's eyes** |
 | `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
-| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's own scale notes (a conflict carries a likely cause) |
+| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
 | `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale and room labels), markup id, `provenance` with the gap closed |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |

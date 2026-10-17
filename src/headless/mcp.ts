@@ -28,7 +28,7 @@ import { METERS_PER_PT, toMeters } from '../engine/units.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
 import { dynamicFill } from '../engine/dynamicfill.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
-import { scaleVotesFromWords, scaleConsensus, type ScaleVote } from '../engine/scale.ts';
+import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -298,23 +298,22 @@ export async function runMcpServer(): Promise<void> {
         wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
       );
       const { votes, nts } = scaleVotesFromWords(words, 'text layer');
-      const setVote: ScaleVote = { ratio: metersPerPt / METERS_PER_PT, source, weight: 1, kind: from_points ? 'dimension' : 'ratio', keyword: false };
-      const check = votes.length ? scaleConsensus([setVote, ...votes], nts) : null;
-      const disagrees = check && check.status === 'conflict';
+      const setRatio = metersPerPt / METERS_PER_PT;
+      // measured scales carry hand-placement error, typed ratios do not
+      const check = checkAgainstSheet(setRatio, votes, nts, from_points ? 0.05 : 0.02);
       return text({
         set: pages,
         metersPerPt: round(metersPerPt, 8),
-        ratio: round(metersPerPt / METERS_PER_PT, 2),
+        ratio: round(setRatio, 2),
         source,
-        sheetCheck: check
-          ? {
-              status: check.status,
-              sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
-              ...(disagrees
-                ? { warning: `the sheet's notes disagree with this scale${check.rivals[0]?.likely ? `: likely ${check.rivals[0].likely}` : ''}. Check before measuring` }
-                : {}),
-            }
-          : { status: nts ? 'sheet marked NTS' : 'no scale note on this sheet' },
+        sheetCheck: {
+          status: check.status,
+          ...(check.sheetRatio !== undefined ? { sheetRatio: round(check.sheetRatio, 3) } : {}),
+          sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
+          ...(check.status === 'disagrees'
+            ? { warning: `the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}. Check before measuring` }
+            : {}),
+        },
       });
     },
   );

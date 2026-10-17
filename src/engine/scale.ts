@@ -183,3 +183,38 @@ export function scaleConsensus(votes: ScaleVote[], nts = false, tol = 0.02): Sca
   const status = !strongTop ? 'insufficient' : strongRival ? 'conflict' : 'agreed';
   return { status, ratio: top.ratio, support: top.support, rivals, nts };
 }
+
+export interface SheetCheck {
+  /**
+   * agrees: matches the sheet's printed scale; disagrees: differs from it
+   * beyond tolerance; ambiguous: the sheet prints several scales and none
+   * matches (viewports, details), so no single answer; none / nts: nothing
+   * to check against.
+   */
+  status: 'agrees' | 'disagrees' | 'ambiguous' | 'none' | 'nts';
+  sheetRatio?: number;
+  likely?: string;
+}
+
+/**
+ * Check a scale someone set against the sheet's own notes. The main scale is
+ * the one printed after a SCALE keyword (title block); detail ratios printed
+ * elsewhere never trigger a warning on their own. tol is relative: keep it
+ * loose (about 5%) for a scale measured from clicked points, which carries
+ * hand-placement error, and tight (2%) for a typed ratio.
+ */
+export function checkAgainstSheet(ratio: number, votes: ScaleVote[], nts: boolean, tol = 0.05): SheetCheck {
+  const full = votes.filter((v) => v.weight >= 1);
+  if (full.length === 0) return { status: nts ? 'nts' : 'none' };
+  const near = (r: number) => Math.abs(ratio / r - 1) <= tol;
+  const main = full.filter((v) => v.keyword);
+  const pool = main.length ? main : full;
+  if (pool.some((v) => near(v.ratio))) {
+    return { status: 'agrees', sheetRatio: pool.find((v) => near(v.ratio))!.ratio };
+  }
+  const distinct = scaleConsensus(pool, nts, 0.02);
+  if (distinct.status !== 'agreed' || distinct.ratio === undefined) return { status: 'ambiguous' };
+  const factor = Math.max(ratio, distinct.ratio) / Math.min(ratio, distinct.ratio);
+  const likely = diagnoseFactor(factor);
+  return { status: 'disagrees', sheetRatio: distinct.ratio, ...(likely ? { likely } : {}) };
+}

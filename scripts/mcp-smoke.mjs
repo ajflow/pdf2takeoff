@@ -97,10 +97,10 @@ check('read_text: sample text present', read.words.some((wd) => wd.text === '12.
 check('read_text: scale notes agree', read.scaleNotes?.status === 'agreed', JSON.stringify(read.scaleNotes));
 
 const wrong = textOf(await call('set_scale', { id: docId, ratio: '1:50' }));
-check('set_scale: a scale the sheet contradicts is flagged', wrong.sheetCheck?.status === 'conflict' && /reduced/.test(wrong.sheetCheck?.warning ?? ''), JSON.stringify(wrong.sheetCheck));
+check('set_scale: a scale the sheet contradicts is flagged', wrong.sheetCheck?.status === 'disagrees' && /reduced/.test(wrong.sheetCheck?.warning ?? ''), JSON.stringify(wrong.sheetCheck));
 const scale = textOf(await call('set_scale', { id: docId, ratio: '1:100', all_pages: true }));
 check('set_scale: applied to all pages', scale.set.length === 2);
-check('set_scale: the sheet agrees with 1:100', scale.sheetCheck?.status === 'agreed', JSON.stringify(scale.sheetCheck));
+check('set_scale: the sheet agrees with 1:100', scale.sheetCheck?.status === 'agrees', JSON.stringify(scale.sheetCheck));
 
 const scanned = textOf(await call('scan_symbol', { id: docId, page: 1, at: [88.35, 271.42] }));
 check('scan_symbol: 8 downlights (matches browser)', scanned.count === 8, `got ${scanned.count}`);

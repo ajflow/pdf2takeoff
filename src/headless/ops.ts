@@ -9,6 +9,9 @@ import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
 import { openPdf } from './pdfjs-node.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { cvScan } from '../engine/scan-cv.ts';
+import { vectorScan } from '../engine/scan-vector.ts';
+import { vectorize } from '../engine/vector.ts';
+import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
@@ -25,8 +28,16 @@ export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
   return markups;
 }
 
-/** Tier-1 CV scan at a click point, in PDF points. */
+/** The page's vector geometry from its drawing operators. */
+export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
+  return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS);
+}
+
+/** Scan at a click point (PDF points): vector match on born-digital symbols, else tier-1 CV. */
 export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt) {
+  const vec = await vectorDocPage(doc, page).catch(() => null);
+  const byVector = vec ? vectorScan(vec, at) : null;
+  if (byVector) return byVector;
   const raster = await renderRasterNode(doc, page, RASTER_SCALE);
   return cvScan(raster, at);
 }

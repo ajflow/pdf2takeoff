@@ -18,7 +18,7 @@ import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
-import { cvScan } from '../src/engine/scan-cv.ts';
+import { scanDocAt } from '../src/headless/ops.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
 import { metersPerPtForRatio } from '../src/engine/units.ts';
 
@@ -149,8 +149,8 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
   page.drawLine({ start: { x: 80, y: 150 }, end: { x: 600, y: 150 }, thickness: 1.2, color: BLACK });
   const onWall = [[200, 155.5], [320, 155.5], [440, 155.5]];
   onWall.forEach(([x, y]) => sym(x, y));
-  cases.push({ id: 'count/open-floor', kind: 'count', page: doc.getPageCount(), at: { x: open[0][0], y: open[0][1] }, expect: open.length, accept: [open.length, open.length + onWall.length] });
-  cases.push({ id: 'count/touching-walls', kind: 'count', page: doc.getPageCount(), at: { x: open[0][0], y: open[0][1] }, expect: open.length + onWall.length, known: 'P17' });
+  cases.push({ id: 'count/all-including-touching-walls', kind: 'count', page: doc.getPageCount(), at: { x: open[0][0], y: open[0][1] }, expect: open.length + onWall.length });
+  cases.push({ id: 'count/click-on-wall-touching-one', kind: 'count', page: doc.getPageCount(), at: { x: onWall[1][0], y: onWall[1][1] }, expect: open.length + onWall.length });
 }
 
 // Pages 3+: scale notes in the text layer, one sheet each.
@@ -202,11 +202,11 @@ for (const c of cases) {
         detail = `${got.toFixed(2)} m² vs ${c.expectM2.toFixed(2)} m² (${(err * 100).toFixed(1)}%)`;
       }
     } else if (c.kind === 'count') {
-      const raster = await renderRasterNode(pdf, c.page, RASTER_SCALE);
-      const r = cvScan(raster, c.at);
+      // the product scan path: vector match on born-digital symbols, else CV
+      const r = await scanDocAt(pdf, c.page, c.at);
       got = 'error' in r ? 0 : r.hits.length;
       pass = (c.accept ?? [c.expect]).includes(got);
-      detail = `${got} found, ${c.expect} expected`;
+      detail = `${got} found, ${c.expect} expected${'provider' in r ? ` (${r.provider})` : ''}`;
     } else {
       const tc = await (await pdf.getPage(c.page)).getTextContent();
       const words = tc.items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));

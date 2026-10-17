@@ -7,6 +7,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist';
 import { state, emit } from './state';
+import { vectorize, type VecPage } from '../engine/vector';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -89,6 +90,13 @@ export async function closePdf(): Promise<void> {
     }
     doc = null;
   }
+}
+
+/** The page's vector geometry from its drawing operators (null before a document loads). */
+export async function getPageVector(pageNum: number): Promise<VecPage | null> {
+  if (!doc) return null;
+  const page = await doc.getPage(pageNum);
+  return vectorize(await page.getOperatorList(), pdfjsLib.OPS);
 }
 
 /** The page's text-layer items (empty for scans or before a document loads). */

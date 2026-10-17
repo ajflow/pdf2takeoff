@@ -33,5 +33,5 @@ export interface ScanHit {
 }
 
 export type ScanResult =
-  | { hits: ScanHit[]; provider: 'cv' | 'detector'; templatePx?: number; note?: string; truncated?: boolean }
+  | { hits: ScanHit[]; provider: 'cv' | 'detector' | 'vector'; templatePx?: number; note?: string; truncated?: boolean }
   | { error: string };

@@ -11,6 +11,7 @@ import { PDFDocument, rgb } from 'pdf-lib';
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { vectorize } from '../src/engine/vector.ts';
+import { vectorScan } from '../src/engine/scan-vector.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failed = false;
@@ -66,6 +67,38 @@ async function vec(bytes) {
   check('A1: dashed ticks flagged', v.segs.filter((s) => s.dashed).length === 200);
   check('A1: heavy and light weights kept apart', v.segs.some((s) => near(s.lineWidth, 2)) && v.segs.some((s) => near(s.lineWidth, 0.35)));
   check(`A1: ${v.segs.length} segments extracted in ${ms.toFixed(0)} ms (< 3000)`, ms < 3000);
+  const t0 = performance.now();
+  const r = vectorScan(v, { x: 106, y: 106 });
+  check(`A1: vector scan finds all 300 symbols among 20k crossing lines in ${(performance.now() - t0).toFixed(0)} ms`, r?.hits.length === 300, `got ${r?.hits.length}`);
+}
+
+// vector scan: an asymmetric switch-like symbol (circle + tail to the right)
+// at 0°, 90°, 180° and mirrored; a same-size lookalike (circle + cross) and
+// a 1.5x copy must not match; one instance touches a wall
+{
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([600, 400]);
+  const black = rgb(0, 0, 0);
+  const sw = (x, y, dx, dy, k = 1) => {
+    page.drawCircle({ x, y, size: 4 * k, borderColor: black, borderWidth: 0.6 });
+    page.drawLine({ start: { x: x + 4 * k * dx, y: y + 4 * k * dy }, end: { x: x + 9 * k * dx, y: y + 9 * k * dy }, thickness: 0.6, color: black });
+  };
+  sw(100, 300, 1, 0);
+  sw(200, 300, 0, 1);
+  sw(300, 300, -1, 0);
+  sw(400, 300, -1, 0); // the mirror of a right tail is a left tail for this symbol
+  page.drawLine({ start: { x: 50, y: 195.4 }, end: { x: 550, y: 195.4 }, thickness: 2, color: black });
+  sw(250, 200, 1, 0); // touching the wall above
+  // lookalike: circle with a cross, same overall size
+  page.drawCircle({ x: 100, y: 100, size: 4, borderColor: black, borderWidth: 0.6 });
+  page.drawLine({ start: { x: 104, y: 100 }, end: { x: 109, y: 100 }, thickness: 0.6, color: black });
+  page.drawLine({ start: { x: 100, y: 96 }, end: { x: 100, y: 104 }, thickness: 0.6, color: black });
+  sw(300, 100, 1, 0, 1.5); // bigger copy
+  const { v } = await vec(await doc.save());
+  const r = vectorScan(v, { x: 100, y: 300 });
+  check('vector scan: finds the symbol at the click', r && r.provider === 'vector');
+  check('vector scan: 5 instances (rotated, mirrored, touching a wall); lookalike and bigger copy excluded', r?.hits.length === 5, r && JSON.stringify(r.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  check('vector scan: nothing under an empty click', vectorScan(v, { x: 500, y: 50 }) === null);
 }
 
 if (failed) process.exit(1);

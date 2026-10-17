@@ -13,6 +13,7 @@
 //     with page rotation keep exact fidelity by delegating to their renderer.
 
 import type { Pt } from './types.ts';
+import type { VecPage } from './vector.ts';
 
 /** Raster scale (px per PDF point) both scan tiers render at. */
 export const RASTER_SCALE = 3;
@@ -65,6 +66,11 @@ export interface ScanDeps {
   renderRaster(pageNum: number, scale: number): Promise<RasterPage>;
   /** null when no trained model is available — tier-1 CV runs instead. */
   detector(): Promise<DetectorSession | null>;
+  /**
+   * The page's vector geometry (vector.ts), or null for scans and pages the
+   * host cannot read as vectors. When present, the vector tier runs first.
+   */
+  vector?(pageNum: number): Promise<VecPage | null>;
   /** Optional sink for recoverable tier-2 failures (host decides logging). */
   warn?(message: string): void;
 }

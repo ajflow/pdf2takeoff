@@ -31,20 +31,46 @@ export type FillResult = { points: Pt[] } | { error: string };
 /** Threshold for pixels no closing on the ladder ever turns into wall. */
 const NEVER = 255;
 
+/** How far (px) wall-end tests look along and across a gap's end ink. */
+const WALL_END_REACH = 64;
+
 /**
  * For every pixel, the smallest half-length r at which a binary closing with
  * an axis-aligned line structuring element (dilate then erode, half-length
  * r) along either axis turns it into wall: 0 for ink, NEVER when no rung
  * reaches it. Closing along one axis fills exactly the ink-free runs of
  * length L ≤ 2r that have ink at both ends (L ≤ r for a run that ends at the
- * page edge) and touches nothing else — so every rung of the ladder is a
+ * page edge) and touches nothing else, so every rung of the ladder is a
  * single threshold test on one precomputed array, with no wall pixel or face
  * ever moved.
+ *
+ * One refinement over a plain closing: an interior run only closes when both
+ * of its ends are wall ENDS, ink that carries on along the run's own axis
+ * and is longer than it is thick there (de las Heras et al.: walls are lines
+ * longer than thick). A door gap sits between two wall ends. The strip
+ * between a wall face and a parallel bench line is bounded by the sides of
+ * lines, and the short gap from a bench's end to a side wall has a wall
+ * face on one side, so neither closes and the floor area is kept. With equal
+ * line weights a door hard against a corner (no return nib) looks the same
+ * as that bench gap and is not bridged.
  */
 function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
   const thr = new Uint8Array(w * h).fill(NEVER);
-  const mark = (L: number, before: boolean, after: boolean): number => {
-    const t = before && after ? Math.ceil(L / 2) : before || after ? L : NEVER;
+  /** consecutive ink from i stepping by d, at most WALL_END_REACH (inBounds guards the axis) */
+  const runFrom = (i: number, d: number, steps: number): number => {
+    let n = 0;
+    for (let k = 0; k < Math.min(steps, WALL_END_REACH) && ink[i + k * d]; k++) n++;
+    return n;
+  };
+  // end ink at (x, y) continuing in direction (dx, dy): along length vs its thickness across
+  const wallEnd = (x: number, y: number, dx: number, dy: number): boolean => {
+    const i = y * w + x;
+    const along = dx > 0 ? runFrom(i, 1, w - x) : dx < 0 ? runFrom(i, -1, x + 1) : dy > 0 ? runFrom(i, w, h - y) : runFrom(i, -w, y + 1);
+    const across = dx !== 0 ? runFrom(i, w, h - y) + runFrom(i, -w, y + 1) - 1 : runFrom(i, 1, w - x) + runFrom(i, -1, x + 1) - 1;
+    return along >= Math.min(WALL_END_REACH, 2 * across);
+  };
+  const mark = (L: number, before: boolean, after: boolean, wallEnded: () => boolean): number => {
+    const t = before && after ? (wallEnded() ? Math.ceil(L / 2) : NEVER) : before || after ? L : NEVER;
     return Math.min(t, NEVER);
   };
   // rows
@@ -59,8 +85,9 @@ function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
       }
       const a = x;
       while (x < w && !ink[row + x]) x++;
-      const t = mark(x - a, a > 0, x < w);
-      if (t < NEVER) for (let i = row + a; i < row + x; i++) thr[i] = t;
+      const b = x;
+      const t = mark(b - a, a > 0, b < w, () => wallEnd(a - 1, y, -1, 0) && wallEnd(b, y, 1, 0));
+      if (t < NEVER) for (let i = row + a; i < row + b; i++) thr[i] = t;
     }
   }
   // columns, swept row by row (one open-run start per column) so reads stay
@@ -68,7 +95,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
   const runStart = new Int32Array(w).fill(-1);
   const flush = (x: number, end: number) => {
     const a = runStart[x];
-    const t = mark(end - a, a > 0, end < h);
+    const t = mark(end - a, a > 0, end < h, () => wallEnd(x, a - 1, 0, -1) && wallEnd(x, end, 0, 1));
     if (t < NEVER) for (let y = a, i = a * w + x; y < end; y++, i += w) if (t < thr[i]) thr[i] = t;
     runStart[x] = -1;
   };

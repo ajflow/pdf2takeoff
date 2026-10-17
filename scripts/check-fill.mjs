@@ -6,6 +6,8 @@
 // unbounded region still errors. A second 600x400 raster covers what the
 // first can't see: an L-shaped room (the trace must follow concave corners,
 // not cut across them) and a door in a horizontal wall (row-wise closing).
+// A third covers the wall-end gate: a bench line near a wall must not be
+// closed onto it, and doors in thick filled walls still bridge.
 
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
 
@@ -103,4 +105,40 @@ const aC = area(r.points);
 console.log(`room C (door in horizontal wall): ${r.points.length} pts, area ${aC.toFixed(0)} (ideal ~56721)`);
 if (Math.abs(aC - 56721) / 56721 > 0.03) { console.error(`FAIL room C area off: ${aC}`); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed and concave rooms traced; unbounded errors');
+
+// --- third sheet: furniture lines near walls, thick walls -------------------
+const W3 = 900;
+const H3 = 500;
+const px3 = new Uint8ClampedArray(W3 * H3 * 4).fill(255);
+const ink3 = (x, y) => {
+  const i = (y * W3 + x) * 4;
+  px3[i] = px3[i + 1] = px3[i + 2] = 0;
+};
+const box3 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ink3(x, y); };
+// room D: thin walls 20..320 x 20..320, 50px door in the left wall (y 120..169),
+// a bench line 40px below the top wall from x 70 to 270 (its ends 49px from
+// the side walls, inside the closing reach)
+box3(20, 20, 320, 20); box3(20, 320, 320, 320); box3(320, 20, 320, 320);
+box3(20, 20, 20, 119); box3(20, 170, 20, 320);
+box3(70, 60, 270, 60);
+// room E: 8px filled walls, outer 400..880 x 20..420 (inner 408..872 x 28..412),
+// 40px door in the bottom wall (x 600..639)
+box3(400, 20, 880, 27); box3(400, 20, 407, 420); box3(873, 20, 880, 420);
+box3(400, 413, 599, 420); box3(640, 413, 880, 420);
+const raster3 = { width: W3, height: H3, data: px3, toPdf: (x, y) => ({ x, y: H3 - y }), toRaster: (x, y) => ({ x, y: H3 - y }) };
+
+// 6. room D: the strip behind the bench is floor too; true inner area = 299 x 299 = 89401
+r = dynamicFill(raster3, { x: 170, y: H3 - 200 });
+if ('error' in r) { console.error('FAIL room D (bench):', r.error); process.exit(1); }
+const aD = area(r.points);
+console.log(`room D (bench line near a wall): ${r.points.length} pts, area ${aD.toFixed(0)} (ideal ~89401)`);
+if (Math.abs(aD - 89401) / 89401 > 0.03) { console.error(`FAIL room D area off (bench strip closed?): ${aD}`); process.exit(1); }
+
+// 7. room E through a door in a thick wall: true inner area = 465 x 385 = 179025
+r = dynamicFill(raster3, { x: 640, y: H3 - 200 });
+if ('error' in r) { console.error('FAIL room E (thick walls):', r.error); process.exit(1); }
+const aE = area(r.points);
+console.log(`room E (door in 8px walls): ${r.points.length} pts, area ${aE.toFixed(0)} (ideal ~179025)`);
+if (Math.abs(aE - 179025) / 179025 > 0.03) { console.error(`FAIL room E area off: ${aE}`); process.exit(1); }
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench and thick-wall rooms traced; unbounded errors');

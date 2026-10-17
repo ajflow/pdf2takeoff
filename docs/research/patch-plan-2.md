@@ -1,10 +1,23 @@
 # Patch plan 2: fixes and improvements from the October 2026 review and research
 
-> **Status 2026-10-17:** plan only, nothing here is built yet. Sources:
-> today's code reviews of 6cdff32, 7cc72db and 06fadc6, the fixes already
-> merged in PR #1, and the research report
-> [AI research for PDF takeoff](../../reports/AI%20research%20for%20PDF%20takeoff.md).
+> **Status 2026-10-17:** phases 0 to 3 shipped on `claude/code-review-v1q38f`
+> (see the git log and the table below). Sources: today's code reviews of
+> 6cdff32, 7cc72db and 06fadc6, the fixes merged in PR #1, and the research
+> report [AI research for PDF takeoff](../../reports/AI%20research%20for%20PDF%20takeoff.md).
 > Patch numbers continue from [patch-plan.md](patch-plan.md) (P1 to P6).
+>
+> | Patch | Status |
+> |---|---|
+> | P7 to P11 | shipped |
+> | P12 | shipped: `npm run bench`, in CI |
+> | P13 | shipped: scale and room-label triggers; corroborated neck cuts still open (bench case `fill/interior-door-no-hints`) |
+> | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open |
+> | P15 | shipped, plus a `fill_area` MCP tool |
+> | P16 | shipped: go ([vector-spike.md](vector-spike.md)); real CAD exports still to check |
+> | P17, P18, P19 | shipped |
+> | P3b, P5b, P2b, P20 | open: need a dependency decision (PaddleOCR.js), model artifacts (DINOv2), a dataset licence check and training run (ResPlan), or an agent harness with model access (public benchmarks) |
+>
+> Bench after phase 3: fill 11/12, count 2/2, scale 9/9.
 
 ## Principles
 

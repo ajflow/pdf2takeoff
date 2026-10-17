@@ -7,12 +7,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFString, rgb } from 'pdf-lib';
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { vectorize } from '../src/engine/vector.ts';
 import { vectorScan } from '../src/engine/scan-vector.ts';
 import { doorBridges } from '../src/engine/fill-vector.ts';
+import { vectorDocPage } from '../src/headless/ops.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failed = false;
@@ -102,6 +103,23 @@ async function vec(bytes) {
   check('vector scan: nothing under an empty click', vectorScan(v, { x: 500, y: 50 }) === null);
 }
 
+// vector scan: instances straddling the 30 pt grouping grid (a circle whose
+// tail starts just across a cell boundary) still group and count
+{
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([600, 400]);
+  const black = rgb(0, 0, 0);
+  const sw = (x, y) => {
+    page.drawCircle({ x, y, size: 4, borderColor: black, borderWidth: 0.6 });
+    page.drawLine({ start: { x: x + 4.3, y }, end: { x: x + 9, y }, thickness: 0.6, color: black });
+  };
+  // circles end at x = 29.9 / 59.9 / 89.9 and their tails start 0.3 pt later, across the cell boundary
+  for (const x of [25.9, 55.9, 85.9, 200, 300]) sw(x, 200);
+  const { v } = await vec(await doc.save());
+  const r = vectorScan(v, { x: 200, y: 200 });
+  check('vector scan: instances on grid boundaries still count (5)', r?.hits.length === 5, r && JSON.stringify(r.hits.map((h) => Math.round(h.x))));
+}
+
 // doorway bridges
 {
   const doc = await PDFDocument.create();
@@ -123,6 +141,23 @@ async function vec(bytes) {
   check('bridges: diagonal door between facing wall ends', has(100, 100, 114.1, 114.1), JSON.stringify(br));
   check('bridges: heavy partition end runs into the heavy wall', has(300, 150, 300, 175), JSON.stringify(br));
   check('bridges: thin bench end is never closed onto a wall side', !br.some((b) => near(b.x1, 480, 0.6) || near(b.x2, 480, 0.6)), JSON.stringify(br));
+}
+
+// hidden CAD layers (optional content switched off) are skipped
+{
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([400, 300]);
+  const ctx = doc.context;
+  const on = ctx.register(ctx.obj({ Type: 'OCG', Name: PDFString.of('Walls') }));
+  const off = ctx.register(ctx.obj({ Type: 'OCG', Name: PDFString.of('Furniture') }));
+  doc.catalog.set(PDFName.of('OCProperties'), ctx.obj({ OCGs: [on, off], D: { ON: [on], OFF: [off], Order: [on, off] } }));
+  page.node.Resources().set(PDFName.of('Properties'), ctx.obj({ MC0: on, MC1: off }));
+  const ops = '/OC /MC0 BDC 1 w 10 10 m 300 10 l S EMC /OC /MC1 BDC 1 w 10 100 m 300 100 l S EMC 1 w 10 200 m 300 200 l S';
+  page.node.addContentStream(ctx.register(ctx.stream(ops)));
+  const v = await vectorDocPage(await openPdf(await doc.save()), 1);
+  const ys = v.segs.map((s) => Math.round(s.y1)).sort((a, b) => a - b);
+  check('layers: visible-layer and unlayered lines kept, hidden-layer line skipped', JSON.stringify(ys) === '[10,200]', JSON.stringify(ys));
+  check('layers: both groups counted', v.layers === 2, `got ${v.layers}`);
 }
 
 if (failed) process.exit(1);

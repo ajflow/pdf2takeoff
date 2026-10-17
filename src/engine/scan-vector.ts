@@ -58,8 +58,10 @@ function groupPaths(vec: VecPage, maxSymbolPt: number): Group[] {
   const grid = new Map<string, number[]>();
   for (const i of small) {
     const p = vec.paths[i];
-    for (let gx = Math.floor(p.x0 / cell); gx <= Math.floor(p.x1 / cell); gx++) {
-      for (let gy = Math.floor(p.y0 / cell); gy <= Math.floor(p.y1 / cell); gy++) {
+    // file under every cell the join distance reaches, so paths touching
+    // across a cell boundary still meet in a shared bucket
+    for (let gx = Math.floor((p.x0 - JOIN_PT) / cell); gx <= Math.floor((p.x1 + JOIN_PT) / cell); gx++) {
+      for (let gy = Math.floor((p.y0 - JOIN_PT) / cell); gy <= Math.floor((p.y1 + JOIN_PT) / cell); gy++) {
         const key = `${gx},${gy}`;
         const bucket = grid.get(key);
         if (bucket) bucket.push(i);

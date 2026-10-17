@@ -34,7 +34,9 @@ export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
 
 /** The page's vector geometry from its drawing operators. */
 export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
-  return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS);
+  // hidden CAD layers are skipped, as the renderer skips them
+  const layers = await doc.getOptionalContentConfig();
+  return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => layers.isVisible(g as never) });
 }
 
 /** Scan at a click point (PDF points): vector match on born-digital symbols, else tier-1 CV. */

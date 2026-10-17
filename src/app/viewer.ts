@@ -96,7 +96,8 @@ export async function closePdf(): Promise<void> {
 export async function getPageVector(pageNum: number): Promise<VecPage | null> {
   if (!doc) return null;
   const page = await doc.getPage(pageNum);
-  return vectorize(await page.getOperatorList(), pdfjsLib.OPS);
+  const layers = await doc.getOptionalContentConfig();
+  return vectorize(await page.getOperatorList(), pdfjsLib.OPS, { isVisible: (g) => layers.isVisible(g as never) });
 }
 
 /** The page's text-layer items (empty for scans or before a document loads). */

@@ -57,7 +57,18 @@ export interface OpsTable {
   closeEOFillStroke: number;
   paintFormXObjectBegin: number;
   paintFormXObjectEnd: number;
+  beginMarkedContent: number;
   beginMarkedContentProps: number;
+  endMarkedContent: number;
+}
+
+export interface VectorizeOptions {
+  /**
+   * Visibility of an optional-content group (a CAD layer), as pdf.js's
+   * OptionalContentConfig.isVisible answers it. Paths inside hidden groups
+   * are skipped, matching what the renderer draws. Omitted: all visible.
+   */
+  isVisible?(group: unknown): boolean;
 }
 
 type M = [number, number, number, number, number, number];
@@ -84,10 +95,11 @@ const CURVE_STEPS = 8;
 
 /**
  * Walk an operator list into page-space segments. Tracks the transform
- * stack, line width (including ExtGState LW), dash state and Form XObject
- * nesting; paths that are neither stroked nor filled (clips) are skipped.
+ * stack, line width (including ExtGState LW), dash state, Form XObject
+ * nesting and optional-content visibility; paths that are neither stroked
+ * nor filled (clips) or that sit on a hidden layer are skipped.
  */
-export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unknown[] }, OPS: OpsTable): VecPage {
+export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unknown[] }, OPS: OpsTable, opts: VectorizeOptions = {}): VecPage {
   const segs: VecSeg[] = [];
   const paths: VecPage['paths'] = [];
   let ctm: M = [1, 0, 0, 1, 0, 0];
@@ -97,6 +109,10 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
   const formStack: number[] = [];
   let forms = 0;
   let layers = 0;
+  // marked-content stack, as the canvas renderer keeps it: visible unless an
+  // enclosing optional-content group is hidden
+  const marked: boolean[] = [];
+  let hidden = 0;
   const paintKind = (op: number): { stroked: boolean; filled: boolean } | null => {
     if (op === OPS.stroke || op === OPS.closeStroke) return { stroked: true, filled: false };
     if (op === OPS.fill || op === OPS.eoFill) return { stroked: false, filled: true };
@@ -131,9 +147,20 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
       formStack.pop();
       const s = stack.pop();
       if (s) ({ ctm, lineWidth, dashed } = s);
+    } else if (fn === OPS.beginMarkedContent) {
+      marked.push(true);
     } else if (fn === OPS.beginMarkedContentProps) {
-      if (args[0] === 'OC') layers++;
+      let visible = true;
+      if (args[0] === 'OC') {
+        layers++;
+        visible = opts.isVisible ? opts.isVisible(args[1]) : true;
+      }
+      marked.push(visible);
+      if (!visible) hidden++;
+    } else if (fn === OPS.endMarkedContent) {
+      if (marked.pop() === false) hidden--;
     } else if (fn === OPS.constructPath) {
+      if (hidden > 0) continue;
       const kind = paintKind(Number(args[0]));
       if (!kind) continue;
       const data = (args[1] as unknown[] | undefined)?.[0] as ArrayLike<number> | undefined;

@@ -45,6 +45,16 @@ export interface DetectorSession {
   head: 'yolox-raw' | 'mmdet';
   /** Manifest model file name, surfaced in scan notes. */
   modelName: string;
+  /**
+   * Tiled inference. When present, the page raster is cut into square
+   * windows of inputSize × RASTER_SCALE / pxPerPt raster px (resampled to
+   * inputSize) instead of letterboxing the whole page into one input —
+   * whole-page scaling crushes symbols on large sheets far below the size
+   * band the model was trained on. pxPerPt is the effective pixels-per-point
+   * AT MODEL INPUT, so training must present symbols at the same rate (see
+   * specs/detector-tiling.md). Absent ⇒ legacy whole-page letterbox.
+   */
+  tile?: { pxPerPt: number; overlapPx: number };
   /** Run one [1,3,size,size] float input; return the raw output tensor. */
   run(input: Float32Array, size: number): Promise<{ data: Float32Array; dims: number[] }>;
 }

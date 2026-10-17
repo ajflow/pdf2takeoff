@@ -21,9 +21,13 @@ interface Manifest {
   score?: number;
   iou?: number;
   // 'yolox-raw': output rows are [x1,y1,x2,y2,obj,cls...] and the score is
-  //   obj * cls (official YOLOX export). 'mmdet': scores are already
-  //   combined, obj column is ~1.
+  //   obj * cls (official YOLOX export). 'mmdet': scores are already combined,
+  //   obj column is ~1.
   head?: 'yolox-raw' | 'mmdet';
+  // Tiled inference (see specs/detector-tiling.md): pxPerPt is the effective
+  //   pixels-per-point at model input the model was trained for. Absent ⇒
+  //   whole-page letterbox (v1 behavior).
+  tile?: { pxPerPt: number; overlapPx: number };
 }
 
 type Ort = typeof import('onnxruntime-web');
@@ -87,6 +91,7 @@ async function getEngine(): Promise<DetectorSession> {
       iou: m.iou,
       head: m.head,
       modelName: m.model,
+      tile: m.tile && m.tile.pxPerPt > 0 ? { pxPerPt: m.tile.pxPerPt, overlapPx: m.tile.overlapPx ?? 0 } : undefined,
       run: async (input, size) => {
         const feeds = { [s.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, size, size]) };
         const out = await s.run(feeds);

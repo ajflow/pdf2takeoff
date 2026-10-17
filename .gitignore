@@ -20,3 +20,6 @@ STRATEGY.md
 SPARK-PLAN.md
 FRONTIER-ANALYSIS.md
 FRIEND-ONBOARDING.md
+
+# ZCode session state
+.zcode/

@@ -37,9 +37,9 @@ square windows and each is letterboxed to `inputSize` independently:
   416 px, symbols train at ≈ 416 × 3 / 1280 ≈ 0.98 px/pt; a tiled manifest for
   that model declares `pxPerPt: 0.98` and gets 1280-px windows at the same
   rate.
-- **Overlap**: the effective overlap is
-  `max(overlapPx, 1.25 × maxSymbolPt × RASTER_SCALE + 4)` raster px, capped
-  at `W / 2`. `maxSymbolPt` is the largest symbol in PDF points (default 30,
+- **Overlap**: the effective overlap is the manifest's `overlapPx` (up to
+  `W − 1`), raised automatically towards `1.25 × maxSymbolPt × RASTER_SCALE
+  + 4` raster px but never past `W / 2`. `maxSymbolPt` is the largest symbol in PDF points (default 30,
   about 10.6 mm). With overlap wider than any symbol, every symbol lies
   whole, clear of interior edges, in at least one window. A 9 mm symbol is
   about 76 raster px, so the old 32 px example could leave a symbol on a
@@ -56,10 +56,12 @@ square windows and each is letterboxed to `inputSize` independently:
      neighbouring window sees whole.
   3. The class of the detection nearest the click is chosen, and only that
      class is fused, so other symbols on a busy sheet cannot crowd it out.
-  4. Greedy suppression, best score first: IoU within a window (rows of
-     neighbouring symbols survive); across windows a box is also merged
-     when either covers half the other (intersection over the smaller box,
-     as SAHI does).
+  4. Greedy suppression, best score first (larger box first on ties): IoU
+     within a window (rows of neighbouring symbols survive); across windows
+     a box is also merged when either covers half the other (intersection
+     over the smaller box, as SAHI does), the kept box grows to the union of
+     what it absorbs, and the pass repeats while it grows, so all fragments
+     of a symbol cut by tiles in both directions collapse into one.
 - **Caps**: at most 2000 hits are returned; beyond that the result sets
   `truncated` and the note says so. More than 4096 non-blank tiles throws,
   which `scan.ts` catches and downgrades to the CV scan with a warning.

@@ -102,12 +102,14 @@ function tileWindows(
   r: RasterPage,
   S: number,
   tile: { pxPerPt: number; overlapPx: number; maxSymbolPt?: number },
-): Win[] {
+): { wins: Win[]; edgeSafe: boolean } {
   // the raster arrives at RASTER_SCALE px/pt (see scan.ts / ops.ts)
   const W = Math.max(64, Math.round((S * RASTER_SCALE) / tile.pxPerPt));
   const symbolPx = (tile.maxSymbolPt ?? DEFAULT_MAX_SYMBOL_PT) * RASTER_SCALE;
-  const wanted = Math.max(tile.overlapPx, Math.ceil(1.25 * symbolPx + 2 * EDGE_EPS));
-  const overlap = Math.min(Math.floor(W / 2), Math.max(0, wanted));
+  const needed = Math.ceil(1.25 * symbolPx + 2 * EDGE_EPS);
+  // the manifest's own overlap is honoured up to W - 1; the automatic raise
+  // stops at half a tile so the tile count stays sane
+  const overlap = Math.min(W - 1, Math.max(0, tile.overlapPx, Math.min(needed, Math.floor(W / 2))));
   const stride = Math.max(1, W - overlap);
   const axis = (len: number): number[] => {
     if (len <= W) return [0];
@@ -117,7 +119,8 @@ function tileWindows(
   };
   const wins: Win[] = [];
   for (const y of axis(r.height)) for (const x of axis(r.width)) wins.push({ x0: x, y0: y, w: W, h: W });
-  return wins;
+  // dropping edge-cut boxes is only safe when every symbol fits whole in some tile
+  return { wins, edgeSafe: overlap >= needed };
 }
 
 interface Det {
@@ -198,26 +201,43 @@ function decodeRows(arr: Float32Array, dims: number[], det: DetectorSession): De
  * into the whole one.
  */
 function nmsPerClass(dets: Det[], iou: number): Det[] {
-  dets.sort((a, b) => b.score - a.score);
+  const areaOf = (d: Det) => (d.x2 - d.x1) * (d.y2 - d.y1);
+  // best score first; on ties the larger box leads, so a whole symbol
+  // anchors the merge rather than a fragment of it
+  dets.sort((a, b) => b.score - a.score || areaOf(b) - areaOf(a));
   const suppressed = new Uint8Array(dets.length);
   const kept: Det[] = [];
   for (let i = 0; i < dets.length; i++) {
     if (suppressed[i]) continue;
-    const a = dets[i];
+    const a = { ...dets[i] };
     kept.push(a);
-    const a1 = (a.x2 - a.x1) * (a.y2 - a.y1);
-    for (let j = i + 1; j < dets.length; j++) {
-      const b = dets[j];
-      if (suppressed[j] || b.cls !== a.cls) continue;
-      const ix1 = Math.max(a.x1, b.x1);
-      const iy1 = Math.max(a.y1, b.y1);
-      const ix2 = Math.min(a.x2, b.x2);
-      const iy2 = Math.min(a.y2, b.y2);
-      const inter = Math.max(0, ix2 - ix1) * Math.max(0, iy2 - iy1);
-      if (inter === 0) continue;
-      const a2 = (b.x2 - b.x1) * (b.y2 - b.y1);
-      if (inter / Math.max(1e-6, a1 + a2 - inter) > iou) suppressed[j] = 1;
-      else if (a.win !== b.win && inter / Math.max(1e-6, Math.min(a1, a2)) > CROSS_IOS) suppressed[j] = 1;
+    // across tiles the kept box grows to the union of what it absorbs (as
+    // SAHI's merge does), and the pass repeats while it grows, so every
+    // fragment of a symbol cut by tiles in both directions meets it
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (let j = i + 1; j < dets.length; j++) {
+        const b = dets[j];
+        if (suppressed[j] || b.cls !== a.cls) continue;
+        const ix1 = Math.max(a.x1, b.x1);
+        const iy1 = Math.max(a.y1, b.y1);
+        const ix2 = Math.min(a.x2, b.x2);
+        const iy2 = Math.min(a.y2, b.y2);
+        const inter = Math.max(0, ix2 - ix1) * Math.max(0, iy2 - iy1);
+        if (inter === 0) continue;
+        const a1 = areaOf(a);
+        const a2 = areaOf(b);
+        const sameObject = inter / Math.max(1e-6, a1 + a2 - inter) > iou;
+        const crossTile = a.win !== b.win;
+        if (!sameObject && !(crossTile && inter / Math.max(1e-6, Math.min(a1, a2)) > CROSS_IOS)) continue;
+        suppressed[j] = 1;
+        if (!crossTile) continue;
+        if (b.x1 < a.x1 || b.y1 < a.y1 || b.x2 > a.x2 || b.y2 > a.y2) grew = true;
+        a.x1 = Math.min(a.x1, b.x1);
+        a.y1 = Math.min(a.y1, b.y1);
+        a.x2 = Math.max(a.x2, b.x2);
+        a.y2 = Math.max(a.y2, b.y2);
+      }
     }
   }
   return kept;
@@ -229,7 +249,8 @@ export async function detectorScan(
   det: DetectorSession,
 ): Promise<ScanResult> {
   const S = det.inputSize;
-  const all = det.tile ? tileWindows(raster, S, det.tile) : [undefined];
+  const grid = det.tile ? tileWindows(raster, S, det.tile) : null;
+  const all = grid ? grid.wins : [undefined];
   const windows = det.tile ? all.filter((w) => w && !blankWindow(raster, w)) : all;
   if (windows.length > MAX_WINDOWS) {
     throw new Error(`tile config yields ${windows.length} non-blank tiles (max ${MAX_WINDOWS})`);
@@ -253,7 +274,9 @@ export async function detectorScan(
         cls: d.cls,
         win: wi,
       };
-      if (win && touchesInteriorEdge(m, win, raster)) continue;
+      // with too little overlap for that guarantee, keep fragments and let
+      // the cross-tile merge collapse them instead
+      if (win && grid?.edgeSafe && touchesInteriorEdge(m, win, raster)) continue;
       dets.push(m);
     }
   }

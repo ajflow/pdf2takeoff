@@ -119,6 +119,21 @@ function expectHits(label, r, centres, tol = 3) {
   console.log(`ok: ${centres.length} symbols swept across tile seams each count once`);
 }
 
+// --- tiles too small for the symbol: the edge-cut filter must stand down ----
+// W = 64 (S 64, pxPerPt 3); 12 pt symbols need ~49 px overlap but only 32 fit,
+// so 40 px symbols on a seam are never whole in one tile. Dropping edge-cut boxes
+// would lose them; coverage merging must count each once instead.
+{
+  const centres = [];
+  for (let x = 25; x <= 385; x += 60) centres.push([x, 50]);
+  const tile = { pxPerPt: 3, overlapPx: 0, maxSymbolPt: 12 };
+  const { det } = blobSession(64, tile);
+  const r = await detectorScan(rasterWith(410, 100, centres, 40), { x: 25, y: 50 }, det);
+  if ('error' in r) fail(`small tiles: ${r.error}`);
+  if (r.hits.length !== centres.length) fail(`small tiles: expected ${centres.length} hits, got ${r.hits.length}`);
+  console.log(`ok: ${centres.length} symbols larger than the tile overlap each count once`);
+}
+
 // --- neighbours on a seam stay separate --------------------------------------
 {
   const centres = [[250, 200], [274, 200], [250, 224], [274, 224]]; // 4 px gaps, around x0 = 256-ish seams

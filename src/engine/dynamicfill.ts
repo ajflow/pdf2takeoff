@@ -34,7 +34,13 @@ const MAX_FILL_FRACTION = 0.4;
  */
 const GAP_HALF = [0, 8, 16, 28, 44];
 
-export type FillResult = { points: Pt[]; gapPx?: number } | { error: string };
+/**
+ * points: the room outline (PDF pt). gapPx: width (raster px) of the widest
+ * gap the closing actually bridged on this room's boundary, absent when the
+ * room was sealed by ink alone. bridged: a vector doorway bridge formed part
+ * of the boundary.
+ */
+export type FillResult = { points: Pt[]; gapPx?: number; bridged?: boolean } | { error: string };
 
 /** Widest doorway closed automatically once the page scale is known (m). */
 const DOOR_MAX_M = 1.0;
@@ -223,7 +229,9 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // ink mask once; each retry only thickens the gap-closing on top of it
   const ink = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = lum(i) < tolerance ? 1 : 0;
-  // vector doorway bridges become ink: 3 px wide so 4-connected fills can't slip through
+  // vector doorway bridges become ink: 3 px wide so 4-connected fills can't
+  // slip through; bridgePx remembers which ink they added, for provenance
+  const bridgePx = hints.bridges?.length ? new Uint8Array(w * h) : null;
   for (const b of hints.bridges ?? []) {
     const a = raster.toRaster(b.x1, b.y1);
     const c = raster.toRaster(b.x2, b.y2);
@@ -235,7 +243,10 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
         for (let ox = -1; ox <= 1; ox++) {
           const px = x + ox;
           const py = y + oy;
-          if (px >= 0 && py >= 0 && px < w && py < h) ink[py * w + px] = 1;
+          if (px >= 0 && py >= 0 && px < w && py < h && !ink[py * w + px]) {
+            ink[py * w + px] = 1;
+            bridgePx![py * w + px] = 1;
+          }
         }
       }
     }
@@ -273,7 +284,8 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   let filled: Uint8Array | null = null;
   let count = 0;
   let gapR = 0;
-  let merged: { mask: Uint8Array; count: number; r: number } | null = null;
+  let bridged = false;
+  let merged: { mask: Uint8Array; count: number; closedR: number; usedBridge: boolean } | null = null;
   const stack: number[] = [];
   // lowest threshold among pixels the last fill reached: a rung below it
   // blocks none of them, so its fill would retrace the same region exactly
@@ -288,25 +300,36 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     mask[seedIdx] = 1;
     reachedMin = thr[seedIdx];
     let n = 1;
-    const visit = (i: number) => {
-      mask[i] = 1;
-      n++;
-      if (thr[i] < reachedMin) reachedMin = thr[i];
-      stack.push(i);
+    // what actually stopped the fill: a closed gap (0 < thr <= r) or a bridge
+    let closedR = 0;
+    let usedBridge = false;
+    const step = (i: number) => {
+      if (mask[i]) return;
+      const t = thr[i];
+      if (t > r) {
+        mask[i] = 1;
+        n++;
+        if (t < reachedMin) reachedMin = t;
+        stack.push(i);
+      } else if (t > 0) {
+        if (t > closedR) closedR = t;
+      } else if (bridgePx && bridgePx[i]) {
+        usedBridge = true;
+      }
     };
     while (stack.length && n <= cap) {
       const idx = stack.pop()!;
       const x = idx % w;
-      if (x > 0 && !mask[idx - 1] && thr[idx - 1] > r) visit(idx - 1);
-      if (x < w - 1 && !mask[idx + 1] && thr[idx + 1] > r) visit(idx + 1);
-      if (idx >= w && !mask[idx - w] && thr[idx - w] > r) visit(idx - w);
-      if (idx + w < w * h && !mask[idx + w] && thr[idx + w] > r) visit(idx + w);
+      if (x > 0) step(idx - 1);
+      if (x < w - 1) step(idx + 1);
+      if (idx >= w) step(idx - w);
+      if (idx + w < w * h) step(idx + w);
     }
     if (n > cap) continue; // leaked
     if (labelIdx.length && labelsIn(mask) >= 2) {
       // bounded but spans several labelled rooms: keep it as the fallback
       // and try closing wider gaps
-      merged ??= { mask: mask.slice(), count: n, r };
+      merged ??= { mask: mask.slice(), count: n, closedR, usedBridge };
       continue;
     }
     if (merged) {
@@ -317,13 +340,15 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     }
     filled = mask;
     count = n;
-    gapR = r;
+    gapR = closedR;
+    bridged = usedBridge;
     break;
   }
   if (!filled && merged) {
     filled = merged.mask;
     count = merged.count;
-    gapR = merged.r;
+    gapR = merged.closedR;
+    bridged = merged.usedBridge;
   }
   if (!filled) return unbounded();
   const region: Uint8Array = filled;
@@ -387,7 +412,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   if (area < 0.8 * (count - boundaryPts.length) || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
-  return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}) };
+  return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}), ...(bridged ? { bridged: true } : {}) };
 }
 
 function shoelace(pts: { x: number; y: number }[]): number {

@@ -358,12 +358,13 @@ export async function runMcpServer(): Promise<void> {
         calibrated: !!cal,
         vertices: result.points.length,
         provenance: {
-          method: 'dynamic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces',
+          method: 'dynamic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces; gapClosed* present only when a closed gap formed part of this room\'s boundary',
           page,
           scale: scaleProvenance(cal),
           bbox: bboxOf(result.points),
-          gapClosedPt: round(gapPt, 1),
-          ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}),
+          // only gaps that actually bound this room; absent for a sealed room
+          ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
+          ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
           roomLabelsOnSheet: labels.length,
           vectorDoorBridges: bridges.length,
         },

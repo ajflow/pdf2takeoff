@@ -58,6 +58,16 @@ if ('error' in r) { console.error('FAIL room B (sealed):', r.error); process.exi
 const aB = area(r.points);
 console.log(`room B (sealed): ${r.points.length} pts, area ${aB.toFixed(0)} (ideal ~17331)`);
 
+// 2b. a sealed room reports no closed gap, even with a scale that puts the
+// doorway rung on the ladder
+r = dynamicFill(raster, { x: 225, y: 100 }, undefined, { metersPerPt: 0.0254 / 72 * 100 });
+if ('error' in r || r.gapPx !== undefined || r.bridged) { console.error('FAIL sealed room reports a gap:', JSON.stringify(r)); process.exit(1); }
+console.log('sealed room: no gap reported');
+// and the gapped room reports the gap it closed (25px door)
+r = dynamicFill(raster, { x: 85, y: 100 });
+if ('error' in r || !(r.gapPx >= 24 && r.gapPx <= 32)) { console.error('FAIL gapped room gap report:', JSON.stringify('error' in r ? r : r.gapPx)); process.exit(1); }
+console.log(`gapped room: reports a ${r.gapPx}px gap closed`);
+
 // 3. unbounded: erase room B so the open area exceeds the page fraction cap
 for (let y = 0; y < H; y++) for (let x = 165; x < W; x++) {
   const i = (y * W + x) * 4;

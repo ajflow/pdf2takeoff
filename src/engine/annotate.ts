@@ -2,7 +2,7 @@
 // Polygon, FreeText) so they open in Bluebeam Revu, Acrobat and friends.
 // Pure pdf-lib: bytes in, bytes out — works identically in any host.
 
-import { PDFDocument, PDFDict, PDFHexString, PDFName, PDFString, type PDFObject } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFHexString, PDFName, PDFRef, PDFString, type PDFObject } from 'pdf-lib';
 import type { Calibration, Markup, Pt } from './types.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume, type DisplayUnit } from './units.ts';
@@ -91,16 +91,21 @@ export async function buildAnnotatedPdf(opts: AnnotateOptions): Promise<Uint8Arr
   // The bytes being loaded may already be a previous pdf2takeoff save
   // (re-open → edit → save). Drop our old annotations so this save replaces
   // them instead of stacking duplicates — and so deletions stay deleted.
+  // Our annotations are single self-contained dicts (no appearance streams
+  // or popups), so deleting the object itself keeps re-saves from growing.
   for (const page of pages) {
     const annots = page.node.Annots();
     if (!annots) continue;
     const entries = annots.asArray();
     for (let i = entries.length - 1; i >= 0; i--) {
-      const dict = context.lookup(entries[i]);
+      const entry = entries[i];
+      const dict = context.lookup(entry);
       if (!(dict instanceof PDFDict)) continue;
       const t = dict.get(PDFName.of('T'));
       const author = t instanceof PDFString || t instanceof PDFHexString ? t.decodeText() : null;
-      if (author === ANNOTATION_AUTHOR) annots.remove(i);
+      if (author !== ANNOTATION_AUTHOR) continue;
+      annots.remove(i);
+      if (entry instanceof PDFRef) context.delete(entry);
     }
   }
 

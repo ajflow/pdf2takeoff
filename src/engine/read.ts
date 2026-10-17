@@ -113,7 +113,7 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
       if (v !== null) {
         type = 'volume';
         label = v;
-        const d = contents.match(/\(depth ([^)]*)\)/);
+        const d = contents.match(/\(depth ([^)]*)\)$/);
         if (d) depth = depthMeters(d[1]);
       } else if (ar !== null) {
         type = 'area';

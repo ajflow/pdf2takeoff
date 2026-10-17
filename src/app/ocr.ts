@@ -11,7 +11,7 @@
 // tick marks and wall strokes.
 
 import { renderRaster } from './raster';
-import type { OcrWord } from '../engine/ocr';
+import { corridorAngles, pickCorridorReading, type OcrWord } from '../engine/ocr';
 import type { Pt } from '../engine/types';
 
 let workerPromise: Promise<import('tesseract.js').Worker> | null = null;
@@ -41,8 +41,13 @@ interface RawWord {
   bbox: { x0: number; y0: number; x1: number; y1: number };
 }
 
-async function recognize(cnv: HTMLCanvasElement): Promise<RawWord[]> {
+/** Characters a printed dimension can contain (digits, separators, unit marks). */
+const DIMENSION_CHARS = "0123456789.,'\"-xXmMcCnNiIfFtT";
+
+async function recognize(cnv: HTMLCanvasElement, whitelist = ''): Promise<RawWord[]> {
   const worker = await getWorker();
+  // the worker is shared with full-page reads, so the whitelist is set per call
+  await worker.setParameters({ tessedit_char_whitelist: whitelist });
   const { data } = await worker.recognize(cnv, {}, { blocks: true, text: true });
   // v7 nests words under blocks -> paragraphs -> lines -> words
   const raw: RawWord[] = [];
@@ -143,20 +148,27 @@ function dropLineArt(ctx: CanvasRenderingContext2D, w: number, h: number, thresh
 /**
  * OCR just the corridor along a clicked segment, rotated so its text reads
  * upright. Returns words in PDF-point space (same shape as ocrPage), ready
- * for nearestDimensionValue.
+ * for nearestDimensionValue. Near-vertical segments read bottom to top by
+ * drafting convention; the opposite reading is tried too and the better
+ * parse wins (corridorAngles / pickCorridorReading).
  */
 export async function ocrCorridor(pageNum: number, a: Pt, b: Pt): Promise<OcrWord[]> {
   const raster = await renderRaster(pageNum, 3);
   const page = rasterToCanvas(raster);
+  const ra = raster.toRaster(a.x, a.y);
+  const rb = raster.toRaster(b.x, b.y);
+  const readings: OcrWord[][] = [];
+  for (const theta of corridorAngles(ra, rb)) readings.push(await readCorridor(page, raster, ra, rb, theta));
+  return readings[pickCorridorReading(readings, a, b)];
+}
 
-  let ra = raster.toRaster(a.x, a.y);
-  let rb = raster.toRaster(b.x, b.y);
-  if (ra.x > rb.x) {
-    const t = ra;
-    ra = rb;
-    rb = t;
-  }
-  const theta = Math.atan2(rb.y - ra.y, rb.x - ra.x);
+async function readCorridor(
+  page: HTMLCanvasElement,
+  raster: Awaited<ReturnType<typeof renderRaster>>,
+  ra: Pt,
+  rb: Pt,
+  theta: number,
+): Promise<OcrWord[]> {
   const len = Math.hypot(rb.x - ra.x, rb.y - ra.y);
   const band = 60; // px each side of the line (~20 pt, where labels sit)
   const cw = Math.ceil(len + 2 * band);
@@ -177,7 +189,7 @@ export async function ocrCorridor(pageNum: number, a: Pt, b: Pt): Promise<OcrWor
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   dropLineArt(ctx, cw, ch);
 
-  const raw = await recognize(cnv);
+  const raw = await recognize(cnv, DIMENSION_CHARS);
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
   // crop px → raster px: src = C + R(θ)·(dest − crop centre)

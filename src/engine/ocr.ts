@@ -102,3 +102,99 @@ export function nearestDimensionValue(words: OcrWord[], a: Pt, b: Pt): Dimension
   }
   return best?.hit ?? null;
 }
+
+/** Within this angle of vertical, aligned-dimension text is folded to read from the right. */
+const VERTICAL_FOLD_DEG = 10;
+/** Within this angle of vertical, the opposite reading is also tried. */
+const VERTICAL_AMBIGUOUS_DEG = 20;
+
+/**
+ * Crop rotations (radians, raster space with y down) that make text along
+ * the a→b segment read upright, preferred first. Drafting convention reads
+ * aligned dimensions from the bottom or the right, so the angle is folded
+ * into [-90°, 90°) and a near-vertical segment always reads bottom to top
+ * (-90°), whichever end was clicked first. Near vertical the opposite
+ * reading is added as a fallback for sheets that break the convention.
+ */
+export function corridorAngles(a: Pt, b: Pt): number[] {
+  let deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  if (deg >= 90) deg -= 180;
+  else if (deg < -90) deg += 180;
+  if (deg > 90 - VERTICAL_FOLD_DEG) deg -= 180; // top-to-bottom → read from the right
+  const angles = [deg];
+  if (Math.abs(Math.abs(deg) - 90) <= VERTICAL_AMBIGUOUS_DEG) angles.push(deg + 180);
+  return angles.map((d) => (d * Math.PI) / 180);
+}
+
+/**
+ * Choose between OCR readings of the same corridor taken at different
+ * rotations: a parsed dimension beats none, a value without a spurious
+ * leading zero beats one with (an upside-down "1200" reads "0021"), then
+ * higher word confidence. Returns the index of the winning reading.
+ */
+export function pickCorridorReading(readings: OcrWord[][], a: Pt, b: Pt): number {
+  let best = 0;
+  let bestScore = -Infinity;
+  readings.forEach((words, i) => {
+    const hit = nearestDimensionValue(words, a, b);
+    let score = 0;
+    if (hit) {
+      score += 1000;
+      if (!/^0\d/.test(hit.text)) score += 500;
+      const w = words.find((x) => x.text.trim() === hit.text);
+      score += w ? w.conf : 0;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/** A text-layer word: an OcrWord plus the reading angle of its baseline. */
+export interface TextLayerWord extends OcrWord {
+  /** baseline direction, degrees counter-clockwise from +x (PDF space) */
+  angleDeg: number;
+}
+
+/**
+ * Split one PDF text item (pdf.js getTextContent) into positioned words.
+ * `transform` is the full text matrix and `width` the advance along the
+ * baseline, so words are laid out along the baseline direction (t0, t1) and
+ * lifted by half the height along the up direction (t2, t3); rotated and
+ * vertical text lands where it is drawn. wPt and hPt are the word's length
+ * along its baseline and its height.
+ */
+export function wordsFromTextItem(str: string, transform: number[] | undefined, width: number | undefined, height: number | undefined): TextLayerWord[] {
+  if (!str.trim()) return [];
+  const t = transform ?? [1, 0, 0, 1, 0, 0];
+  const ul = Math.hypot(t[0], t[1]) || 1;
+  const vl = Math.hypot(t[2], t[3]) || 1;
+  const ux = t[0] / ul;
+  const uy = t[1] / ul;
+  const vx = t[2] / vl;
+  const vy = t[3] / vl;
+  const w = Math.abs(width ?? 0) || str.length * 3;
+  const h = Math.abs(height ?? 0) || 8;
+  const angleDeg = Math.round(((Math.atan2(uy, ux) * 180) / Math.PI) * 10) / 10;
+  const words: TextLayerWord[] = [];
+  let offset = 0;
+  for (const part of str.split(/(\s+)/)) {
+    const pw = (part.length / str.length) * w;
+    if (part.trim()) {
+      const along = offset + pw / 2;
+      words.push({
+        text: part,
+        conf: 100,
+        xPt: t[4] + ux * along + vx * (h / 2),
+        yPt: t[5] + uy * along + vy * (h / 2),
+        wPt: pw,
+        hPt: h,
+        angleDeg,
+      });
+    }
+    offset += pw;
+  }
+  return words;
+}

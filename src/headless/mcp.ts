@@ -24,7 +24,7 @@ import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, d
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { toMeters } from '../engine/units.ts';
-import { findScaleRatio } from '../engine/ocr.ts';
+import { findScaleRatio, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -174,7 +174,7 @@ export async function runMcpServer(): Promise<void> {
     'read_text',
     {
       description:
-        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
+        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -197,22 +197,9 @@ export async function runMcpServer(): Promise<void> {
       // text items → whitespace-split words in PDF-point space. The text
       // layer is exact (born-digital), so confidence is 100 — the point of
       // this tool vs OCR-ing the render is that these numbers are trustworthy.
-      const words: { text: string; conf: number; xPt: number; yPt: number; wPt: number; hPt: number }[] = [];
+      const words: TextLayerWord[] = [];
       for (const item of tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]) {
-        const str = typeof item.str === 'string' ? item.str : '';
-        if (!str.trim()) continue;
-        const t = item.transform ?? [1, 0, 0, 1, 0, 0];
-        const x = t[4];
-        const y = t[5];
-        const w = Math.abs(item.width ?? 0) || str.length * 3;
-        const h = Math.abs(item.height ?? 0) || 8;
-        const parts = str.split(/\s+/).filter(Boolean);
-        let offset = 0;
-        for (const part of parts) {
-          const pw = (part.length / str.length) * w;
-          words.push({ text: part, conf: 100, xPt: x + offset + pw / 2, yPt: y + h / 2, wPt: pw, hPt: h });
-          offset += pw + (1 / Math.max(str.length, 1)) * w;
-        }
+        words.push(...wordsFromTextItem(typeof item.str === 'string' ? item.str : '', item.transform, item.width, item.height));
       }
       const clipped = region
         ? words.filter(

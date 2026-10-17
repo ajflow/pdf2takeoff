@@ -7,6 +7,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist';
 import { state, emit } from './state';
+import { vectorize, type VecPage } from '../engine/vector';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -89,6 +90,40 @@ export async function closePdf(): Promise<void> {
     }
     doc = null;
   }
+}
+
+// per-page caches for the open document (geometry and text never change
+// while it is open); keyed by the document so a new load starts fresh
+type TextItems = { str?: string; transform?: number[]; width?: number; height?: number }[];
+const vectorCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<VecPage>>>();
+const textCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<TextItems>>>();
+function cached<T>(store: WeakMap<PDFDocumentProxy, Map<number, Promise<T>>>, d: PDFDocumentProxy, pageNum: number, make: () => Promise<T>): Promise<T> {
+  let byPage = store.get(d);
+  if (!byPage) store.set(d, (byPage = new Map()));
+  let p = byPage.get(pageNum);
+  if (!p) {
+    p = make();
+    p.catch(() => byPage!.delete(pageNum)); // don't cache failures
+    byPage.set(pageNum, p);
+  }
+  return p;
+}
+
+/** The page's vector geometry from its drawing operators (null before a document loads). */
+export async function getPageVector(pageNum: number): Promise<VecPage | null> {
+  const d = doc;
+  if (!d) return null;
+  return cached(vectorCache, d, pageNum, async () => {
+    const [page, layers] = await Promise.all([d.getPage(pageNum), d.getOptionalContentConfig()]);
+    return vectorize(await page.getOperatorList(), pdfjsLib.OPS, { isVisible: (g) => layers.isVisible(g as never) });
+  });
+}
+
+/** The page's text-layer items (empty for scans or before a document loads). */
+export async function getPageTextItems(pageNum: number): Promise<TextItems> {
+  const d = doc;
+  if (!d) return [];
+  return cached(textCache, d, pageNum, async () => (await (await d.getPage(pageNum)).getTextContent()).items as TextItems);
 }
 
 /** Load annotations written by pdf2takeoff (or any tool) back into the state. */

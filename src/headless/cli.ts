@@ -37,8 +37,10 @@ Usage:
   pdf2takeoff export <file.pdf> [--scale 1:100] [--unit m] [--format csv|tsv|xlsx] [-o out]
       Read pdf2takeoff annotations back out as a quantities table.
       csv/tsv print to stdout without -o; xlsx requires -o.
-  pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]
+  pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf] [--keep-existing]
       Write spec-defined markups into the PDF as standard annotations.
+      Replaces pdf2takeoff markups already in the file (re-runs stay
+      idempotent); --keep-existing keeps them and adds the spec's.
   pdf2takeoff run <takeoff.yaml> [--prev previous-summary.json]
       Takeoff-as-code: calibrate, scan-count every symbol type in the spec,
       write the exports (csv / xlsx / annotated-pdf / summary JSON).
@@ -170,7 +172,7 @@ async function cmdExport(
   }
 }
 
-async function cmdAnnotate(file: string, specPath: string, outOverride: string | undefined): Promise<unknown> {
+async function cmdAnnotate(file: string, specPath: string, outOverride: string | undefined, keepExisting = false): Promise<unknown> {
   const spec = parseSpec(readFileSync(specPath, 'utf8'), specPath);
   const output = outOverride ?? spec.output;
   if (!output) throw new Error('no output path: pass -o out.pdf or set "output" in the spec');
@@ -190,15 +192,17 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
     points: m.points.map(([x, y]) => ({ x, y })),
     createdAt: Date.now(),
   }));
+  // the writer replaces our earlier annotations, so carry them over to keep them
+  const existing = keepExisting ? (await readMarkupsFromPdf(file)).markups : [];
 
   const bytes = await buildAnnotatedPdf({
     bytes: readPdf(file),
-    markups,
+    markups: [...existing, ...markups],
     calibrations,
     displayUnit: (spec.unit ?? 'm') as DisplayUnit,
   });
   writeFileSync(output, bytes);
-  return { output, markups: markups.length, scale: spec.scale ?? null };
+  return { output, markups: markups.length, kept: existing.length, scale: spec.scale ?? null };
 }
 
 /** Execute a takeoff spec: calibrate, scan-count each symbol type, write exports. */
@@ -341,10 +345,10 @@ export async function run(argv: string[]): Promise<void> {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { spec: { type: 'string' }, o: { type: 'string' } },
+        options: { spec: { type: 'string' }, o: { type: 'string' }, 'keep-existing': { type: 'boolean' } },
       });
-      if (positionals.length !== 1 || !values.spec) throw new Error('usage: pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf]');
-      process.stdout.write(JSON.stringify(await cmdAnnotate(positionals[0], values.spec, values.o), null, 2) + '\n');
+      if (positionals.length !== 1 || !values.spec) throw new Error('usage: pdf2takeoff annotate <file.pdf> --spec takeoff.yaml [-o out.pdf] [--keep-existing]');
+      process.stdout.write(JSON.stringify(await cmdAnnotate(positionals[0], values.spec, values.o, values['keep-existing'] ?? false), null, 2) + '\n');
       return;
     }
     if (cmd === 'set') {

@@ -113,4 +113,23 @@ const expectedPage = `External wall: ${formatLength(markupLength(markups[0], met
 check('viewport scale used in saved comment text', wall?.contents === expectedVp, `got "${wall?.contents}", want "${expectedVp}"`);
 check('viewport value differs from page-scale value', expectedVp !== expectedPage);
 
+// --- re-saves must not grow the file with orphaned annotation objects ------
+{
+  const objCount = async (b) => (await PDFDocument.load(b)).context.enumerateIndirectObjects().length;
+  let b = await buildAnnotatedPdf({ bytes, markups, calibrations, displayUnit: 'm' });
+  const first = await objCount(b);
+  for (let i = 0; i < 3; i++) b = await buildAnnotatedPdf({ bytes: b, markups, calibrations, displayUnit: 'm' });
+  const after = await objCount(b);
+  check('re-saves keep the object count stable', after === first, `first ${first}, after 3 re-saves ${after}`);
+}
+
+// --- depth comes from the value tail, not from a label mentioning depth -----
+{
+  const pad = { ...markups[4], id: 't8', label: 'Pad (depth 1 m) east', depth: 0.2 };
+  const saved = await buildAnnotatedPdf({ bytes, markups: [pad], calibrations, displayUnit: 'm' });
+  const { markups: back } = await readBack(saved);
+  const v = back.find((m) => m.type === 'volume');
+  check('label mentioning depth keeps the real depth', v?.depth !== undefined && Math.abs(v.depth - 0.2) < 0.005 && v.label === pad.label, `got depth ${v?.depth}, label "${v?.label}"`);
+}
+
 console.log('\nround-trip check: all steps passed');

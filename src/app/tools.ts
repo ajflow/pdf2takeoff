@@ -1,8 +1,9 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt } from './state';
-import { eventToView, viewToPdf, isTypingTarget } from './viewer';
+import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector } from './viewer';
+import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
@@ -10,11 +11,12 @@ import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
-import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
+import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
+import { scaleVotesFromWords, checkAgainstSheet } from '../engine/scale';
 import { dynamicFill } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
-import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, type Unit } from '../engine/units';
+import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -287,8 +289,17 @@ async function runFill(p: Pt): Promise<void> {
   hint('Filling…');
   const t0 = performance.now();
   try {
-    const raster = await renderRaster(state.pageNum, 3);
-    const result = dynamicFill(raster, p);
+    // room labels, the scale at the click and vector doorway bridges let the
+    // fill stop at doorways; page text and geometry are cached per page
+    const [raster, items, vec] = await Promise.all([
+      renderRaster(state.pageNum, 3),
+      getPageTextItems(state.pageNum).catch(() => []),
+      getPageVector(state.pageNum).catch(() => null),
+    ]);
+    const labels = roomLabelPoints(items);
+    const clickCal = calibrationForMarkup({ id: '', page: state.pageNum, type: 'area', label: '', points: [p], createdAt: 0 });
+    const bridges = vec ? doorBridgesFor(vec, clickCal?.metersPerPt) : [];
+    const result = dynamicFill(raster, p, undefined, { labels, bridges, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
     if ('error' in result) {
       hint(result.error);
       return;
@@ -590,11 +601,25 @@ function applyCalibration(): void {
   }
   const ptDist = distPt(pendingCalib.a, pendingCalib.b);
   const meters = toMeters(value, unit);
-  applyScaleToPages(meters / ptDist, `measured ${calibInput.value.trim()} ${unit}`);
+  const metersPerPt = meters / ptDist;
+  applyScaleToPages(metersPerPt, `measured ${calibInput.value.trim()} ${unit}`);
   closeCalibModal();
   renderMarkups();
   emit();
   hint('Scale set · press L for length, A for area, N to count');
+  void warnIfSheetDisagrees(state.pageNum, metersPerPt);
+}
+
+/** Compare a measured scale with the sheet's printed scale; hint on a mismatch. */
+async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<void> {
+  const items = await getPageTextItems(page).catch(() => []);
+  const words = items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));
+  const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+  const measured = metersPerPt / METERS_PER_PT;
+  const c = checkAgainstSheet(measured, votes, nts);
+  if (c.status !== 'disagrees' || c.sheetRatio === undefined) return;
+  const why = c.likely ? `, likely ${c.likely}` : '';
+  hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);
 }
 
 // --- keyboard ---

@@ -26,8 +26,9 @@ interface Manifest {
   head?: 'yolox-raw' | 'mmdet';
   // Tiled inference (see specs/detector-tiling.md): pxPerPt is the effective
   //   pixels-per-point at model input the model was trained for. Absent ⇒
-  //   whole-page letterbox (v1 behavior).
-  tile?: { pxPerPt: number; overlapPx: number };
+  //   whole-page letterbox (v1 behavior). maxSymbolPt: largest symbol in PDF
+  //   points; the overlap is raised to 1.25x it (default 30 pt).
+  tile?: { pxPerPt: number; overlapPx: number; maxSymbolPt?: number };
 }
 
 type Ort = typeof import('onnxruntime-web');
@@ -91,7 +92,14 @@ async function getEngine(): Promise<DetectorSession> {
       iou: m.iou,
       head: m.head,
       modelName: m.model,
-      tile: m.tile && m.tile.pxPerPt > 0 ? { pxPerPt: m.tile.pxPerPt, overlapPx: m.tile.overlapPx ?? 0 } : undefined,
+      tile:
+        m.tile && m.tile.pxPerPt > 0
+          ? {
+              pxPerPt: m.tile.pxPerPt,
+              overlapPx: m.tile.overlapPx ?? 0,
+              ...(m.tile.maxSymbolPt && m.tile.maxSymbolPt > 0 ? { maxSymbolPt: m.tile.maxSymbolPt } : {}),
+            }
+          : undefined,
       run: async (input, size) => {
         const feeds = { [s.inputNames[0]]: new ort.Tensor('float32', input, [1, 3, size, size]) };
         const out = await s.run(feeds);

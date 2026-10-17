@@ -13,6 +13,7 @@
 //     with page rotation keep exact fidelity by delegating to their renderer.
 
 import type { Pt } from './types.ts';
+import type { VecPage } from './vector.ts';
 
 /** Raster scale (px per PDF point) both scan tiers render at. */
 export const RASTER_SCALE = 3;
@@ -53,8 +54,10 @@ export interface DetectorSession {
    * band the model was trained on. pxPerPt is the effective pixels-per-point
    * AT MODEL INPUT, so training must present symbols at the same rate (see
    * specs/detector-tiling.md). Absent ⇒ legacy whole-page letterbox.
+   * maxSymbolPt is the largest symbol in PDF points (default 30); the
+   * overlap is raised to 1.25x it so no symbol is only ever seen cut off.
    */
-  tile?: { pxPerPt: number; overlapPx: number };
+  tile?: { pxPerPt: number; overlapPx: number; maxSymbolPt?: number };
   /** Run one [1,3,size,size] float input; return the raw output tensor. */
   run(input: Float32Array, size: number): Promise<{ data: Float32Array; dims: number[] }>;
 }
@@ -63,6 +66,11 @@ export interface ScanDeps {
   renderRaster(pageNum: number, scale: number): Promise<RasterPage>;
   /** null when no trained model is available — tier-1 CV runs instead. */
   detector(): Promise<DetectorSession | null>;
+  /**
+   * The page's vector geometry (vector.ts), or null for scans and pages the
+   * host cannot read as vectors. When present, the vector tier runs first.
+   */
+  vector?(pageNum: number): Promise<VecPage | null>;
   /** Optional sink for recoverable tier-2 failures (host decides logging). */
   warn?(message: string): void;
 }

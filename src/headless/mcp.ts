@@ -18,13 +18,17 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta } from './ops.ts';
+import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
-import { toMeters } from '../engine/units.ts';
-import { findScaleRatio } from '../engine/ocr.ts';
+import { METERS_PER_PT, toMeters } from '../engine/units.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
+import { dynamicFill } from '../engine/dynamicfill.ts';
+import { RASTER_SCALE } from '../engine/ports.ts';
+import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -98,6 +102,19 @@ const ptTuple = z.tuple([z.number(), z.number()]);
 
 export async function runMcpServer(): Promise<void> {
   const server = new McpServer({ name: 'pdf2takeoff', version: '0.1.0' });
+
+  // provenance attached to every numeric result: where the number came from
+  const scaleProvenance = (cal: Calibration | undefined) =>
+    cal ? { ratio: round(cal.metersPerPt / METERS_PER_PT, 2), source: cal.source } : null;
+  const bboxOf = (pts: { x: number; y: number }[]) =>
+    pts.length
+      ? [
+          round(Math.min(...pts.map((p) => p.x))),
+          round(Math.min(...pts.map((p) => p.y))),
+          round(Math.max(...pts.map((p) => p.x))),
+          round(Math.max(...pts.map((p) => p.y))),
+        ]
+      : null;
 
   server.registerTool(
     'open_document',
@@ -174,7 +191,7 @@ export async function runMcpServer(): Promise<void> {
     'read_text',
     {
       description:
-        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
+        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -197,22 +214,9 @@ export async function runMcpServer(): Promise<void> {
       // text items → whitespace-split words in PDF-point space. The text
       // layer is exact (born-digital), so confidence is 100 — the point of
       // this tool vs OCR-ing the render is that these numbers are trustworthy.
-      const words: { text: string; conf: number; xPt: number; yPt: number; wPt: number; hPt: number }[] = [];
+      const words: TextLayerWord[] = [];
       for (const item of tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]) {
-        const str = typeof item.str === 'string' ? item.str : '';
-        if (!str.trim()) continue;
-        const t = item.transform ?? [1, 0, 0, 1, 0, 0];
-        const x = t[4];
-        const y = t[5];
-        const w = Math.abs(item.width ?? 0) || str.length * 3;
-        const h = Math.abs(item.height ?? 0) || 8;
-        const parts = str.split(/\s+/).filter(Boolean);
-        let offset = 0;
-        for (const part of parts) {
-          const pw = (part.length / str.length) * w;
-          words.push({ text: part, conf: 100, xPt: x + offset + pw / 2, yPt: y + h / 2, wPt: pw, hPt: h });
-          offset += pw + (1 / Math.max(str.length, 1)) * w;
-        }
+        words.push(...wordsFromTextItem(typeof item.str === 'string' ? item.str : '', item.transform, item.width, item.height));
       }
       const clipped = region
         ? words.filter(
@@ -224,6 +228,8 @@ export async function runMcpServer(): Promise<void> {
           )
         : words;
       const scaleHit = findScaleRatio(clipped, 'text layer');
+      const { votes, nts } = scaleVotesFromWords(clipped, 'text layer');
+      const consensus = scaleConsensus(votes, nts);
       return text({
         page,
         wordCount: clipped.length,
@@ -234,6 +240,14 @@ export async function runMcpServer(): Promise<void> {
         scaleRatio: scaleHit
           ? { ratio: scaleHit.ratio, source: scaleHit.source, hint: `set_scale with ratio "1:${scaleHit.ratio}"` }
           : null,
+        // every scale note found and whether they agree; a conflict usually
+        // means viewports at different scales (clip with region) or a misread
+        scaleNotes: {
+          status: consensus.status,
+          nts: consensus.nts,
+          notes: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source, weight: v.weight, at: v.at })),
+          rivals: consensus.rivals,
+        },
       });
     },
   );
@@ -278,7 +292,83 @@ export async function runMcpServer(): Promise<void> {
       }
       const pages = all_pages ? Array.from({ length: d.doc.numPages }, (_, i) => i + 1) : [page];
       for (const p of pages) d.calibrations.set(p, { metersPerPt, source });
-      return text({ set: pages, metersPerPt: round(metersPerPt, 8), source });
+      // cross-check against the sheet's own scale notes (text layer)
+      const tc = await (await d.doc.getPage(page)).getTextContent();
+      const words = (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
+        wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
+      );
+      const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+      const setRatio = metersPerPt / METERS_PER_PT;
+      // measured scales carry hand-placement error, typed ratios do not
+      const check = checkAgainstSheet(setRatio, votes, nts, from_points ? 0.05 : 0.02);
+      return text({
+        set: pages,
+        metersPerPt: round(metersPerPt, 8),
+        ratio: round(setRatio, 2),
+        source,
+        sheetCheck: {
+          status: check.status,
+          ...(check.sheetRatio !== undefined ? { sheetRatio: round(check.sheetRatio, 3) } : {}),
+          sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
+          ...(check.status === 'disagrees'
+            ? { warning: `the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}. Check before measuring` }
+            : {}),
+        },
+      });
+    },
+  );
+
+  server.registerTool(
+    'fill_area',
+    {
+      description:
+        'Measure a room by clicking inside it (Dynamic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value) and room labels from the text layer to stop at doorways. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).default(1),
+        at: ptTuple.describe('a point inside the room, PDF points'),
+        label: z.string().optional(),
+      },
+    },
+    async ({ id, page, at, label }) => {
+      const d = getDoc(id);
+      if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
+      const raster = await renderRasterNode(d.doc, page, RASTER_SCALE);
+      const items = (await (await d.doc.getPage(page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+      const labels = roomLabelPoints(items);
+      const cal = d.calibrations.get(page);
+      const bridges = doorBridgesFor(await vectorDocPage(d.doc, page), cal?.metersPerPt);
+      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, bridges, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
+      if ('error' in result) throw new Error(result.error);
+      const markup: Markup = {
+        id: nextId('mcp'),
+        page,
+        type: 'area',
+        label: label ?? 'Filled area',
+        points: result.points,
+        createdAt: Date.now(),
+      };
+      d.markups.push(markup);
+      const gapPt = result.gapPx ? result.gapPx / RASTER_SCALE : 0;
+      return text({
+        markupId: markup.id,
+        label: markup.label,
+        value: cal ? round(markupArea(markup, cal.metersPerPt), 4) : null,
+        unit: 'm2',
+        calibrated: !!cal,
+        vertices: result.points.length,
+        provenance: {
+          method: 'dynamic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces; gapClosed* present only when a closed gap formed part of this room\'s boundary',
+          page,
+          scale: scaleProvenance(cal),
+          bbox: bboxOf(result.points),
+          // only gaps that actually bound this room; absent for a sealed room
+          ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
+          ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
+          roomLabelsOnSheet: labels.length,
+          vectorDoorBridges: bridges.length,
+        },
+      });
     },
   );
 
@@ -336,6 +426,12 @@ export async function runMcpServer(): Promise<void> {
         value: value === null ? null : round(value, 4),
         unit: type === 'count' ? 'each' : type === 'angle' ? 'deg' : type === 'length' || type === 'perimeter' ? 'm' : type === 'volume' ? 'm3' : 'm2',
         calibrated: type === 'angle' || type === 'count' ? true : !!cal,
+        provenance: {
+          method: 'geometry of the points you gave',
+          page,
+          scale: type === 'angle' || type === 'count' ? null : scaleProvenance(cal),
+          bbox: bboxOf(markup.points),
+        },
       });
     },
   );
@@ -392,6 +488,13 @@ export async function runMcpServer(): Promise<void> {
         provider: result.provider,
         label: result.hits[0]?.label ?? fallback,
         hits: result.hits.map((h) => ({ x: round(h.x), y: round(h.y) })),
+        provenance: {
+          method: result.provider === 'detector' ? 'trained symbol detector' : 'template match of the clicked symbol',
+          page,
+          bbox: bboxOf(result.hits),
+          ...(result.note ? { note: result.note } : {}),
+          ...('truncated' in result && result.truncated ? { truncated: true } : {}),
+        },
       });
     },
   );
@@ -400,13 +503,14 @@ export async function runMcpServer(): Promise<void> {
     'compare_revisions',
     {
       description:
-        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added).',
+        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
       inputSchema: {
         a: z.string().describe('path to the older revision (file or folder)'),
         b: z.string().describe('path to the newer revision (file or folder)'),
+        quantities: z.boolean().default(false).describe('files only: re-run the takeoff saved in A on B and report quantity deltas'),
       },
     },
-    async ({ a, b }) => {
+    async ({ a, b, quantities }) => {
       const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
       if (isDir(a) || isDir(b)) {
         if (!isDir(a) || !isDir(b)) throw new Error('folder comparison needs two folders');
@@ -416,7 +520,8 @@ export async function runMcpServer(): Promise<void> {
       const docA = await openPdf(new Uint8Array(readFileSync(a)));
       const docB = await openPdf(new Uint8Array(readFileSync(b)));
       const result = await compareDocs(docA, docB);
-      return text({ a: basename(a), b: basename(b), ...result });
+      const delta = quantities ? await quantityDelta(docA, docB) : undefined;
+      return text({ a: basename(a), b: basename(b), ...result, ...(delta ? { quantities: delta } : {}) });
     },
   );
 

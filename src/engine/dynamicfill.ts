@@ -42,6 +42,13 @@ const DOOR_MAX_M = 1.0;
 const HEAVY_PT = 0.9;
 /** Ink pieces spanning less than this (PDF pt) are marks, not structure (~1.3 m at 1:100). */
 const STRUCT_PT = 36;
+/**
+ * A label-driven split must cut off at least this share of the merged fill
+ * (or MIN_ROOM_M2 when the scale is known): a stray note in a wardrobe or
+ * alcove must not shave that alcove off the room.
+ */
+const MIN_SPLIT_SHARE = 0.15;
+const MIN_ROOM_M2 = 2;
 /** Label probes sit this far (PDF pt) around a label's centre. */
 const LABEL_PROBE_PT = 4;
 
@@ -301,6 +308,12 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       // and try closing wider gaps
       merged ??= { mask: mask.slice(), count: n, r };
       continue;
+    }
+    if (merged) {
+      // a split found by escalating past labels must cut off a room-sized part
+      const cut = merged.count - n;
+      const minRoomPx = hints.metersPerPt ? MIN_ROOM_M2 / (hints.metersPerPt / pxPerPt) ** 2 : 0;
+      if (cut < Math.max(MIN_SPLIT_SHARE * merged.count, minRoomPx)) break;
     }
     filled = mask;
     count = n;

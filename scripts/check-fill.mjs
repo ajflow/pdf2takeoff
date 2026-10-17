@@ -141,4 +141,41 @@ const aE = area(r.points);
 console.log(`room E (door in 8px walls): ${r.points.length} pts, area ${aE.toFixed(0)} (ideal ~179025)`);
 if (Math.abs(aE - 179025) / 179025 > 0.03) { console.error(`FAIL room E area off: ${aE}`); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench and thick-wall rooms traced; unbounded errors');
+
+// --- fourth sheet: label-driven splits must cut off a room, not an alcove ----
+const W4 = 700;
+const H4 = 400;
+const px4 = new Uint8ClampedArray(W4 * H4 * 4).fill(255);
+const box4 = (x0, y0, x1, y1) => {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = (y * W4 + x) * 4;
+    px4[i] = px4[i + 1] = px4[i + 2] = 0;
+  }
+};
+// room F: 20..320 x 20..320 with a 40 x 60 px wardrobe alcove off its right
+// wall (x 320..360, y 120..180), open to the room through a 60px gap between
+// wall ends; a note sits in the alcove, the room name in the room
+box4(20, 20, 320, 20); box4(20, 320, 320, 320); box4(20, 20, 20, 320);
+box4(320, 20, 320, 120); box4(320, 180, 320, 320);
+box4(320, 120, 360, 120); box4(320, 180, 360, 180); box4(360, 120, 360, 180);
+// rooms G and H: 400..680 x 20..320 split by a wall at x 540 with a 40px door between wall ends
+box4(400, 20, 680, 20); box4(400, 320, 680, 320); box4(400, 20, 400, 320); box4(680, 20, 680, 320);
+box4(540, 20, 540, 150); box4(540, 191, 540, 320);
+const raster4 = { width: W4, height: H4, data: px4, toPdf: (x, y) => ({ x, y: H4 - y }), toRaster: (x, y) => ({ x, y: H4 - y }) };
+const at4 = (x, y) => ({ x, y: H4 - y });
+
+// 8. a note in the alcove must not shave the alcove off: room + alcove ≈ 299*299 + 39*59 = 91702
+r = dynamicFill(raster4, at4(170, 200), undefined, { labels: [at4(170, 170), at4(340, 150)] });
+if ('error' in r) { console.error('FAIL room F (alcove note):', r.error); process.exit(1); }
+const aF = area(r.points);
+console.log(`room F (note in an alcove): area ${aF.toFixed(0)} (ideal ~91702 with the alcove)`);
+if (Math.abs(aF - 91702) / 91702 > 0.03) { console.error(`FAIL room F lost its alcove: ${aF}`); process.exit(1); }
+
+// 9. two labelled rooms joined by a door still split: room G = 139 x 299 = 41561
+r = dynamicFill(raster4, at4(470, 200), undefined, { labels: [at4(470, 170), at4(610, 170)] });
+if ('error' in r) { console.error('FAIL room G (labelled split):', r.error); process.exit(1); }
+const aG = area(r.points);
+console.log(`room G (labelled rooms joined by a door): area ${aG.toFixed(0)} (ideal ~41561)`);
+if (Math.abs(aG - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split: ${aG}`); process.exit(1); }
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; unbounded errors');

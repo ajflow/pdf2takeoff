@@ -185,10 +185,19 @@ export function wordsFromTextItem(str: string, transform: number[] | undefined, 
 }
 
 /**
+ * Drawing annotations that sit inside rooms but are not room names: stair
+ * arrows, level and setting-out marks, typical/similar notes, north points.
+ */
+const NOT_ROOM_NAMES = /^(dn|up|ffl|fl|rl|ssl|tos|tow|cl|eq|eq\.|typ\.?|typical|sim\.?|similar|nts|n|fall|fw|sw|ww|hw|ref|via|max|min|approx\.?)$/i;
+
+/**
  * Centres (PDF pt) of text items that read like room labels ("BED 1",
- * "KITCHEN", "WC"): at least two letters, and not a scale note or a pure
- * dimension. One point per text item, so a two-word label counts once.
- * Dynamic Fill uses these to tell that a fill has merged rooms.
+ * "KITCHEN", "WC"): at least two letters, and not a scale note, a dimension
+ * with a unit ("1200mm", "2.4 m"), a level ("RL 10.5") or a common
+ * annotation word ("DN", "TYP."). One point per text item, so a two-word
+ * label counts once. Dynamic Fill uses these to tell that a fill has merged
+ * rooms; a finish note that slips through ("CARPET") can only split off a
+ * room-sized part (see dynamicFill), never an alcove.
  */
 export function roomLabelPoints(items: { str?: string; transform?: number[]; width?: number; height?: number }[]): Pt[] {
   const out: Pt[] = [];
@@ -196,6 +205,9 @@ export function roomLabelPoints(items: { str?: string; transform?: number[]; wid
     const str = (it.str ?? '').trim();
     if ((str.match(/[A-Za-z]/g) ?? []).length < 2) continue;
     if (/scale|\d\s*:\s*\d|^nts$/i.test(str)) continue;
+    if (/\d\s*(mm|cm|m|m2|m²|m3|ft|in|")\b|\d\s*(mm|cm|m²|")$/i.test(str)) continue;
+    const first = str.split(/\s+/)[0];
+    if (NOT_ROOM_NAMES.test(str) || NOT_ROOM_NAMES.test(first)) continue;
     const words = wordsFromTextItem(str, it.transform, it.width, it.height);
     if (!words.length) continue;
     out.push({

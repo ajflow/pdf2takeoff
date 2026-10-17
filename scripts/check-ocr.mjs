@@ -7,7 +7,7 @@
 // (read_text) land where they are drawn at 0°, 90° and 270°.
 
 import { PDFDocument, StandardFonts, degrees } from 'pdf-lib';
-import { corridorAngles, pickCorridorReading, wordsFromTextItem } from '../src/engine/ocr.ts';
+import { corridorAngles, pickCorridorReading, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 
 let failed = false;
@@ -74,6 +74,16 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
     check(`text layer: "${second}" at ${d.rot}° placed within 1.5 pt`, err < 1.5, `got (${w?.xPt.toFixed(1)}, ${w?.yPt.toFixed(1)}), want (${ex.toFixed(1)}, ${ey.toFixed(1)})`);
     check(`text layer: "${second}" reports angle ${d.rot}°`, w && ((w.angleDeg - d.rot) % 360 + 360) % 360 < 0.5, `got ${w?.angleDeg}`);
   }
+}
+
+// room labels: names count, annotation words and dimensions do not
+{
+  const item = (str) => ({ str, transform: [8, 0, 0, 8, 100, 100], width: str.length * 5, height: 8 });
+  const names = ['BED 1', 'KITCHEN', 'WC', 'Living Room'];
+  const notNames = ['DN', 'UP', 'FFL 10.500', 'RL 12.3', '1200mm', '2.4 m', 'TYP.', 'SCALE 1:100', '3600', 'NTS'];
+  const kept = (s) => roomLabelPoints([item(s)]).length === 1;
+  check('room labels: names kept', names.every(kept), JSON.stringify(names.filter((s) => !kept(s))));
+  check('room labels: annotations and dimensions dropped', notNames.every((s) => !kept(s)), JSON.stringify(notNames.filter(kept)));
 }
 
 if (failed) process.exit(1);

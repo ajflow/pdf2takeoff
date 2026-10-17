@@ -2,7 +2,7 @@
 // Polygon, FreeText) so they open in Bluebeam Revu, Acrobat and friends.
 // Pure pdf-lib: bytes in, bytes out — works identically in any host.
 
-import { PDFDocument, PDFName, PDFString, type PDFObject } from 'pdf-lib';
+import { PDFDocument, PDFDict, PDFHexString, PDFName, PDFString, type PDFObject } from 'pdf-lib';
 import type { Calibration, Markup, Pt } from './types.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume, type DisplayUnit } from './units.ts';
@@ -88,6 +88,22 @@ export async function buildAnnotatedPdf(opts: AnnotateOptions): Promise<Uint8Arr
   const pages = pdfDoc.getPages();
   const { context } = pdfDoc;
 
+  // The bytes being loaded may already be a previous pdf2takeoff save
+  // (re-open → edit → save). Drop our old annotations so this save replaces
+  // them instead of stacking duplicates — and so deletions stay deleted.
+  for (const page of pages) {
+    const annots = page.node.Annots();
+    if (!annots) continue;
+    const entries = annots.asArray();
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const dict = context.lookup(entries[i]);
+      if (!(dict instanceof PDFDict)) continue;
+      const t = dict.get(PDFName.of('T'));
+      const author = t instanceof PDFString || t instanceof PDFHexString ? t.decodeText() : null;
+      if (author === ANNOTATION_AUTHOR) annots.remove(i);
+    }
+  }
+
   const addAnnot = (pageIndex: number, dict: Record<string, string | number | number[] | PDFObject>) => {
     const page = pages[pageIndex];
     const annots = page.node.Annots() ?? context.obj([]);
@@ -99,7 +115,7 @@ export async function buildAnnotatedPdf(opts: AnnotateOptions): Promise<Uint8Arr
   const common = (m: Markup) => ({
     Type: PDFName.of('Annot'),
     T: PDFString.of(ANNOTATION_AUTHOR),
-    Contents: PDFString.of(contentsFor(m, opts.calibrations, opts.displayUnit)),
+    Contents: PDFString.of(contentsFor(m, opts.calibrations, opts.displayUnit, opts.viewports)),
     M: PDFString.of(pdfDate()),
     C: COLOR_HEX[m.type],
     CA: 1,

@@ -5,10 +5,50 @@
 
 import type { Markup } from './types.ts';
 import { ANNOTATION_AUTHOR } from './annotate.ts';
-import { parseLength, toMeters, type Unit } from './units.ts';
+import { toMeters, type Unit } from './units.ts';
 
 /** A renderer's annotation object, accessed structurally. */
 export type AnnotationLike = Record<string, unknown> & { subtype?: string };
+
+const RESTORED = 'Restored';
+
+// Formatted value tails exactly as annotate.ts writes them, anchored at the
+// end of Contents: "Label: 12.50 m", "Label: 12.34 m²", "Label: 1.2 m³
+// (depth 150 mm)", "Label: 45.0°", "Label: 2'-6\"", "Label: 1". The label is
+// everything before the tail, so labels and note text may themselves contain
+// colons ("DL: type A", "Check: ceiling height").
+const NUM = String.raw`-?\d[\d.,]*`;
+const UNIT = String.raw`(?:mm|cm|m|in|ft)`;
+const FT_IN = String.raw`\d+(?:\.\d+)?'-\d+(?:\.\d+)?"`;
+const LENGTH_TAIL = new RegExp(`: (?:${NUM}\\s*${UNIT}|${FT_IN})$`);
+const AREA_TAIL = new RegExp(`: ${NUM}\\s*${UNIT}²$`);
+const VOLUME_TAIL = new RegExp(`: ${NUM}\\s*${UNIT}³(?: \\(depth [^)]*\\))?$`);
+const ANGLE_TAIL = /: -?\d+(?:\.\d+)?°$/;
+const COUNT_TAIL = /: 1$/;
+
+/** Depth as annotate.ts writes it in any display unit — "150 mm", "0.20 m",
+ *  "2'-6"" — converted to metres (undefined when unparseable). */
+function depthMeters(raw: string): number | undefined {
+  const s = raw.trim();
+  const su = s.match(/^(-?\d[\d.,]*)\s*(mm|cm|m|in|ft)$/i);
+  if (su) {
+    const v = parseFloat(su[1].replace(',', '.'));
+    return Number.isFinite(v) ? toMeters(v, su[2].toLowerCase() as Unit) : undefined;
+  }
+  const fi = s.match(/^(-?\d+(?:\.\d+)?)'\s*-?\s*(\d+(?:\.\d+)?)\s*"?$/);
+  if (fi) {
+    const v = parseFloat(fi[1]) + parseFloat(fi[2]) / 12;
+    return Number.isFinite(v) ? toMeters(v, 'ft') : undefined;
+  }
+  return undefined;
+}
+
+/** Label sitting before a value tail, or null when the tail doesn't match. */
+function labelBefore(contents: string, tail: RegExp): string | null {
+  const m = contents.match(tail);
+  if (!m || m.index === undefined) return null;
+  return contents.slice(0, m.index).trimEnd() || RESTORED;
+}
 
 export function parseMarkups(annots: AnnotationLike[], page: number, startIndex: number): Markup[] {
   const found: Markup[] = [];
@@ -33,7 +73,6 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     const contents = (statusMatch || layerMatch)
       ? contentsRaw.slice(0, (statusMatch ?? layerMatch)!.index!).trimEnd()
       : contentsRaw;
-    const label = contents.includes(':') ? contents.split(':')[0].trim() : contents || 'Restored';
 
     const toPt = (x: number, y: number): { x: number; y: number } => ({ x, y });
     let points: { x: number; y: number }[] = [];
@@ -51,33 +90,54 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
 
     if (points.length === 0) continue;
 
-    // Our writer encodes the value in Contents, so the unit suffix tells the
-    // type back: ² = area, ³ (+ depth note) = volume, ° = angle, a bare
-    // value on a Polygon = perimeter. Uncalibrated comments carry no value
-    // and degrade to the geometry's base type.
+    // Type and label come from the value tail, not the first colon: notes and
+    // uncalibrated markups carry the label alone, everything else is
+    // "label: formatted value". Angles end in °, areas in ², volumes in ³
+    // (+ depth), counts are exactly ": 1", lengths/perimeters end in a unit
+    // (or ft-in like 2'-6").
     let type: Markup['type'];
     let depth: number | undefined;
+    let label = contents || RESTORED;
     if (subtype === 'FreeText') {
-      type = /: 1$/.test(contents) ? 'count' : 'note';
+      const c = labelBefore(contents, COUNT_TAIL);
+      if (c !== null) {
+        type = 'count';
+        label = c;
+      } else {
+        type = 'note';
+      }
     } else if (subtype === 'Polygon') {
-      if (contents.includes('³')) {
+      const v = labelBefore(contents, VOLUME_TAIL);
+      const ar = labelBefore(contents, AREA_TAIL);
+      const pe = labelBefore(contents, LENGTH_TAIL);
+      if (v !== null) {
         type = 'volume';
-        const d = contents.match(/\(depth ([^)]+?)\s*(m|ft)\)/);
-        if (d) {
-          const parsed = parseLength(d[1], d[2] as Unit);
-          if (parsed != null) depth = toMeters(parsed, d[2] as Unit);
-        }
-      } else if (contents.includes('²')) {
+        label = v;
+        const d = contents.match(/\(depth ([^)]*)\)/);
+        if (d) depth = depthMeters(d[1]);
+      } else if (ar !== null) {
         type = 'area';
-      } else if (contents.includes(':')) {
+        label = ar;
+      } else if (pe !== null) {
         type = 'perimeter';
+        label = pe;
       } else {
         type = 'area';
       }
-    } else if (subtype === 'PolyLine' && contents.includes('°')) {
-      type = 'angle';
+    } else if (subtype === 'PolyLine') {
+      const ang = labelBefore(contents, ANGLE_TAIL);
+      if (ang !== null) {
+        type = 'angle';
+        label = ang;
+      } else {
+        type = 'length';
+        const l = labelBefore(contents, LENGTH_TAIL);
+        if (l !== null) label = l;
+      }
     } else {
       type = 'length';
+      const l = labelBefore(contents, LENGTH_TAIL);
+      if (l !== null) label = l;
     }
 
     found.push({

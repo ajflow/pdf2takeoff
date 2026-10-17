@@ -58,5 +58,30 @@ if ('error' in scan || 'error' in fill) {
   check('quantities: lengths listed as not re-measured', q.notReMeasured.some((n) => n.type === 'length' && n.markups === 1));
 }
 
+// an unchanged L-shaped room re-measures unchanged: its vertex mean sits on
+// the inner corner, outside the room, so the re-fill must start inside it
+{
+  const { PDFDocument, rgb } = await import('pdf-lib');
+  const draw = async () => {
+    const d = await PDFDocument.create();
+    const page = d.addPage([400, 400]);
+    const L = [[100, 100], [300, 100], [300, 200], [200, 200], [200, 300], [100, 300]];
+    for (let i = 0; i < L.length; i++) {
+      const [x1, y1] = L[i];
+      const [x2, y2] = L[(i + 1) % L.length];
+      page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 1, color: rgb(0, 0, 0) });
+    }
+    return d;
+  };
+  const a = await draw();
+  const bytes = await a.save();
+  const poly = [[100.5, 100.5], [299.5, 100.5], [299.5, 199.5], [199.5, 199.5], [199.5, 299.5], [100.5, 299.5]].map(([x, y]) => ({ x, y }));
+  const markups = [{ id: 'L', page: 1, type: 'area', label: 'L room', points: poly, createdAt: 1 }];
+  const saved = await openPdf(await buildAnnotatedPdf({ bytes, markups, calibrations: new Map(), displayUnit: 'm' }));
+  const q = await quantityDelta(saved, await openPdf(await (await draw()).save()));
+  const l = q.areas[0];
+  check('quantities: unchanged L-shaped room re-measures unchanged', l && l.bPt2 !== null && Math.abs(l.changePct) < 3, JSON.stringify(l));
+}
+
 if (failed) process.exit(1);
 console.log('PASS: revision diffs and quantity delta');

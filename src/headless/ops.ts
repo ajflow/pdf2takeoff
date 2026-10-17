@@ -17,7 +17,8 @@ import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
 import type { Markup, Pt } from '../engine/types.ts';
 import { vectorDiff, textDiff, type VectorDiff, type TextDiff } from '../engine/revdiff.ts';
-import { roomLabelPoints, wordsFromTextItem } from '../engine/ocr.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../engine/ocr.ts';
+import { metersPerPtForRatio } from '../engine/units.ts';
 import { dynamicFill } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 
@@ -164,6 +165,41 @@ export interface QuantityDelta {
   notReMeasured: { type: string; markups: number }[];
 }
 
+/**
+ * A point inside a polygon, also when it is concave (an L-shaped room's
+ * vertex mean can fall outside it): the middle of the widest inside span on
+ * a horizontal line through the vertex mean, else through mid-height.
+ */
+function interiorPoint(points: Pt[]): Pt {
+  const mean = { x: points.reduce((s, p) => s + p.x, 0) / points.length, y: points.reduce((s, p) => s + p.y, 0) / points.length };
+  const ys = points.map((p) => p.y);
+  for (const y of [mean.y, (Math.min(...ys) + Math.max(...ys)) / 2, mean.y + 0.25 * (Math.max(...ys) - mean.y), mean.y - 0.25 * (mean.y - Math.min(...ys))]) {
+    const xs: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+    }
+    xs.sort((p, q) => p - q);
+    let best: Pt | null = null;
+    let width = 0;
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+      if (xs[i + 1] - xs[i] > width) {
+        width = xs[i + 1] - xs[i];
+        best = { x: (xs[i] + xs[i + 1]) / 2, y };
+      }
+    }
+    if (best) return best;
+  }
+  return mean;
+}
+
+/** The sheet's printed scale (text layer), as metres per PDF point. */
+async function sheetMetersPerPt(doc: PDFDocumentProxy, page: number): Promise<number | undefined> {
+  const hit = findScaleRatio(await pageWords(doc, page).catch(() => []), 'text layer');
+  return hit ? metersPerPtForRatio(hit.ratio) : undefined;
+}
+
 function polyAreaPt2(points: Pt[]): number {
   let a = 0;
   for (let i = 0; i < points.length; i++) {
@@ -177,9 +213,10 @@ function polyAreaPt2(points: Pt[]): number {
 /**
  * Re-run the pdf2takeoff markups saved in revision A on revision B: each
  * counted symbol type is re-scanned on B from its first instance, each area
- * is re-filled on B from its centroid (Dynamic Fill with labels and vector
- * doorway bridges). Lengths and other drawn measures can't be re-derived
- * from a point, so they are listed as not re-measured.
+ * is re-filled on B from a point inside it (Dynamic Fill with labels, vector
+ * doorway bridges and the sheet's printed scale, so doorways close as they
+ * did in A). Lengths and other drawn measures can't be re-derived from a
+ * point, so they are listed as not re-measured.
  */
 export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentProxy): Promise<QuantityDelta> {
   const markups = await readMarkups(docA);
@@ -212,14 +249,12 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
       areas.push({ page: m.page, label: m.label, aPt2, bPt2: null, changePct: null, note: 'sheet missing in B' });
       continue;
     }
-    const c = {
-      x: m.points.reduce((s, p) => s + p.x, 0) / m.points.length,
-      y: m.points.reduce((s, p) => s + p.y, 0) / m.points.length,
-    };
+    const c = interiorPoint(m.points);
+    const metersPerPt = (await sheetMetersPerPt(docB, m.page)) ?? (await sheetMetersPerPt(docA, m.page));
     const raster = await renderRasterNode(docB, m.page, RASTER_SCALE);
     const items = (await (await docB.getPage(m.page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
-    const bridges = doorBridgesFor(await vectorDocPage(docB, m.page), undefined);
-    const r = dynamicFill(raster, c, undefined, { labels: roomLabelPoints(items), bridges });
+    const bridges = doorBridgesFor(await vectorDocPage(docB, m.page), metersPerPt);
+    const r = dynamicFill(raster, c, undefined, { labels: roomLabelPoints(items), bridges, ...(metersPerPt ? { metersPerPt } : {}) });
     if ('error' in r) {
       areas.push({ page: m.page, label: m.label, aPt2, bPt2: null, changePct: null, note: r.error });
       continue;

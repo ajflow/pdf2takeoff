@@ -1,8 +1,8 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt } from './state';
-import { eventToView, viewToPdf, isTypingTarget } from './viewer';
+import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems } from './viewer';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
@@ -10,7 +10,7 @@ import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
 import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
-import { findScaleRatio, nearestDimensionValue } from '../engine/ocr';
+import { findScaleRatio, nearestDimensionValue, roomLabelPoints } from '../engine/ocr';
 import { dynamicFill } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
@@ -288,7 +288,10 @@ async function runFill(p: Pt): Promise<void> {
   const t0 = performance.now();
   try {
     const raster = await renderRaster(state.pageNum, 3);
-    const result = dynamicFill(raster, p);
+    // room labels and the scale at the click let the fill stop at doorways
+    const labels = roomLabelPoints(await getPageTextItems(state.pageNum).catch(() => []));
+    const clickCal = calibrationForMarkup({ id: '', page: state.pageNum, type: 'area', label: '', points: [p], createdAt: 0 });
+    const result = dynamicFill(raster, p, undefined, { labels, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
     if ('error' in result) {
       hint(result.error);
       return;

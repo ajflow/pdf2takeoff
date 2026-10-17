@@ -198,3 +198,25 @@ export function wordsFromTextItem(str: string, transform: number[] | undefined, 
   }
   return words;
 }
+
+/**
+ * Centres (PDF pt) of text items that read like room labels ("BED 1",
+ * "KITCHEN", "WC"): at least two letters, and not a scale note or a pure
+ * dimension. One point per text item, so a two-word label counts once.
+ * Dynamic Fill uses these to tell that a fill has merged rooms.
+ */
+export function roomLabelPoints(items: { str?: string; transform?: number[]; width?: number; height?: number }[]): Pt[] {
+  const out: Pt[] = [];
+  for (const it of items) {
+    const str = (it.str ?? '').trim();
+    if ((str.match(/[A-Za-z]/g) ?? []).length < 2) continue;
+    if (/scale|\d\s*:\s*\d|^nts$/i.test(str)) continue;
+    const words = wordsFromTextItem(str, it.transform, it.width, it.height);
+    if (!words.length) continue;
+    out.push({
+      x: words.reduce((a, w) => a + w.xPt, 0) / words.length,
+      y: words.reduce((a, w) => a + w.yPt, 0) / words.length,
+    });
+  }
+  return out;
+}

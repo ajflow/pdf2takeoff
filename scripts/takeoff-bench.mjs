@@ -19,7 +19,7 @@ import { renderRasterNode } from '../src/headless/raster-node.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
 import { cvScan } from '../src/engine/scan-cv.ts';
-import { findScaleRatio, wordsFromTextItem } from '../src/engine/ocr.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
 import { metersPerPtForRatio } from '../src/engine/units.ts';
 
 const SCALE = 100; // drawings below are 1:100
@@ -89,7 +89,11 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     w(3, 0, 3, 1.05); w(3, 1.95, 3, 3);
     page.drawText('BED 1', { x: 40 + 1.2 * M, y: 200 + 2.2 * M, size: 6, font });
     page.drawText('BED 2', { x: 40 + 4.2 * M, y: 200 + 2.2 * M, size: 6, font });
-    cases.push({ id: 'fill/interior-door', kind: 'fill', page: 1, at: pt(40, 200, 1.5, 1.0), expectM2: inner(3, 3), known: 'P13' });
+    const at = pt(40, 200, 1.5, 1.0);
+    cases.push({ id: 'fill/interior-door', kind: 'fill', page: 1, at, expectM2: inner(3, 3) });
+    cases.push({ id: 'fill/interior-door-labels-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'labels' });
+    cases.push({ id: 'fill/interior-door-scale-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'scale' });
+    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none', known: 'P13 neck cuts' });
   }
   // F: 4 x 3 m room in 0.2 m filled walls (drawn as filled rectangles), 0.9 m door to outside
   {
@@ -158,8 +162,15 @@ for (const c of cases) {
   let detail = '';
   try {
     if (c.kind === 'fill') {
+      // like the app: room labels from the text layer, scale when calibrated
       const raster = await renderRasterNode(pdf, c.page, RASTER_SCALE);
-      const r = dynamicFill(raster, c.at);
+      const items = (await (await pdf.getPage(c.page)).getTextContent()).items;
+      const use = c.hints ?? 'all';
+      const hints = {
+        ...(use === 'all' || use === 'labels' ? { labels: roomLabelPoints(items) } : {}),
+        ...(use === 'all' || use === 'scale' ? { metersPerPt: mpp } : {}),
+      };
+      const r = dynamicFill(raster, c.at, undefined, hints);
       if ('error' in r) {
         got = null;
         detail = r.error;

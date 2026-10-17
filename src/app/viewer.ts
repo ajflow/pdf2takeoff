@@ -91,6 +91,13 @@ export async function closePdf(): Promise<void> {
   }
 }
 
+/** The page's text-layer items (empty for scans or before a document loads). */
+export async function getPageTextItems(pageNum: number): Promise<{ str?: string; transform?: number[]; width?: number; height?: number }[]> {
+  if (!doc) return [];
+  const page = await doc.getPage(pageNum);
+  return (await page.getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+}
+
 /** Load annotations written by pdf2takeoff (or any tool) back into the state. */
 export async function getPageAnnotations(pageNum: number) {
   if (!doc) return [];

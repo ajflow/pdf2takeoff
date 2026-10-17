@@ -13,6 +13,12 @@
 // fill leaks, so the least intervention that bounds the region wins; a
 // shoelace-vs-pixel-count check rejects pathological traces
 // (docs/research/patch-plan.md, patch 2).
+//
+// Rooms joined by an interior door never leak, so two hints escalate the
+// closing further (patch-plan-2 P13): with a known scale, doorways up to
+// 1.0 m between wall ends are always closed; and a fill holding two or more
+// room labels from the text layer keeps escalating until the clicked room
+// holds one.
 
 import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
@@ -26,7 +32,28 @@ const MAX_FILL_FRACTION = 0.4;
  */
 const GAP_HALF = [0, 8, 16, 28, 44];
 
-export type FillResult = { points: Pt[] } | { error: string };
+export type FillResult = { points: Pt[]; gapPx?: number } | { error: string };
+
+/** Widest doorway closed automatically once the page scale is known (m). */
+const DOOR_MAX_M = 1.0;
+/** Label probes sit this far (PDF pt) around a label's centre. */
+const LABEL_PROBE_PT = 4;
+
+/** Optional context that lets the fill separate rooms joined by a doorway. */
+export interface FillHints {
+  /**
+   * Centres (PDF pt) of room-label text items from the text layer (see
+   * roomLabelPoints). A fill holding two or more labels has merged rooms,
+   * so the gap closing keeps escalating until the clicked room holds one.
+   */
+  labels?: Pt[];
+  /**
+   * Calibrated scale at the click. Doorways up to DOOR_MAX_M between two
+   * wall ends are then always closed, so a room joined to the next by a
+   * door fills on its own.
+   */
+  metersPerPt?: number;
+}
 
 /** Threshold for pixels no closing on the ladder ever turns into wall. */
 const NEVER = 255;
@@ -112,7 +139,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number): Uint8Array {
   return thr;
 }
 
-export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): FillResult {
+export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
   const w = raster.width;
   const h = raster.height;
   const data = raster.data;
@@ -132,18 +159,39 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
   });
 
   // flood fill (4-connectivity keeps the boundary tight), boundary = ink with
-  // gaps up to 2r closed; escalate only while the fill leaks. A fill stops
-  // the moment it passes the cap: a leak is a leak, however far it would run.
+  // gaps up to 2r closed; escalate only while the fill leaks or holds more
+  // than one room label. A fill stops the moment it passes the cap: a leak
+  // is a leak, however far it would run.
   const cap = MAX_FILL_FRACTION * w * h;
   const mask = new Uint8Array(w * h);
   const thr = closingThresholds(ink, w, h);
+  const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
+  // a known scale puts the doorway rung on the ladder and starts there:
+  // every smaller rung only closes a subset of what it closes
+  const doorR = hints.metersPerPt ? Math.min(NEVER - 1, Math.ceil(((DOOR_MAX_M / hints.metersPerPt) * pxPerPt) / 2)) : 0;
+  const ladder = [...new Set([...GAP_HALF, doorR])].filter((r) => r >= doorR).sort((a, b) => a - b);
+  const labelIdx = (hints.labels ?? []).map((l) => {
+    const c = raster.toRaster(l.x, l.y);
+    const rp = LABEL_PROBE_PT * pxPerPt;
+    const probes: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      const px = Math.round(c.x + rp * Math.cos((k * Math.PI) / 4));
+      const py = Math.round(c.y + rp * Math.sin((k * Math.PI) / 4));
+      if (px >= 0 && py >= 0 && px < w && py < h) probes.push(py * w + px);
+    }
+    return probes;
+  });
+  const labelsIn = (m: Uint8Array) => labelIdx.filter((probes) => probes.some((i) => m[i])).length;
+
   let filled: Uint8Array | null = null;
   let count = 0;
+  let gapR = 0;
+  let merged: { mask: Uint8Array; count: number; r: number } | null = null;
   const stack: number[] = [];
-  // lowest threshold among pixels the last leaking fill reached: a rung below
-  // it blocks none of them, so its fill would retrace the same leak exactly
+  // lowest threshold among pixels the last fill reached: a rung below it
+  // blocks none of them, so its fill would retrace the same region exactly
   let reachedMin = 0;
-  for (const r of GAP_HALF) {
+  for (const r of ladder) {
     if (r < reachedMin) continue;
     mask.fill(0);
     stack.length = 0;
@@ -167,18 +215,30 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
       if (idx >= w && !mask[idx - w] && thr[idx - w] > r) visit(idx - w);
       if (idx + w < w * h && !mask[idx + w] && thr[idx + w] > r) visit(idx + w);
     }
-    if (n <= cap) {
-      filled = mask;
-      count = n;
-      break;
+    if (n > cap) continue; // leaked
+    if (labelIdx.length && labelsIn(mask) >= 2) {
+      // bounded but spans several labelled rooms: keep it as the fallback
+      // and try closing wider gaps
+      merged ??= { mask: mask.slice(), count: n, r };
+      continue;
     }
+    filled = mask;
+    count = n;
+    gapR = r;
+    break;
+  }
+  if (!filled && merged) {
+    filled = merged.mask;
+    count = merged.count;
+    gapR = merged.r;
   }
   if (!filled) return unbounded();
+  const region: Uint8Array = filled;
 
   // Moore-neighbour boundary trace, clockwise from the topmost-leftmost pixel
   let startIdx = -1;
-  for (let i = 0; i < filled.length; i++) {
-    if (filled[i]) {
+  for (let i = 0; i < region.length; i++) {
+    if (region[i]) {
       startIdx = i;
       break;
     }
@@ -193,7 +253,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
     [0, -1],
     [1, -1],
   ] as const;
-  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && filled[y * w + x];
+  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && region[y * w + x];
   const boundaryPts: { x: number; y: number }[] = [];
   let cx = startIdx % w;
   let cy = (startIdx / w) | 0;
@@ -201,7 +261,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
   const startX = cx;
   const startY = cy;
   let firstDir = -1;
-  for (let guard = 0; guard < 4 * filled.length; guard++) {
+  for (let guard = 0; guard < 4 * region.length; guard++) {
     // search clockwise starting 90° left of the heading, so the trace hugs
     // the outside and follows concave corners instead of cutting across them
     let d = -1;
@@ -234,7 +294,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150): Fill
   if (area < 0.8 * (count - boundaryPts.length) || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
-  return { points };
+  return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}) };
 }
 
 function shoelace(pts: { x: number; y: number }[]): number {

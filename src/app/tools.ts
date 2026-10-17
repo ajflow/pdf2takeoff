@@ -2,7 +2,8 @@
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
 import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems } from './viewer';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector } from './viewer';
+import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
@@ -289,10 +290,12 @@ async function runFill(p: Pt): Promise<void> {
   const t0 = performance.now();
   try {
     const raster = await renderRaster(state.pageNum, 3);
-    // room labels and the scale at the click let the fill stop at doorways
+    // room labels, the scale at the click and vector doorway bridges let the fill stop at doorways
     const labels = roomLabelPoints(await getPageTextItems(state.pageNum).catch(() => []));
     const clickCal = calibrationForMarkup({ id: '', page: state.pageNum, type: 'area', label: '', points: [p], createdAt: 0 });
-    const result = dynamicFill(raster, p, undefined, { labels, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
+    const vec = await getPageVector(state.pageNum).catch(() => null);
+    const bridges = vec ? doorBridgesFor(vec, clickCal?.metersPerPt) : [];
+    const result = dynamicFill(raster, p, undefined, { labels, bridges, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
     if ('error' in result) {
       hint(result.error);
       return;

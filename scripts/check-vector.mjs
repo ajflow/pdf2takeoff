@@ -12,6 +12,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { vectorize } from '../src/engine/vector.ts';
 import { vectorScan } from '../src/engine/scan-vector.ts';
+import { doorBridges } from '../src/engine/fill-vector.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failed = false;
@@ -99,6 +100,29 @@ async function vec(bytes) {
   check('vector scan: finds the symbol at the click', r && r.provider === 'vector');
   check('vector scan: 5 instances (rotated, mirrored, touching a wall); lookalike and bigger copy excluded', r?.hits.length === 5, r && JSON.stringify(r.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
   check('vector scan: nothing under an empty click', vectorScan(v, { x: 500, y: 50 }) === null);
+}
+
+// doorway bridges
+{
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([600, 400]);
+  const black = rgb(0, 0, 0);
+  const line = (x1, y1, x2, y2, t) => page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: t, color: black });
+  // A: a diagonal thin wall with a 20 pt door between two free ends
+  line(50, 50, 100, 100, 0.7);
+  line(114.1, 114.1, 160, 160, 0.7);
+  // B: a heavy partition ending 25 pt short of a heavy wall (doorway at a corner)
+  line(300, 50, 300, 150, 2);
+  line(250, 175, 400, 175, 2);
+  // C: a thin bench line ending 20 pt short of a heavy wall's side
+  line(420, 100, 480, 100, 0.5);
+  line(500, 50, 500, 200, 2);
+  const { v } = await vec(await doc.save());
+  const br = doorBridges(v, 30);
+  const has = (x1, y1, x2, y2) => br.some((b) => (near(b.x1, x1, 0.6) && near(b.y1, y1, 0.6) && near(b.x2, x2, 0.6) && near(b.y2, y2, 0.6)) || (near(b.x1, x2, 0.6) && near(b.y1, y2, 0.6) && near(b.x2, x1, 0.6) && near(b.y2, y1, 0.6)));
+  check('bridges: diagonal door between facing wall ends', has(100, 100, 114.1, 114.1), JSON.stringify(br));
+  check('bridges: heavy partition end runs into the heavy wall', has(300, 150, 300, 175), JSON.stringify(br));
+  check('bridges: thin bench end is never closed onto a wall side', !br.some((b) => near(b.x1, 480, 0.6) || near(b.x2, 480, 0.6)), JSON.stringify(br));
 }
 
 if (failed) process.exit(1);

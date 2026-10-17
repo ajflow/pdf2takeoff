@@ -18,7 +18,9 @@
 // closing further (patch-plan-2 P13): with a known scale, doorways up to
 // 1.0 m between wall ends are always closed; and a fill holding two or more
 // room labels from the text layer keeps escalating until the clicked room
-// holds one.
+// holds one. On born-digital sheets the host can also pass doorway bridges
+// from the vector layer (fill-vector.ts, P18), which close doors at any
+// angle, including in diagonal walls.
 
 import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
@@ -57,6 +59,12 @@ export interface FillHints {
    * door fills on its own.
    */
   metersPerPt?: number;
+  /**
+   * Virtual wall lines (PDF pt) across doorways, from the vector layer
+   * (fill-vector.ts doorBridges). Drawn into the ink mask before filling, so
+   * doors in diagonal or curved walls close too.
+   */
+  bridges?: { x1: number; y1: number; x2: number; y2: number }[];
 }
 
 /** Threshold for pixels no closing on the ladder ever turns into wall. */
@@ -208,6 +216,23 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // ink mask once; each retry only thickens the gap-closing on top of it
   const ink = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = lum(i) < tolerance ? 1 : 0;
+  // vector doorway bridges become ink: 3 px wide so 4-connected fills can't slip through
+  for (const b of hints.bridges ?? []) {
+    const a = raster.toRaster(b.x1, b.y1);
+    const c = raster.toRaster(b.x2, b.y2);
+    const n = Math.ceil(Math.hypot(c.x - a.x, c.y - a.y)) + 1;
+    for (let k = 0; k <= n; k++) {
+      const x = Math.round(a.x + ((c.x - a.x) * k) / n);
+      const y = Math.round(a.y + ((c.y - a.y) * k) / n);
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const px = x + ox;
+          const py = y + oy;
+          if (px >= 0 && py >= 0 && px < w && py < h) ink[py * w + px] = 1;
+        }
+      }
+    }
+  }
 
   const unbounded = (): FillResult => ({
     error: 'that region is not bounded by lines on all sides — draw around it with the Area tool instead',

@@ -18,7 +18,8 @@ import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
-import { scanDocAt } from '../src/headless/ops.ts';
+import { scanDocAt, vectorDocPage } from '../src/headless/ops.ts';
+import { doorBridgesFor } from '../src/engine/fill-vector.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
 import { metersPerPtForRatio } from '../src/engine/units.ts';
 
@@ -107,12 +108,11 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
   // G: room with a diagonal wall carrying a 0.9 m door to outside
   {
     const w = wall(page, 560, 200, T);
-    w(0, 0, 4, 0); w(4, 0, 4, 2); w(4, 2, 3, 3); w(3, 3, 0, 3); w(0, 3, 0, 0);
-    // door in the diagonal: replace the 4,2 → 3,3 segment with two pieces leaving a gap
-    page.drawLine({ start: pt(560, 200, 4, 2), end: pt(560, 200, 3, 3), thickness: T + 1.5, color: rgb(1, 1, 1) });
+    w(0, 0, 4, 0); w(4, 0, 4, 2); w(3, 3, 0, 3); w(0, 3, 0, 0);
+    // the diagonal 4,2 → 3,3 drawn as two pieces leaving a 0.96 m door
     w(4, 2, 3.84, 2.16); w(3.16, 2.84, 3, 3);
     const expect = (4 * 3 - 0.5) - 0.06; // 4x3 minus the 1x1 corner triangle, minus stroke allowance
-    cases.push({ id: 'fill/diagonal-wall-door', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05, known: 'P18' });
+    cases.push({ id: 'fill/diagonal-wall-door', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05 });
   }
 }
 
@@ -189,6 +189,7 @@ for (const c of cases) {
       const hints = {
         ...(use === 'all' || use === 'labels' ? { labels: roomLabelPoints(items) } : {}),
         ...(use === 'all' || use === 'scale' ? { metersPerPt: mpp } : {}),
+        ...(use === 'all' ? { bridges: doorBridgesFor(await vectorDocPage(pdf, c.page), mpp) } : {}),
       };
       const r = dynamicFill(raster, c.at, undefined, hints);
       if ('error' in r) {

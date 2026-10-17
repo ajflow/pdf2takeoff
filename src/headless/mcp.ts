@@ -18,7 +18,8 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage } from './ops.ts';
+import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
@@ -337,7 +338,8 @@ export async function runMcpServer(): Promise<void> {
       const items = (await (await d.doc.getPage(page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
       const labels = roomLabelPoints(items);
       const cal = d.calibrations.get(page);
-      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
+      const bridges = doorBridgesFor(await vectorDocPage(d.doc, page), cal?.metersPerPt);
+      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, bridges, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
       if ('error' in result) throw new Error(result.error);
       const markup: Markup = {
         id: nextId('mcp'),
@@ -364,6 +366,7 @@ export async function runMcpServer(): Promise<void> {
           gapClosedPt: round(gapPt, 1),
           ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}),
           roomLabelsOnSheet: labels.length,
+          vectorDoorBridges: bridges.length,
         },
       });
     },

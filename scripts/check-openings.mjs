@@ -24,11 +24,9 @@ const OUTER = 0.2 * M; // outer wall thickness (pt)
 const INNER = 0.1 * M; // partition thickness (pt)
 const THIN = 0.5; // arcs, leaves, glazing, furniture
 
-const doc = await PDFDocument.create();
-const page = doc.addPage([W, H]);
-const font = await doc.embedFont(StandardFonts.Helvetica);
 // plan metres (y down) to page points (y up)
 const P = (x, y) => ({ x: OX + x * M, y: H - (OY + y * M) });
+let doc, page, font;
 const wall = (x0, y0, x1, y1, thickness) => page.drawLine({ start: P(x0, y0), end: P(x1, y1), thickness, color: BLACK });
 const thin = (x0, y0, x1, y1) => wall(x0, y0, x1, y1, THIN);
 /** quarter arc from a to b around centre c (plan metres), drawn as a thin stroke */
@@ -65,7 +63,13 @@ const doorH = (y, x0, width, dir, hingeAtEnd = false) => {
 const windowH = (y, x0, x1) => { thin(x0, y - 0.05, x1, y - 0.05); thin(x0, y + 0.05, x1, y + 0.05); };
 const windowV = (x, y0, y1) => { thin(x - 0.05, y0, x - 0.05, y1); thin(x + 0.05, y0, x + 0.05, y1); };
 
-// --- building 12 x 8 m: rooms A (0-4 x 0-8), B (4-12 x 0-4), C (4-8 x 4-8), D (8-12 x 4-8)
+/** Builds the plan on a fresh page of `d` and returns it. */
+const buildPlanPage = async (d) => {
+  doc = d;
+  page = d.addPage([W, H]);
+  font = await d.embedFont(StandardFonts.Helvetica);
+
+  // --- building 12 x 8 m: rooms A (0-4 x 0-8), B (4-12 x 0-4), C (4-8 x 4-8), D (8-12 x 4-8)
 // outer walls, with gaps for the Windows and the entrance door
 wall(0, 0, 1, 0, OUTER); wall(2.2, 0, 6, 0, OUTER); wall(7.2, 0, 12.1, 0, OUTER); // top: Windows at 1..2.2 and 6..7.2
 wall(0, 8, 1.5, 8, OUTER); wall(2.4, 8, 12.1, 8, OUTER); // bottom: entrance door at 1.5..2.4
@@ -90,8 +94,13 @@ page.drawRectangle({ x: P(9, 0.3).x, y: P(9, 0.9).y, width: 2.5 * M, height: 0.6
 for (const [t, x, y] of [['ROOM A', 1.2, 5], ['ROOM B', 7, 2], ['ROOM C', 5, 5], ['ROOM D', 9.5, 6.5], ['GROUND FLOOR 1:100', 0, 9]]) {
   page.drawText(t, { x: P(x, y).x, y: P(x, y).y, size: 7, font });
 }
+  return page;
+};
 
-const pdf = await openPdf(await doc.save());
+const planDoc = await PDFDocument.create();
+await buildPlanPage(planDoc);
+
+const pdf = await openPdf(await planDoc.save());
 const raster = await renderRasterNode(pdf, 1, RASTER_SCALE);
 const res = detectOpenings(raster);
 const spaces = countEnclosedSpaces(raster, {}, res);
@@ -148,3 +157,27 @@ if (fail) {
   process.exit(1);
 }
 console.log('PASS: synthetic plan counted exactly (6 door leaves incl. a double door, 4 Window groups incl. a merged pair, 4 spaces)');
+
+// --- regression: fat filled ink (a solid title block) must not hijack the
+// wall-thickness estimator. Every interior pixel of a filled block has a
+// min-run far above maxWallPx (80 px); clamping that ink into the last
+// histogram bin made it a phantom strongest peak, the real wall peak failed
+// the peakShare gate, and the detector silently returned nothing.
+{
+  const fatDoc = await PDFDocument.create();
+  await buildPlanPage(fatDoc);
+  // 300x150pt solid block, clear of the plan: 900x450 px at RASTER_SCALE
+  page.drawRectangle({ x: W - 320, y: 20, width: 300, height: 150, color: BLACK });
+  const fatRaster = await renderRasterNode(await openPdf(await fatDoc.save()), 1, RASTER_SCALE);
+  const fat = detectOpenings(fatRaster);
+  const fatSpaces = countEnclosedSpaces(fatRaster, {}, fat);
+  const t = fat.walls.thicknessPx;
+  const got = { doors: fat.doors.length, windows: fat.windows.length, spaces: fatSpaces.count };
+  let fatFail = false;
+  if (t > 2 * OUTER * RASTER_SCALE) { console.error(`FAIL fat-ink walls: thickness ${t.toFixed(1)}px latched onto the filled block (walls are ${OUTER * RASTER_SCALE}px)`); fatFail = true; }
+  for (const k of Object.keys(expect)) {
+    if (got[k] !== expect[k]) { console.error(`FAIL fat-ink ${k}: ${got[k]} found, ${expect[k]} expected`); fatFail = true; }
+  }
+  if (fatFail) process.exit(1);
+  console.log(`PASS: a solid 300x150pt title block does not disturb estimation (t=${t.toFixed(1)}px, counts exact)`);
+}

@@ -418,8 +418,13 @@ export function strokeHistogram(
     const a = hr[i];
     const b = vr[i];
     // bins are page pixels: an upsampled mask only has widths that are
-    // multiples of the scale, which would leave empty bins between peaks
-    const s = Math.min(Math.round(Math.min(a, b) / scale), maxW);
+    // multiples of the scale, which would leave empty bins between peaks.
+    // Ink wider than maxW is not a wall candidate (filled title blocks, fat
+    // blobs) — it is dropped, never clamped: clamping piles it into the last
+    // bin, where it becomes a phantom strongest peak and the estimator
+    // silently latches onto it (all-zero detections on thin-line drawings).
+    const s = Math.round(Math.min(a, b) / scale);
+    if (s > maxW) continue;
     const len = Math.max(a, b);
     weighted[s] += len;
     count[s]++;
@@ -464,17 +469,19 @@ function heaviestPeak(hist: Float64Array, minWallPx: number): number {
 function wallThickness(hist: Float64Array, minWallPx: number, peakShare: number, smooth: number): number {
   const n = hist.length;
   const sm = new Float64Array(n);
-  for (let i = minWallPx; i < n; i++) {
+  // the last bin is excluded everywhere (as in heaviestPeak): it only bounds
+  // the array, and any mass that lands there is not a wall candidate
+  for (let i = minWallPx; i < n - 1; i++) {
     let s = 0;
     let k = 0;
     // bins under the floor are pen strokes; they must not smear into the first wall bin
-    for (let j = Math.max(minWallPx, i - smooth); j <= Math.min(n - 1, i + smooth); j++) { s += hist[j]; k++; }
+    for (let j = Math.max(minWallPx, i - smooth); j <= Math.min(n - 2, i + smooth); j++) { s += hist[j]; k++; }
     sm[i] = k ? s / k : 0;
   }
   let strongest = 0;
-  for (let i = minWallPx; i < n; i++) strongest = Math.max(strongest, sm[i]);
+  for (let i = minWallPx; i < n - 1; i++) strongest = Math.max(strongest, sm[i]);
   if (strongest <= 0) return minWallPx;
-  for (let i = minWallPx; i < n; i++) {
+  for (let i = minWallPx; i < n - 1; i++) {
     const left = i > 0 ? sm[i - 1] : 0;
     const right = i < n - 1 ? sm[i + 1] : 0;
     if (sm[i] >= left && sm[i] >= right && sm[i] >= peakShare * strongest) {

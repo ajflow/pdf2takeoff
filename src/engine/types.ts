@@ -33,5 +33,13 @@ export interface ScanHit {
 }
 
 export type ScanResult =
-  | { hits: ScanHit[]; provider: 'cv' | 'detector' | 'vector'; templatePx?: number; note?: string; truncated?: boolean }
+  | {
+      hits: ScanHit[];
+      provider: 'cv' | 'detector' | 'vector';
+      templatePx?: number;
+      note?: string;
+      truncated?: boolean;
+      /** Tier 1 only: set when the line-removal pre-pass produced this result. */
+      lineRemoval?: { trigger: string; strokeWidth: number; minRun: number; removedPx: number };
+    }
   | { error: string };

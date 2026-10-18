@@ -379,12 +379,45 @@ function scaleFromDimensions(ctx) {
   return null;
 }
 
-function solveScale(ctx) {
+/**
+ * The scale note's right side ('= 1'-0"') is the smallest print in the title
+ * block and the first thing a degraded scan destroys, while the 'SCALE:'
+ * keyword itself usually survives at full-page resolution. Re-read the strip
+ * beside (and under) the keyword at 4x — a few square centimetres of paper —
+ * and parse the recovered tokens with the keyword context restored.
+ */
+async function rereadScaleNote(ctx) {
+  const anchor = ctx.words.find((w) => /^SCALE:?$/i.test(w.text) && w.conf >= 60);
+  if (!anchor) return null;
+  const { ocrRaster } = await import('../../src/headless/ocr-node.ts');
+  const raster = await ctx.raster();
+  const regions = [
+    { x0: anchor.xPt + anchor.wPt / 2 + 1, y0: anchor.yPt - 6, x1: anchor.xPt + anchor.wPt / 2 + 130, y1: anchor.yPt + 9, where: 'beside' },
+    { x0: anchor.xPt - 24, y0: anchor.yPt + 4, x1: anchor.xPt + 126, y1: anchor.yPt + 22, where: 'below' },
+  ];
+  for (const r of regions) {
+    if (r.x1 <= r.x0 || r.y1 <= r.y0) continue;
+    let words;
+    try {
+      words = await ocrRaster(raster, { region: r, upsample: 4 });
+    } catch {
+      return null;
+    }
+    if (!words.length) continue;
+    const synth = [{ text: 'SCALE:', conf: 95, xPt: anchor.xPt, yPt: anchor.yPt, wPt: anchor.wPt, hPt: anchor.hPt }, ...words];
+    const hit = findScaleRatio(synth, `OCR re-read ${r.where} the keyword at 4x`);
+    if (hit && hit.ratio >= 5 && hit.ratio <= 5000) return { ...hit, source: `${hit.source} (re-read ${r.where} 'SCALE:' at 4x)` };
+  }
+  return null;
+}
+
+async function solveScale(ctx) {
   if (ctx.scale !== undefined) return ctx.scale;
   const origin = ctx.isVector ? 'text layer' : 'OCR';
   const { nts } = scaleVotesFromWords(ctx.words, origin);
   let hit = findScaleRatio(ctx.words, origin);
   if (!hit) hit = readScaleBar(ctx);
+  if (!hit && !ctx.isVector) hit = await rereadScaleNote(ctx);
   if (!hit) hit = scaleFromDimensions(ctx);
   ctx.scale = hit ? { ...hit, nts } : { ratio: null, nts };
   ctx.mpp = hit ? metersPerPtForRatio(hit.ratio) : undefined;
@@ -697,7 +730,7 @@ async function compareRaster(ctx, revBFile) {
 
 async function answerQuestion(ctx, q) {
   const text = q.question;
-  const scale = solveScale(ctx);
+  const scale = await solveScale(ctx);
   const needScale = ['scale', 'length', 'area', 'perimeter'].includes(q.type);
   if (needScale && !scale.ratio) return { answer: UNANS, note: scale.nts ? 'sheet says NTS' : 'no scale found' };
   switch (q.type) {

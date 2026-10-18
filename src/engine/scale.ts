@@ -45,6 +45,8 @@ const INCH = String.raw`(?:"|''|in\b|inch(?:es)?)`;
 const FOOT = String.raw`(?:'|ft\b|feet|foot)`;
 const ARCH = new RegExp(String.raw`^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*${INCH}\s*=\s*1\s*${FOOT}\s*(?:-?\s*0\s*${INCH}?)?$`, 'i');
 const ENG = new RegExp(String.raw`^1\s*${INCH}\s*=\s*(\d+(?:\.\d+)?)\s*${FOOT}\s*(?:-?\s*0\s*${INCH}?)?$`, 'i');
+/** A keyword'd bare architectural fraction: the note's '= 1'-0"' half did not survive the scan. */
+const ARCH_LEFT_ONLY = new RegExp(String.raw`^(\d+\/\d+)\s*${INCH}$`, 'i');
 const NTS = /^(n\.?\s*t\.?\s*s\.?|not\s+to\s+scale)$/i;
 
 /**
@@ -149,6 +151,14 @@ export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: 
           const ratio = 12 * ft;
           if (!nearImperialStandard(ratio)) return null;
           return { ratio, weight: repaired ? 0.9 : 1, kind: 'imperial', keyword, label: repaired ? `${str} (digits repaired)` : str };
+        } else if (keyword && (m = str.match(ARCH_LEFT_ONLY))) {
+          // the note's right side is the smallest print in the title block and
+          // the first thing a degraded scan destroys: a keyword'd bare
+          // fraction ('SCALE: 1/4"', '= 1'-0"' unread) still names the scale,
+          // gated to the printed standards and weighted below a whole note
+          const v = inches(m[1]);
+          const ratio = 12 / v;
+          if (nearImperialStandard(ratio)) return { ratio, weight: 0.6, kind: 'imperial', keyword, label: `${str} (right side unread)` };
         } else if (/^full\s*size$/i.test(str)) {
           return { ratio: 1, weight: 1, kind: 'size', keyword, label: 'FULL SIZE' };
         } else if (/^half\s*size$/i.test(str)) {

@@ -101,10 +101,12 @@ function inches(raw: string): number {
 export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: ScaleVote[]; nts: boolean } {
   const clean = words.map((w) => ({ ...w, text: w.text.trim() })).filter((w) => w.text);
   const votes: ScaleVote[] = [];
+  // candidate readings with their token spans; a reading contained in a
+  // longer kept reading is a fragment of it (the full 'SCALE: 1/4" = 1'-0"'
+  // beats its own 'SCALE: 1/4"' prefix), so the longest reading of a note
+  // wins over the fragments inside it
+  const found: { s: number; e: number; vote: Omit<ScaleVote, 'source'> & { label: string }; at: { x: number; y: number }; conf: number }[] = [];
   let nts = false;
-  // one vote per token span end: windows are tried earliest start first, so
-  // the longest reading of a note wins over the fragments inside it
-  const ended = new Set<number>();
   for (let i = 0; i < clean.length; i++) {
     const prevKeyword = i > 0 && /^scale\s*:?$/i.test(clean[i - 1].text);
     for (let n = 1; n <= 6 && i + n <= clean.length; n++) {
@@ -180,11 +182,19 @@ export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: 
         return fixedStr === s ? null : parse(fixedStr, true);
       })();
       if (!vote || vote.ratio > 5000) continue;
-      if (ended.has(i + n)) continue;
-      ended.add(i + n);
-      const { label, ...rest } = vote;
-      votes.push({ ...rest, source: `${origin} ${label}`, at, conf });
+      found.push({ s: i, e: i + n, vote, at, conf });
     }
+  }
+  found.sort((a, b) => b.e - b.s - (a.e - a.s));
+  const kept: typeof found = [];
+  for (const f of found) {
+    if (kept.some((k) => f.s >= k.s && f.e <= k.e)) continue;
+    kept.push(f);
+  }
+  kept.sort((a, b) => a.s - b.s || a.e - b.e);
+  for (const f of kept) {
+    const { label, ...rest } = f.vote;
+    votes.push({ ...rest, source: `${origin} ${label}`, at: f.at, conf: f.conf });
   }
   return { votes, nts };
 }

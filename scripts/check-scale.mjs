@@ -48,6 +48,11 @@ const parse = [
   [['SCALE:', '1:2SO'], [250]],
   [['13"', '=', "1'-0\""], []], // 12/13 is no printed scale and no repair reaches one
   [['1"', '=', "13'"], []], // 156 feet per inch is no engineer scale
+  // the note's right side destroyed by the scan: the keyword'd bare fraction
+  // votes alone (reduced weight), and never double-votes beside the full note
+  [['SCALE:', '1/4"'], [48]],
+  [['SCALE:', '1/8"'], [96]],
+  [['1/4"'], []], // without the keyword a bare fraction is just a dimension
 ];
 for (const [input, want] of parse) {
   const got = ratios(...input);

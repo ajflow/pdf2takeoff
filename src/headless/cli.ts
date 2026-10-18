@@ -36,7 +36,7 @@ Usage:
       one sorted multi-sheet PDF.
   pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
       Two PDFs (or images): per-sheet change fractions and changed regions.
-      Two folders: batch compare — sheets paired by file stem across the
+      Two folders: batch compare, sheets paired by file stem across the
       revision sets (a PNG scan pairs with the PDF of the same sheet), with
       added/removed sheets listed. --png writes the overlay of the first
       changed sheet; --png-dir (folder mode) writes an overlay per changed

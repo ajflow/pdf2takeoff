@@ -7,9 +7,10 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
 import { openPdf } from './pdfjs-node.ts';
-import { RASTER_SCALE, type ScanDeps } from '../engine/ports.ts';
+import { RASTER_SCALE, type RasterPage, type ScanDeps } from '../engine/ports.ts';
 import { scanForSimilar } from '../engine/scan.ts';
 import { loadDetectorNode } from './detector-node.ts';
+import { ocrRaster, type OcrPageOptions } from './ocr-node.ts';
 import { vectorize } from '../engine/vector.ts';
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
@@ -17,7 +18,7 @@ import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
 import type { Markup, Pt } from '../engine/types.ts';
 import { vectorDiff, textDiff, type VectorDiff, type TextDiff } from '../engine/revdiff.ts';
-import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../engine/ocr.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type OcrWord } from '../engine/ocr.ts';
 import { metersPerPtForRatio } from '../engine/units.ts';
 import { dynamicFill } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
@@ -85,6 +86,33 @@ async function pageWords(doc: PDFDocumentProxy, page: number) {
   return (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
     wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
   );
+}
+
+export interface PageWordsResult {
+  words: OcrWord[];
+  /** where the words came from: the PDF text layer (exact, conf 100) or OCR of the render (recogniser confidence per word) */
+  source: 'text-layer' | 'ocr';
+}
+
+/**
+ * Words of a page with OCR as the fallback: the text layer when it has
+ * words (born-digital sheets), else OCR of the page render (scans, raster
+ * imports). `ocr` true forces OCR, false forbids it. `raster` supplies an
+ * already rendered page, or an image with no PDF behind it (then pass doc
+ * as null). `region` (PDF points) narrows the OCR, not the text layer.
+ */
+export async function pageWordsWithOcr(
+  doc: PDFDocumentProxy | null,
+  page: number,
+  raster?: RasterPage,
+  opts: { ocr?: boolean; region?: OcrPageOptions['region']; rotations?: number[] } = {},
+): Promise<PageWordsResult> {
+  const layer = doc && opts.ocr !== true ? await pageWords(doc, page).catch(() => []) : [];
+  if (layer.length && opts.ocr !== true) return { words: layer, source: 'text-layer' };
+  if (opts.ocr === false || (!doc && !raster)) return { words: layer, source: 'text-layer' };
+  const r = raster ?? (await renderRasterNode(doc!, page, RASTER_SCALE));
+  const words = await ocrRaster(r, { region: opts.region, rotations: opts.rotations });
+  return { words, source: 'ocr' };
 }
 
 /** Keep diff listings readable: the first n entries (totals are reported beside them). */

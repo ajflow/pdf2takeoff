@@ -19,14 +19,15 @@ import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta, pageWordsWithOcr } from './ops.ts';
+import { terminateOcr } from './ocr-node.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
-import { METERS_PER_PT, toMeters } from '../engine/units.ts';
-import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
+import { METERS_PER_PT, toMeters, metersPerPtForRatio } from '../engine/units.ts';
+import { findScaleRatio, roomLabelPoints } from '../engine/ocr.ts';
 import { dynamicFill } from '../engine/dynamicfill.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet } from '../engine/scale.ts';
@@ -192,10 +193,11 @@ export async function runMcpServer(): Promise<void> {
     'read_text',
     {
       description:
-        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
+        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values: scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Scanned sheets have no text layer: then the render is OCR\'d instead (source: "ocr", each word with the recogniser\'s confidence; slower, and the first use fetches a 3 MB language pack). Pass a region to keep OCR fast.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
+        ocr: z.boolean().optional().describe('true: OCR the render even when a text layer exists; false: text layer only; omitted: OCR only when the text layer is empty'),
         region: z
           .object({
             x0: z.number().describe('left edge, PDF points'),
@@ -207,18 +209,15 @@ export async function runMcpServer(): Promise<void> {
           .describe('clip to this rectangle (e.g. a title block you located on the rendered page)'),
       },
     },
-    async ({ id, page, region }) => {
+    async ({ id, page, ocr, region }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
-      const pdfPage = await d.doc.getPage(page);
-      const tc = await pdfPage.getTextContent();
       // text items → whitespace-split words in PDF-point space. The text
       // layer is exact (born-digital), so confidence is 100 — the point of
       // this tool vs OCR-ing the render is that these numbers are trustworthy.
-      const words: TextLayerWord[] = [];
-      for (const item of tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]) {
-        words.push(...wordsFromTextItem(typeof item.str === 'string' ? item.str : '', item.transform, item.width, item.height));
-      }
+      // Without a text layer (scans) the render is OCR'd and source says so.
+      const { words, source } = await pageWordsWithOcr(d.doc, page, undefined, { ocr, region });
+      const origin = source === 'ocr' ? 'OCR' : 'text layer';
       const clipped = region
         ? words.filter(
             (wd) =>
@@ -228,11 +227,12 @@ export async function runMcpServer(): Promise<void> {
               wd.yPt <= Math.max(region.y0, region.y1),
           )
         : words;
-      const scaleHit = findScaleRatio(clipped, 'text layer');
-      const { votes, nts } = scaleVotesFromWords(clipped, 'text layer');
+      const scaleHit = findScaleRatio(clipped, origin);
+      const { votes, nts } = scaleVotesFromWords(clipped, origin);
       const consensus = scaleConsensus(votes, nts);
       return text({
         page,
+        source,
         wordCount: clipped.length,
         ...(clipped.length > 200
           ? { note: 'long text layer — pass a region to clip; only the first 200 words are listed' }
@@ -257,7 +257,7 @@ export async function runMcpServer(): Promise<void> {
     'set_scale',
     {
       description:
-        'Calibrate the drawing scale — required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0") or measure a known dimension: give both endpoints in PDF points and its true length.',
+        'Calibrate the drawing scale, required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0"), measure a known dimension (give both endpoints in PDF points and its true length), or pass neither to read the printed scale note off the sheet (text layer, OCR of the render on scans).',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -275,11 +275,20 @@ export async function runMcpServer(): Promise<void> {
     },
     async ({ id, page, all_pages, ratio, from_points }) => {
       const d = getDoc(id);
+      // the sheet's own scale notes: text layer, else (auto-read only, so a
+      // typed ratio stays instant on scans) OCR of the render
+      const sheet = await pageWordsWithOcr(d.doc, page, undefined, { ocr: ratio || from_points ? false : undefined });
+      const origin = sheet.source === 'ocr' ? 'OCR' : 'text layer';
       let metersPerPt: number;
       let source: string;
       if (ratio) {
         metersPerPt = parseScaleSpec(ratio);
         source = `mcp preset ${ratio}`;
+      } else if (!from_points) {
+        const hit = findScaleRatio(sheet.words, origin);
+        if (!hit) throw new Error('no scale note could be read off the sheet: pass ratio or from_points');
+        metersPerPt = metersPerPtForRatio(hit.ratio);
+        source = `sheet ${hit.source}`;
       } else if (from_points) {
         const ptDist = distPt(
           { x: from_points.a[0], y: from_points.a[1] },
@@ -293,12 +302,8 @@ export async function runMcpServer(): Promise<void> {
       }
       const pages = all_pages ? Array.from({ length: d.doc.numPages }, (_, i) => i + 1) : [page];
       for (const p of pages) d.calibrations.set(p, { metersPerPt, source });
-      // cross-check against the sheet's own scale notes (text layer)
-      const tc = await (await d.doc.getPage(page)).getTextContent();
-      const words = (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
-        wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
-      );
-      const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+      // cross-check against the sheet's own scale notes
+      const { votes, nts } = scaleVotesFromWords(sheet.words, origin);
       const setRatio = metersPerPt / METERS_PER_PT;
       // measured scales carry hand-placement error, typed ratios do not
       const check = checkAgainstSheet(setRatio, votes, nts, from_points ? 0.05 : 0.02);
@@ -629,7 +634,9 @@ export async function runMcpServer(): Promise<void> {
   );
 
   await server.connect(new StdioServerTransport());
-  // the transport keeps the process alive until the client closes stdin
+  // the transport keeps the process alive until the client closes stdin;
+  // an OCR worker thread, once started, must not outlive it
+  process.stdin.once('end', () => void terminateOcr());
 }
 
 // direct invocation: node --experimental-strip-types src/headless/mcp.ts

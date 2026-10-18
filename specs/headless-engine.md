@@ -211,9 +211,9 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `open_document` | `path` | doc id, page count, page sizes, existing annotation count |
 | `render_page` | `doc, page, dpi?` | PNG content block + width/height/page-space note — **the agent's eyes** |
 | `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
-| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none |
+| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none, plus `doorWidth`: for sheets that print no usable scale, the door size this scale implies for the sheet's own doorways, plausible / implausible with the likely slip; null when a printed scale was checked instead (agrees / disagrees), when the sheet shows fewer than two interior doorways of at least 14 pt, or when the page exceeds A1 at 3 px/pt |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
-| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale and room labels), markup id, `provenance` with the gap closed |
+| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |
 | `compare_revisions` | `path_a, path_b` | changed sheets, changed regions, summary |
 | `list_markups` / `delete_markup` | `doc` / `doc, id` | markups table / confirmation |
@@ -353,6 +353,15 @@ Running pdf.js v5's legacy build on @napi-rs/canvas in Node:
    Functionally equivalent: the tier-1 scan returns identical results (8/8
    symbols) in both environments. Reproduce with `scripts/golden-raster.mjs`
    + the in-browser compare-canvas recipe.
+
+   **Sequel (2026-10-18):** pdfjs-dist also declares its own
+   `@napi-rs/canvas` (0.1.x), which npm nests under `node_modules/pdfjs-dist`.
+   pdf.js's `NodeCanvasFactory` requires that copy, so every image's
+   temporary canvas came from a second skia binary and `drawImage` into our
+   page context segfaulted on the first real sheet with a logo. The fix is a
+   `CanvasFactory` passed to `getDocument` that creates canvases from our
+   module (`pdfjs-node.ts`), plus our `DOMMatrix` on the global. The bench
+   embeds a PNG logo on every sheet so the path is exercised in CI.
 
 H2 ships without the ONNX detector in Node (no model exists yet — training
 is in flight); the `DetectorSession` port is ready for `onnxruntime-node`

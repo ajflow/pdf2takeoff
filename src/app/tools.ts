@@ -2,7 +2,7 @@
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
 import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector } from './viewer';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPdfDoc } from './viewer';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
@@ -12,8 +12,8 @@ import { getActiveLayer, DEFAULT_LAYER } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
 import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
-import { scaleVotesFromWords, checkAgainstSheet } from '../engine/scale';
-import { dynamicFill } from '../engine/dynamicfill';
+import { scaleVotesFromWords, checkAgainstSheet, doorWidthCheck } from '../engine/scale';
+import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
 import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
@@ -320,10 +320,19 @@ async function runFill(p: Pt): Promise<void> {
     renderMarkups();
     emit();
     const cal = state.calibrations.get(state.pageNum);
+    // say why the fill stopped where it did, so the polygon can be trusted or overridden
+    const why: string[] = [];
+    if (result.gapPx) {
+      const gapPt = result.gapPx / 3; // rendered at 3 px/pt
+      why.push(`closed a ${cal ? `${(gapPt * cal.metersPerPt).toFixed(2)} m` : `${gapPt.toFixed(0)} pt`} gap`);
+    }
+    if (result.bridged) why.push('vector doorway bridged');
+    if (result.doorSource === 'sheet') why.push('door width read from this sheet');
+    const because = why.length ? ` · ${why.join(', ')}` : '';
     if (cal) {
-      hint(`Fill area added (${Math.round(performance.now() - t0)} ms) · drag vertices to adjust`);
+      hint(`Fill area added (${Math.round(performance.now() - t0)} ms)${because} · drag vertices to adjust`);
     } else {
-      hint('Fill area added · calibrate the scale to see its value');
+      hint(`Fill area added${because} · calibrate the scale to see its value`);
     }
   } catch (err) {
     hint(`Fill failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -610,16 +619,35 @@ function applyCalibration(): void {
   void warnIfSheetDisagrees(state.pageNum, metersPerPt);
 }
 
-/** Compare a measured scale with the sheet's printed scale; hint on a mismatch. */
+/**
+ * Compare a measured scale with the sheet's printed scale, and with the
+ * sheet's own doorways (which should measure like doors); hint on a mismatch.
+ */
 async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<void> {
   const items = await getPageTextItems(page).catch(() => []);
   const words = items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));
   const { votes, nts } = scaleVotesFromWords(words, 'text layer');
   const measured = metersPerPt / METERS_PER_PT;
   const c = checkAgainstSheet(measured, votes, nts);
-  if (c.status !== 'disagrees' || c.sheetRatio === undefined) return;
-  const why = c.likely ? `, likely ${c.likely}` : '';
-  hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);
+  if (c.status === 'disagrees' && c.sheetRatio !== undefined) {
+    const why = c.likely ? `, likely ${c.likely}` : '';
+    hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);
+    return;
+  }
+  if (c.status === 'agrees') return; // the printed scale is the stronger witness
+  // no printed scale to lean on (scans): do the doors come out door-sized?
+  // (sheets larger than A1 are not checked: the pass would take seconds, so
+  // the size is read from the page before anything is rendered)
+  const doc = getPdfDoc();
+  if (!doc) return;
+  const vp = (await doc.getPage(page)).getViewport({ scale: 3 });
+  if (vp.width * vp.height > DOOR_CHECK_MAX_PX) return;
+  const raster = await renderRaster(page, 3).catch(() => null);
+  if (!raster) return;
+  const doors = doorWidthCheck(metersPerPt, sheetDoorWidthPx(raster), 3);
+  if (doors?.status !== 'implausible') return;
+  const why = doors.likely ? `, likely ${doors.likely}` : '';
+  hint(`Scale set to about 1:${Math.round(measured)}, which makes this sheet's doorways ${doors.impliedDoorM.toFixed(2)} m wide${why}. Check the dimension you used.`);
 }
 
 // --- keyboard ---

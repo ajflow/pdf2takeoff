@@ -17,7 +17,8 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
-import { dynamicFill } from '../src/engine/dynamicfill.ts';
+import { dynamicFill, sheetDoorWidthPx } from '../src/engine/dynamicfill.ts';
+import { doorWidthCheck } from '../src/engine/scale.ts';
 import { scanDocAt, vectorDocPage } from '../src/headless/ops.ts';
 import { doorBridgesFor } from '../src/engine/fill-vector.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
@@ -28,8 +29,39 @@ const M = 1 / metersPerPtForRatio(SCALE); // PDF points per real metre (≈ 28.3
 const BLACK = rgb(0, 0, 0);
 
 // --- drawing helpers (real metres → PDF points from an origin) --------------
+// Every sheet carries what real sheets carry: a border frame and a title
+// block with text. Rules that read the sheet (door widths, scale notes) must
+// hold with those present, and an "outside" bounded by a frame must still
+// read as unbounded.
+// Real title blocks carry a logo: an embedded raster image. Headless
+// rendering must survive it (pdf.js draws images through a temporary canvas,
+// which once came from a second copy of the canvas module and segfaulted).
+let logoPng = null;
+async function logo(doc) {
+  if (!logoPng) {
+    const { createCanvas } = await import('@napi-rs/canvas');
+    const c = createCanvas(48, 24);
+    const g = c.getContext('2d');
+    g.fillStyle = '#1b5e9e';
+    g.fillRect(0, 0, 48, 24);
+    g.fillStyle = '#fff';
+    g.fillRect(6, 6, 36, 12);
+    logoPng = await doc.embedPng(c.toBuffer('image/png'));
+  }
+  return logoPng;
+}
+let sheetNo = 0;
 function sheet(doc, width = 842, height = 595) {
-  return doc.addPage([width, height]);
+  const page = doc.addPage([width, height]);
+  sheetNo++;
+  if (logoPng) page.drawImage(logoPng, { x: width - 12 - 46, y: 12 + 25, width: 36, height: 18 }); // inside the title block's upper band
+  page.drawRectangle({ x: 12, y: 12, width: width - 24, height: height - 24, borderColor: BLACK, borderWidth: 0.8 });
+  const tb = { x: width - 12 - 190, y: 12, w: 190, h: 44 };
+  page.drawRectangle({ x: tb.x, y: tb.y, width: tb.w, height: tb.h, borderColor: BLACK, borderWidth: 0.8 });
+  page.drawLine({ start: { x: tb.x, y: tb.y + 22 }, end: { x: tb.x + tb.w, y: tb.y + 22 }, thickness: 0.5, color: BLACK });
+  page.drawText(`BENCH SHEET ${sheetNo}`, { x: tb.x + 6, y: tb.y + 30, size: 7, font });
+  page.drawText('pdf2takeoff accuracy bench', { x: tb.x + 6, y: tb.y + 8, size: 6, font });
+  return page;
 }
 const wall = (page, ox, oy, t) => (x0, y0, x1, y1) =>
   page.drawLine({ start: { x: ox + x0 * M, y: oy + y0 * M }, end: { x: ox + x1 * M, y: oy + y1 * M }, thickness: t, color: BLACK });
@@ -47,8 +79,10 @@ function polyArea(points) {
 
 // --- fixtures ------------------------------------------------------------------
 const cases = [];
+let PAGE_1C = 0; // set when page 1c is built
 const doc = await PDFDocument.create();
 const font = await doc.embedFont(StandardFonts.Helvetica);
+await logo(doc);
 
 // Page 1: rooms. Thin 0.7 pt walls unless noted. Areas are between wall
 // centrelines minus half the stroke each side (what the ink leaves open).
@@ -94,7 +128,9 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     cases.push({ id: 'fill/interior-door', kind: 'fill', page: 1, at, expectM2: inner(3, 3) });
     cases.push({ id: 'fill/interior-door-labels-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'labels' });
     cases.push({ id: 'fill/interior-door-scale-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'scale' });
-    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none', known: 'P13 neck cuts' });
+    // no scale, no labels, no vector layer (a scan before calibration): the
+    // sheet's own door width (its clustered wall-end gaps) closes the door
+    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none' });
   }
   // F: 4 x 3 m room in 0.2 m filled walls (drawn as filled rectangles), 0.9 m door to outside
   {
@@ -113,6 +149,73 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     w(4, 2, 3.84, 2.16); w(3.16, 2.84, 3, 3);
     const expect = (4 * 3 - 0.5) - 0.06; // 4x3 minus the 1x1 corner triangle, minus stroke allowance
     cases.push({ id: 'fill/diagonal-wall-door', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05 });
+    cases.push({ id: 'fill/diagonal-wall-door-no-hints', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05, hints: 'none', known: 'axis-aligned closing cannot bridge a diagonal door without the vector layer' });
+  }
+  // H: an L-shaped corridor 0.9 m wide in 1.2 pt walls. Its inner corner is
+  // a heavy wall end facing the opposite wall 0.9 m away, which is inside
+  // the calibrated doorway rung: only a FREE wall end may close onto a wall
+  // side, so the corridor must come back whole, not cut at the elbow
+  {
+    const Tc = 1.2;
+    const w = wall(page, 40, 470, Tc);
+    w(0, 0, 4, 0); w(4, 0, 4, 0.9); w(4, 0.9, 0.9, 0.9); w(0.9, 0.9, 0.9, 4); w(0.9, 4, 0, 4); w(0, 4, 0, 0);
+    const Tm = Tc / M;
+    const expect = (4 - Tm) * (0.9 - Tm) + (0.9 - Tm) * (3.1 - Tm / 2);
+    cases.push({ id: 'fill/l-corridor-0.9m', kind: 'fill', page: 1, at: pt(40, 470, 2.5, 0.45), expectM2: expect, tol: 0.04 });
+  }
+  // every page-1 room again with no hints: the sheet door width must not
+  // change a room that was already right (benches, alcoves, L-shapes stay)
+  for (const c of cases.filter((k) => k.kind === 'fill' && !k.hints && k.page === 1)) {
+    const id = `${c.id}-no-hints`;
+    if (!cases.some((k) => k.id === id)) cases.push({ ...c, id, hints: 'none' });
+  }
+}
+
+// Page 1c: a scan before calibration (no hints anywhere on this page). The
+// sheet states its door width through four 0.9 m doorways; five dimension
+// lines broken for text at door width must not be mistaken for doors; a
+// 2.4 m open-plan opening is not a doorway and stays open; a door into a
+// 1.2 m corridor still closes from both sides.
+{
+  const page = sheet(doc);
+  const T = 0.7;
+  const inner = (wM, hM) => (wM * M - T) * (hM * M - T) / (M * M);
+  const pg = doc.getPageCount();
+  PAGE_1C = pg;
+  // building 1: rooms P (0..4) and Q (4..8) in one 8 x 4 m outline, a 2.4 m
+  // opening in the partition, a 0.9 m door from P to outside
+  {
+    const w = wall(page, 40, 330, T);
+    w(0, 0, 1.5, 0); w(2.4, 0, 8, 0); w(8, 0, 8, 4); w(8, 4, 0, 4); w(0, 4, 0, 0);
+    w(4, 0, 4, 0.8); w(4, 3.2, 4, 4);
+    cases.push({ id: 'fill/open-plan-opening-no-hints', kind: 'fill', page: pg, at: pt(40, 330, 2, 2), expectM2: inner(8, 4), hints: 'none' });
+  }
+  // building 2: room U (3 x 3 m) with a 0.9 m door into a 1.2 m wide corridor V (6 m long)
+  {
+    const w = wall(page, 300, 330, T);
+    w(0, 0, 3, 0); w(0, 0, 0, 3); w(0, 3, 3, 3);
+    w(3, 0, 3, 1.05); w(3, 1.95, 3, 6);
+    w(3, 0, 4.2, 0); w(4.2, 0, 4.2, 6); w(4.2, 6, 3, 6);
+    cases.push({ id: 'fill/corridor-door-room-side-no-hints', kind: 'fill', page: pg, at: pt(300, 330, 1.5, 1.5), expectM2: inner(3, 3), hints: 'none' });
+    cases.push({ id: 'fill/corridor-door-corridor-side-no-hints', kind: 'fill', page: pg, at: pt(300, 330, 3.6, 4), expectM2: inner(1.2, 6), hints: 'none' });
+  }
+  // building 3: three 3 x 3 m rooms in a row, 0.9 m doors between them
+  {
+    const w = wall(page, 480, 330, T);
+    w(0, 0, 9, 0); w(9, 0, 9, 3); w(9, 3, 0, 3); w(0, 3, 0, 0);
+    w(3, 0, 3, 1.05); w(3, 1.95, 3, 3); w(6, 0, 6, 1.05); w(6, 1.95, 6, 3);
+    cases.push({ id: 'fill/middle-of-three-rooms-no-hints', kind: 'fill', page: pg, at: pt(480, 330, 4.5, 1.5), expectM2: inner(3, 3), hints: 'none' });
+  }
+  // decoys: dimension lines broken for their text, the break as wide as a
+  // door (0.9 m), text sitting just above the line as drafted
+  for (let i = 0; i < 5; i++) {
+    const y = 300 - i * 12;
+    const x0 = 40 + (i % 2) * 20;
+    const x1 = x0 + 8 * M;
+    const mid = (x0 + x1) / 2;
+    page.drawLine({ start: { x: x0, y }, end: { x: mid - 0.45 * M, y }, thickness: 0.6, color: BLACK });
+    page.drawLine({ start: { x: mid + 0.45 * M, y }, end: { x: x1, y }, thickness: 0.6, color: BLACK });
+    page.drawText(`${8000 - i * 250}`, { x: mid - 8, y: y + 1.2, size: 6, font });
   }
 }
 
@@ -172,6 +275,14 @@ for (const s of scaleSheets) {
   cases.push({ id: s.id, kind: 'scale', page: doc.getPageCount(), expect: s.expect, known: s.known });
 }
 
+// Door-width second opinion on a calibration. Page 1 has one interior
+// doorway (its other doors open to the outside and do not vote), too little
+// to warn on; page 1c has three, which measure like doors at 1:100 and like
+// double garage doors at 1:50.
+cases.push({ id: 'doorcheck/one-doorway-is-no-evidence', kind: 'doorcheck', page: 1, ratio: 50, expect: 'none' });
+cases.push({ id: 'doorcheck/1-100-plausible', kind: 'doorcheck', page: PAGE_1C, ratio: 100, expect: 'plausible' });
+cases.push({ id: 'doorcheck/1-50-implausible', kind: 'doorcheck', page: PAGE_1C, ratio: 50, expect: 'implausible' });
+
 // --- run -------------------------------------------------------------------------
 const pdf = await openPdf(await doc.save());
 const mpp = metersPerPtForRatio(SCALE);
@@ -202,6 +313,12 @@ for (const c of cases) {
         pass = err <= (c.tol ?? 0.03);
         detail = `${got.toFixed(2)} m² vs ${c.expectM2.toFixed(2)} m² (${(err * 100).toFixed(1)}%)`;
       }
+    } else if (c.kind === 'doorcheck') {
+      const raster = await renderRasterNode(pdf, c.page, RASTER_SCALE);
+      const dc = doorWidthCheck(metersPerPtForRatio(c.ratio), sheetDoorWidthPx(raster), RASTER_SCALE);
+      got = dc?.status ?? 'none';
+      pass = got === c.expect;
+      detail = `${got}${dc ? ` (doors read ${dc.impliedDoorM.toFixed(2)} m at 1:${c.ratio}${dc.likely ? `, likely ${dc.likely}` : ''})` : ''}, ${c.expect} expected`;
     } else if (c.kind === 'count') {
       // the product scan path: vector match on born-digital symbols, else CV
       const r = await scanDocAt(pdf, c.page, c.at);

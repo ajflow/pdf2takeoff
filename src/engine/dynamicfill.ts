@@ -21,6 +21,18 @@
 // holds one. On born-digital sheets the host can also pass doorway bridges
 // from the vector layer (fill-vector.ts, P18), which close doors at any
 // angle, including in diagonal walls.
+//
+// With no hints at all (a scanned sheet before calibration) the sheet still
+// shows its own doorways: gaps between two facing wall ends (a jamb on each
+// side) with open floor on both sides (which rules out dimension-line text
+// breaks) and an enclosed space on both sides (which rules out exterior
+// doors and the gaps between separate buildings); the threshold pass finds
+// every such gap anyway. Their widths cluster at the door width. Each width
+// is tried as a closing rung, narrowest first, and kept only when it bounds
+// a fill that leaked or cuts a room-sized part off the fill (the door
+// between two rooms), never when it would only shave an alcove. A known
+// scale always wins. The same reading gives a calibration a second opinion
+// (sheetDoorWidthPx): under the right scale the sheet's doors are door-sized.
 
 import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
@@ -38,9 +50,13 @@ const GAP_HALF = [0, 8, 16, 28, 44];
  * points: the room outline (PDF pt). gapPx: width (raster px) of the widest
  * gap the closing actually bridged on this room's boundary, absent when the
  * room was sealed by ink alone. bridged: a vector doorway bridge formed part
- * of the boundary.
+ * of the boundary. doorPx / doorSource: the doorway width (raster px) closed
+ * by default on this fill, from the calibrated scale or from the sheet's own
+ * wall-end gaps; absent when no doorway rule applied.
  */
-export type FillResult = { points: Pt[]; gapPx?: number; bridged?: boolean } | { error: string };
+export type FillResult =
+  | { points: Pt[]; gapPx?: number; bridged?: boolean; doorPx?: number; doorSource?: 'scale' | 'sheet' }
+  | { error: string };
 
 /** Widest doorway closed automatically once the page scale is known (m). */
 const DOOR_MAX_M = 1.0;
@@ -85,6 +101,66 @@ const NEVER = 255;
 
 /** How far (px) wall-end tests look along and across a gap's end ink. */
 const WALL_END_REACH = 64;
+/** How far back (px) from a wall tip its own thickness is read, to tell a free end from a corner. */
+const FREE_END_BACK_PX = 6;
+/** A tip up to this many times thicker than the wall behind it still counts as free (anti-aliasing, end caps). */
+const FREE_END_SLACK = 1.5;
+
+/**
+ * A wall-end gap is a doorway candidate only when open floor runs at least
+ * this share of the gap width away from it on both sides (a dimension-line
+ * text break has glyphs a few px above the line; a door swing arc crosses
+ * the gap's centre line 0.87 gap widths out, a 45° leaf at 0.5) ...
+ */
+const DOOR_CLEARANCE = 0.4;
+/**
+ * ... and both sides are enclosed spaces: with every candidate gap closed,
+ * the region on each side stays under the page's unbounded cap. An exterior
+ * door, and the gap between two separate buildings' collinear walls, open
+ * onto the outside and so never vote for the sheet's door width.
+ */
+/** Door candidates within this ratio of each other form one width cluster. */
+const DOOR_CLUSTER = 1.2;
+/** Fewest agreeing doorways that make a width the sheet's door width (tried whatever its size). */
+const MIN_DOOR_SUPPORT = 2;
+/** Other widths are tried only up to this multiple of the sheet's narrowest doorway: wider gaps are openings, not doors. */
+const DOOR_WIDEST = 1.5;
+/** Slack over a doorway width when it sets the closing rung. */
+const DOOR_SLACK = 1.1;
+/** Cell size (px) of the grid the doorway enclosure test floods. */
+const ENCLOSURE_CELL = 4;
+/**
+ * Narrowest gap (PDF pt) the fill will try as a doorway width: a 0.7 m door
+ * at 1:330. Exploded CAD text and hatching leave thousands of 2 to 4 pt
+ * two-ended slots that would otherwise cluster and cost a flood each.
+ */
+const MIN_DOOR_PT = 6;
+/**
+ * Largest raster (px) the door-width scale check runs on: an A1 sheet at
+ * 3 px/pt. Beyond that the threshold pass alone takes seconds, too slow for
+ * a calibration hint; the check reports nothing instead of guessing.
+ */
+export const DOOR_CHECK_MAX_PX = 40_000_000;
+/**
+ * Narrowest agreed door width (PDF pt) the scale CHECK will act on: a 0.7 m
+ * door at 1:140. The fill may still try narrower widths (guarded by its
+ * split test), but a warning needs stronger evidence: real Revit sheets
+ * carry 9 pt two-ended slots in schedules and legends that cluster.
+ */
+const MIN_DOOR_CHECK_PT = 14;
+
+/**
+ * A bridgeable ink-free run along `pos` (row or column), from a up to b.
+ * ends: both sides are wall ends (door jambs); false for a wall end facing
+ * the side of another wall (a doorway hard against a corner, but also the
+ * elbow of an L-shaped room), which closes but never votes for a width.
+ */
+interface Gap {
+  pos: number;
+  a: number;
+  b: number;
+  ends: boolean;
+}
 
 /**
  * For every pixel, the smallest half-length r at which a binary closing with
@@ -115,8 +191,15 @@ const WALL_END_REACH = 64;
  * (a downlight's flat top edge looks like a short heavy wall end) are
  * isolated pieces, so they never anchor a closing.
  */
-function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number): Uint8Array {
+function closingThresholds(ink: Uint8Array, w: number, h: number, pxPerPt: number): { thr: Uint8Array; doors: () => SheetDoors } {
+  const heavyPx = Math.max(2, Math.round(HEAVY_PT * pxPerPt));
+  const structPx = Math.round(STRUCT_PT * pxPerPt);
+  const minDoorPx = Math.floor(MIN_DOOR_PT * pxPerPt);
   const thr = new Uint8Array(w * h).fill(NEVER);
+  // interior wall-end gaps (t < NEVER on an interior run means bridgeable),
+  // the raw material for the sheet's own door-width estimate
+  const rowGaps: Gap[] = [];
+  const colGaps: Gap[] = [];
   // structural-ink cache: 0 unknown, 1 part of a piece spanning structPx, 2 a small piece
   const piece = new Uint8Array(w * h);
   const queue: number[] = [];
@@ -161,21 +244,31 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
   // run's axis and its thickness across it
   const endInk = (x: number, y: number, dx: number, dy: number) => {
     const i = y * w + x;
+    const dAlong = dx > 0 ? 1 : dx < 0 ? -1 : dy > 0 ? w : -w;
     const along = dx > 0 ? runFrom(i, 1, w - x) : dx < 0 ? runFrom(i, -1, x + 1) : dy > 0 ? runFrom(i, w, h - y) : runFrom(i, -w, y + 1);
-    const across = dx !== 0 ? runFrom(i, w, h - y) + runFrom(i, -w, y + 1) - 1 : runFrom(i, 1, w - x) + runFrom(i, -1, x + 1) - 1;
+    const acrossAt = (j: number, jx: number, jy: number) =>
+      dx !== 0 ? runFrom(j, w, h - jy) + runFrom(j, -w, jy + 1) - 1 : runFrom(j, 1, w - jx) + runFrom(j, -1, jx + 1) - 1;
+    const across = acrossAt(i, x, y);
+    // the wall's own thickness, read a few px back from the tip: a free end
+    // is as thick at the tip as behind it; at a corner the tip runs into the
+    // perpendicular wall, so it reads far thicker than the wall behind it
+    let thickness = across;
+    for (const k of [FREE_END_BACK_PX, 2 * FREE_END_BACK_PX]) {
+      if (k >= along) break;
+      const j = i + k * dAlong;
+      thickness = Math.min(thickness, acrossAt(j, dx !== 0 ? x + k * dx : x, dy !== 0 ? y + k * dy : y));
+    }
     const solid = structural(i);
-    return { along, across, solid, wallEnd: solid && along >= Math.min(WALL_END_REACH, 2 * across) };
+    return { along, across, solid, wallEnd: solid && along >= Math.min(WALL_END_REACH, 2 * across), free: across <= FREE_END_SLACK * thickness + 1 };
   };
   type EndInk = ReturnType<typeof endInk>;
-  // two wall ends, or a heavy wall end facing heavy ink (a doorway at a corner)
+  // two wall ends, or a heavy FREE wall end facing heavy ink (a doorway at a
+  // corner; the inner corner of an L-shaped room is a wall end too, but not
+  // a free one, and must never be closed onto the opposite wall)
   const bridgeable = (a: EndInk, b: EndInk): boolean =>
     (a.wallEnd && b.wallEnd) ||
-    (a.wallEnd && a.across >= heavyPx && b.solid && Math.min(b.along, b.across) >= heavyPx) ||
-    (b.wallEnd && b.across >= heavyPx && a.solid && Math.min(a.along, a.across) >= heavyPx);
-  const mark = (L: number, before: boolean, after: boolean, wallEnded: () => boolean): number => {
-    const t = before && after ? (wallEnded() ? Math.ceil(L / 2) : NEVER) : before || after ? L : NEVER;
-    return Math.min(t, NEVER);
-  };
+    (a.wallEnd && a.free && a.across >= heavyPx && b.solid && Math.min(b.along, b.across) >= heavyPx) ||
+    (b.wallEnd && b.free && b.across >= heavyPx && a.solid && Math.min(a.along, a.across) >= heavyPx);
   // rows
   for (let y = 0; y < h; y++) {
     const row = y * w;
@@ -189,7 +282,17 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
       const a = x;
       while (x < w && !ink[row + x]) x++;
       const b = x;
-      const t = mark(b - a, a > 0, b < w, () => bridgeable(endInk(a - 1, y, -1, 0), endInk(b, y, 1, 0)));
+      let t = NEVER;
+      if (a > 0 && b < w) {
+        const ea = endInk(a - 1, y, -1, 0);
+        const eb = endInk(b, y, 1, 0);
+        if (bridgeable(ea, eb)) {
+          t = Math.min(Math.ceil((b - a) / 2), NEVER);
+          rowGaps.push({ pos: y, a, b, ends: ea.wallEnd && eb.wallEnd });
+        }
+      } else if (a > 0 || b < w) {
+        t = Math.min(b - a, NEVER);
+      }
       if (t < NEVER) for (let i = row + a; i < row + b; i++) thr[i] = t;
     }
   }
@@ -198,7 +301,17 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
   const runStart = new Int32Array(w).fill(-1);
   const flush = (x: number, end: number) => {
     const a = runStart[x];
-    const t = mark(end - a, a > 0, end < h, () => bridgeable(endInk(x, a - 1, 0, -1), endInk(x, end, 0, 1)));
+    let t = NEVER;
+    if (a > 0 && end < h) {
+      const ea = endInk(x, a - 1, 0, -1);
+      const eb = endInk(x, end, 0, 1);
+      if (bridgeable(ea, eb)) {
+        t = Math.min(Math.ceil((end - a) / 2), NEVER);
+        colGaps.push({ pos: x, a, b: end, ends: ea.wallEnd && eb.wallEnd });
+      }
+    } else if (a > 0 || end < h) {
+      t = Math.min(end - a, NEVER);
+    }
     if (t < NEVER) for (let y = a, i = a * w + x; y < end; y++, i += w) if (t < thr[i]) thr[i] = t;
     runStart[x] = -1;
   };
@@ -212,7 +325,206 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
     }
   }
   for (let x = 0; x < w; x++) if (runStart[x] >= 0) flush(x, h);
-  return thr;
+  // the doorway reading is only needed without a scale (and for scale checks)
+  let doors: SheetDoors | undefined;
+  return { thr, doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)) };
+}
+
+/**
+ * What the sheet says about its doors. doorPx: the door width (px) when at
+ * least MIN_DOOR_SUPPORT doorways agree on one, else 0. widths: the doorway
+ * widths worth trying as closing rungs, ascending: every distinct width
+ * (cluster maxima) up to DOOR_WIDEST times the narrowest, plus doorPx.
+ */
+interface SheetDoors {
+  doorPx: number;
+  widths: number[];
+}
+
+/**
+ * Doorways read off the gaps between two wall ends (one-ended corner gaps
+ * never vote). A wall of any thickness crosses several rows or columns, so
+ * consecutive gaps with the same extents (within 2 px of anti-aliasing)
+ * count as one doorway. At its centre a doorway has DOOR_CLEARANCE of open
+ * floor on both sides (the sheet edge that close counts as a wall), and
+ * with every candidate gap closed both sides are enclosed (under the page
+ * cap). Widths within DOOR_CLUSTER of each other form a cluster; the
+ * best-supported cluster (ties to the narrower) sets doorPx by its widest
+ * member.
+ */
+function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, h: number, minDoorPx: number): SheetDoors {
+  // ink-free px from (x, y) stepping (dx, dy) before ink or the sheet edge
+  const clearRun = (x: number, y: number, dx: number, dy: number, limit: number): number => {
+    for (let k = 0; k < limit; k++) {
+      const px = x + dx * k;
+      const py = y + dy * k;
+      if (px < 0 || py < 0 || px >= w || py >= h || ink[py * w + px]) return k;
+    }
+    return limit;
+  };
+  interface Track {
+    a: number;
+    b: number;
+    p0: number;
+    p1: number;
+  }
+  // candidates that passed the clearance test: width, the first floor pixel
+  // on each side, and the gap's own pixels (closed for the enclosure test)
+  const candidates: { L: number; sideA: number[]; sideB: number[]; rows: boolean; t: Track }[] = [];
+  const collect = (gaps: Gap[], rows: boolean) => {
+    gaps.sort((p, q) => p.pos - q.pos || p.a - q.a);
+    const finish = (t: Track) => {
+      const L = t.b - t.a;
+      if (L < minDoorPx || L > 2 * (NEVER - 1)) return; // not a door at any scale, or beyond every rung
+      const need = Math.ceil(DOOR_CLEARANCE * L);
+      const m = (t.a + t.b - 1) >> 1;
+      const [u, v] = rows
+        ? [clearRun(m, t.p0 - 1, 0, -1, need), clearRun(m, t.p1 + 1, 0, 1, need)]
+        : [clearRun(t.p0 - 1, m, -1, 0, need), clearRun(t.p1 + 1, m, 1, 0, need)];
+      if (u < need || v < need) return;
+      // enclosure probes start a full clearance out, clear of the wall's cell
+      const sideA = rows ? [m, t.p0 - need] : [t.p0 - need, m];
+      const sideB = rows ? [m, t.p1 + need] : [t.p1 + need, m];
+      candidates.push({ L, sideA, sideB, rows, t });
+    };
+    let open: Track[] = [];
+    let lastPos = -2;
+    for (let i = 0; i < gaps.length; ) {
+      const pos = gaps[i].pos;
+      let j = i;
+      while (j < gaps.length && gaps[j].pos === pos) j++;
+      if (pos !== lastPos + 1) {
+        open.forEach(finish);
+        open = [];
+      }
+      const used = new Set<Track>();
+      const next: Track[] = [];
+      for (let k = i; k < j; k++) {
+        const g = gaps[k];
+        const t = open.find((o) => !used.has(o) && Math.abs(o.a - g.a) <= 2 && Math.abs(o.b - g.b) <= 2);
+        if (t) {
+          used.add(t);
+          t.a = g.a;
+          t.b = g.b;
+          t.p1 = pos;
+          next.push(t);
+        } else {
+          next.push({ a: g.a, b: g.b, p0: pos, p1: pos });
+        }
+      }
+      for (const o of open) if (!used.has(o)) finish(o);
+      open = next;
+      lastPos = pos;
+      i = j;
+    }
+    open.forEach(finish);
+  };
+  collect(rowGaps.filter((g) => g.ends), true);
+  collect(colGaps.filter((g) => g.ends), false);
+  if (candidates.length === 0) return { doorPx: 0, widths: [] };
+
+  // Enclosure, judged the way the closing rung for that width would act:
+  // for each width cluster (ascending), close every candidate gap up to the
+  // cluster's rung and flood both sides of each member. Rooms behind
+  // narrower doors seal; wider gaps (openings between buildings, the
+  // street between two blocks) stay open, so the outside stays unbounded
+  // and exterior doors never vote. The flood runs on a grid of
+  // ENCLOSURE_CELL px cells (a cell with any ink is wall), so whole regions
+  // are filled exactly at a sixteenth of the cost; a capped fill would
+  // leave an over-cap region half labelled and its remainder reading as
+  // bounded.
+  candidates.sort((p, q) => p.L - q.L);
+  const D = ENCLOSURE_CELL;
+  const gw = Math.ceil(w / D);
+  const gh = Math.ceil(h / D);
+  const base = new Uint8Array(gw * gh);
+  for (let y = 0, i = 0; y < h; y++) {
+    const gy = (y / D) | 0;
+    for (let x = 0; x < w; x++, i++) if (ink[i]) base[gy * gw + ((x / D) | 0)] = 1;
+  }
+  const cellOf = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? -1 : ((y / D) | 0) * gw + ((x / D) | 0));
+  const cap = MAX_FILL_FRACTION * gw * gh;
+  const label = new Int32Array(gw * gh); // 0 unlabelled, else region id (per cluster)
+  const stack: number[] = [];
+  const clusters: { top: number; n: number }[] = [];
+  for (let i = 0; i < candidates.length; ) {
+    let j = i;
+    while (j + 1 < candidates.length && candidates[j + 1].L <= candidates[i].L * DOOR_CLUSTER) j++;
+    const top = candidates[j].L;
+    const closeUpTo = 2 * Math.min(NEVER - 1, Math.ceil((DOOR_SLACK * top) / 2));
+    const blocked = base.slice();
+    for (const c of candidates) {
+      if (c.L > closeUpTo) break;
+      for (let p = c.t.p0; p <= c.t.p1; p++) {
+        for (let q = c.t.a; q < c.t.b; q++) blocked[c.rows ? cellOf(q, p) : cellOf(p, q)] = 1;
+      }
+    }
+    label.fill(0);
+    const bounded: boolean[] = [true]; // by region id
+    const enclosed = (cell: number): boolean => {
+      if (cell < 0 || blocked[cell]) return false;
+      if (label[cell]) return bounded[label[cell]];
+      const id = bounded.length;
+      stack.length = 0;
+      stack.push(cell);
+      label[cell] = id;
+      let n = 1;
+      while (stack.length) {
+        const idx = stack.pop()!;
+        const x = idx % gw;
+        for (const k of [x > 0 ? idx - 1 : -1, x < gw - 1 ? idx + 1 : -1, idx - gw, idx + gw]) {
+          if (k < 0 || k >= gw * gh || blocked[k] || label[k]) continue;
+          label[k] = id;
+          n++;
+          stack.push(k);
+        }
+      }
+      bounded.push(n <= cap);
+      return n <= cap;
+    };
+    let n = 0;
+    for (let k = i; k <= j; k++) {
+      const c = candidates[k];
+      if (enclosed(cellOf(c.sideA[0], c.sideA[1])) && enclosed(cellOf(c.sideB[0], c.sideB[1]))) n++;
+    }
+    if (n > 0) clusters.push({ top, n });
+    i = j + 1;
+  }
+  if (clusters.length === 0) return { doorPx: 0, widths: [] };
+  let best = clusters[0];
+  for (const c of clusters) if (c.n > best.n) best = c;
+  const doorPx = best.n >= MIN_DOOR_SUPPORT ? best.top : 0;
+  const narrowest = clusters[0].top;
+  const widths = clusters.map((c) => c.top).filter((t) => t <= narrowest * DOOR_WIDEST || t === doorPx);
+  return { doorPx, widths };
+}
+
+/** Ink mask of a raster: 1 where luminance is below tolerance. */
+function inkOf(raster: RasterPage, tolerance: number): Uint8Array {
+  const data = raster.data;
+  const ink = new Uint8Array(raster.width * raster.height);
+  for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000 < tolerance ? 1 : 0;
+  return ink;
+}
+
+/** Raster px per PDF pt of a raster page. */
+function pxPerPtOf(raster: RasterPage): number {
+  return Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
+}
+
+/**
+ * The door width the sheet itself shows (raster px): the best-supported
+ * width among its two-jamb doorways when at least two agree, else 0. The
+ * same reading Dynamic Fill uses without a scale; here for scale checks
+ * (a calibration that makes these doors 2 m wide is wrong). Rasters above
+ * DOOR_CHECK_MAX_PX return 0 rather than spend seconds on a hint.
+ */
+export function sheetDoorWidthPx(raster: RasterPage, tolerance = 150): number {
+  if (raster.width * raster.height > DOOR_CHECK_MAX_PX) return 0;
+  const pxPerPt = pxPerPtOf(raster);
+  const ink = inkOf(raster, tolerance);
+  const doorPx = closingThresholds(ink, raster.width, raster.height, pxPerPt).doors().doorPx;
+  return doorPx >= MIN_DOOR_CHECK_PT * pxPerPt ? doorPx : 0;
 }
 
 export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
@@ -227,8 +539,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   if (lum(sy * w + sx) < tolerance) return { error: 'you clicked on a line — click inside the region' };
 
   // ink mask once; each retry only thickens the gap-closing on top of it
-  const ink = new Uint8Array(w * h);
-  for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = lum(i) < tolerance ? 1 : 0;
+  const ink = inkOf(raster, tolerance);
   // vector doorway bridges become ink: 3 px wide so 4-connected fills can't
   // slip through; bridgePx remembers which ink they added, for provenance
   const bridgePx = hints.bridges?.length ? new Uint8Array(w * h) : null;
@@ -262,11 +573,15 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // is a leak, however far it would run.
   const cap = MAX_FILL_FRACTION * w * h;
   const mask = new Uint8Array(w * h);
-  const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
-  const thr = closingThresholds(ink, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt));
+  const pxPerPt = pxPerPtOf(raster);
+  const { thr, doors: sheetDoorsLazy } = closingThresholds(ink, w, h, pxPerPt);
   // a known scale puts the doorway rung on the ladder and starts there:
-  // every smaller rung only closes a subset of what it closes
-  const doorR = hints.metersPerPt ? Math.min(NEVER - 1, Math.ceil(((DOOR_MAX_M / hints.metersPerPt) * pxPerPt) / 2)) : 0;
+  // every smaller rung only closes a subset of what it closes. Without a
+  // scale the ladder starts at 0 and the sheet's own doorway widths are
+  // tried afterwards, each one guarded (below).
+  const rungFor = (gapPx: number) => Math.min(NEVER - 1, Math.ceil((DOOR_SLACK * gapPx) / 2));
+  let doorR = hints.metersPerPt ? Math.min(NEVER - 1, Math.ceil(((DOOR_MAX_M / hints.metersPerPt) * pxPerPt) / 2)) : 0;
+  let doorSource: 'scale' | 'sheet' | undefined = doorR ? 'scale' : undefined;
   const ladder = [...new Set([...GAP_HALF, doorR])].filter((r) => r >= doorR).sort((a, b) => a - b);
   const labelIdx = (hints.labels ?? []).map((l) => {
     const c = raster.toRaster(l.x, l.y);
@@ -281,24 +596,19 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   });
   const labelsIn = (m: Uint8Array) => labelIdx.filter((probes) => probes.some((i) => m[i])).length;
 
-  let filled: Uint8Array | null = null;
-  let count = 0;
-  let gapR = 0;
-  let bridged = false;
-  let merged: { mask: Uint8Array; count: number; closedR: number; usedBridge: boolean } | null = null;
+  type Fill = { mask: Uint8Array; count: number; gapR: number; bridged: boolean; rung: number };
   const stack: number[] = [];
-  // lowest threshold among pixels the last fill reached: a rung below it
-  // blocks none of them, so its fill would retrace the same region exactly
-  let reachedMin = 0;
-  for (const r of ladder) {
-    if (r < reachedMin) continue;
+  const seedIdx = sy * w + sx;
+  // one flood fill with gaps up to 2r closed. reachedMin: the lowest
+  // threshold among pixels it reached (a rung below it blocks none of them,
+  // so that fill would retrace the same region exactly); leaked: past the cap
+  const fillRung = (r: number): { n: number; closedR: number; usedBridge: boolean; reachedMin: number; leaked: boolean } => {
     mask.fill(0);
     stack.length = 0;
-    const seedIdx = sy * w + sx;
-    if (thr[seedIdx] <= r) continue; // the closing swallowed the click point
+    if (thr[seedIdx] <= r) return { n: 0, closedR: 0, usedBridge: false, reachedMin: 0, leaked: true }; // the closing swallowed the click point
     stack.push(seedIdx);
     mask[seedIdx] = 1;
-    reachedMin = thr[seedIdx];
+    let reachedMin = thr[seedIdx];
     let n = 1;
     // what actually stopped the fill: a closed gap (0 < thr <= r) or a bridge
     let closedR = 0;
@@ -325,33 +635,66 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       if (idx >= w) step(idx - w);
       if (idx + w < w * h) step(idx + w);
     }
-    if (n > cap) continue; // leaked
+    return { n, closedR, usedBridge, reachedMin, leaked: n > cap };
+  };
+  const keep = (f: { n: number; closedR: number; usedBridge: boolean }, rung: number): Fill => ({ mask: mask.slice(), count: f.n, gapR: f.closedR, bridged: f.usedBridge, rung });
+  // a split found by escalating past labels (or by trying a doorway width)
+  // must cut off a room-sized part, not an alcove
+  const minRoomPx = hints.metersPerPt ? MIN_ROOM_M2 / (hints.metersPerPt / pxPerPt) ** 2 : 0;
+  const roomSized = (base: Fill, n: number) => base.count - n >= Math.max(MIN_SPLIT_SHARE * base.count, minRoomPx);
+
+  let out: Fill | null = null;
+  // bounded but spanning several labelled rooms: the fallback while wider
+  // gaps are tried
+  let merged: Fill | null = null;
+  let reachedMin = 0;
+  // highest rung actually filled: fills nest, so a lower rung tried later
+  // can only repeat a result the ladder already judged
+  let topTried = 0;
+  for (const r of ladder) {
+    if (r < reachedMin) continue;
+    const f = fillRung(r);
+    reachedMin = f.reachedMin;
+    topTried = r;
+    if (f.leaked) continue;
     if (labelIdx.length && labelsIn(mask) >= 2) {
-      // bounded but spans several labelled rooms: keep it as the fallback
-      // and try closing wider gaps
-      merged ??= { mask: mask.slice(), count: n, closedR, usedBridge };
+      merged ??= keep(f, r);
       continue;
     }
-    if (merged) {
-      // a split found by escalating past labels must cut off a room-sized part
-      const cut = merged.count - n;
-      const minRoomPx = hints.metersPerPt ? MIN_ROOM_M2 / (hints.metersPerPt / pxPerPt) ** 2 : 0;
-      if (cut < Math.max(MIN_SPLIT_SHARE * merged.count, minRoomPx)) break;
-    }
-    filled = mask;
-    count = n;
-    gapR = closedR;
-    bridged = usedBridge;
+    if (merged && !roomSized(merged, f.n)) break;
+    out = keep(f, r);
     break;
   }
-  if (!filled && merged) {
-    filled = merged.mask;
-    count = merged.count;
-    gapR = merged.closedR;
-    bridged = merged.usedBridge;
+  // Without a scale, each doorway width the sheet shows is tried in turn
+  // (narrowest first) beyond the rung reached so far: it is kept when it
+  // bounds a fill that leaked, or cuts a room-sized part off the fill (the
+  // door between two rooms), never when it only shaves an alcove. A width
+  // that swallows the click or still leaks is simply skipped, so nothing
+  // the sheet shows can break a fill that was already bounded.
+  if (!hints.metersPerPt) {
+    for (const width of sheetDoorsLazy().widths) {
+      const r = rungFor(width);
+      const base = out ?? merged;
+      if (r <= Math.max(topTried, base ? base.rung : 0)) continue;
+      const f = fillRung(r);
+      if (f.leaked) continue;
+      if (labelIdx.length && labelsIn(mask) >= 2) {
+        merged ??= keep(f, r);
+        continue;
+      }
+      if (base && !roomSized(base, f.n)) continue;
+      out = keep(f, r);
+      doorR = r;
+      doorSource = 'sheet';
+      break;
+    }
   }
-  if (!filled) return unbounded();
-  const region: Uint8Array = filled;
+  if (!out && merged) out = merged;
+  if (!out) return unbounded();
+  const region = out.mask;
+  const count = out.count;
+  const gapR = out.gapR;
+  const bridged = out.bridged;
 
   // Moore-neighbour boundary trace, clockwise from the topmost-leftmost pixel
   let startIdx = -1;
@@ -412,7 +755,12 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   if (area < 0.8 * (count - boundaryPts.length) || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
-  return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}), ...(bridged ? { bridged: true } : {}) };
+  return {
+    points,
+    ...(gapR > 0 ? { gapPx: 2 * gapR } : {}),
+    ...(bridged ? { bridged: true } : {}),
+    ...(doorSource ? { doorPx: 2 * doorR, doorSource } : {}),
+  };
 }
 
 function shoelace(pts: { x: number; y: number }[]): number {

@@ -116,14 +116,22 @@ generations behind the fixes they were supposed to verify. On fresh tabs,
 every operation synced both directions. Lesson: when a bug refuses to
 reproduce in isolation, suspect the test harness before the code.
 
-### Dynamic Fill leaks through doors (and that's honest)
+### Dynamic Fill leaked through doors (and we said so)
 
 Click inside a room, flood-fill to the walls, read the area — it works in
 ~150 ms and creates a normal editable polygon. But floor-plan walls have
 door openings, and a naive flood fill escapes through them (on our sample
-it read 74 m² for a 32 m² office). Bluebeam solves this with a gap-close
-setting; ours is documented as the known follow-up. Lesson: ship the
-mechanism, name the limitation, don't pretend.
+it read 74 m² for a 32 m² office). We shipped it with that limitation
+named, then closed it in layers, each with a bench case that failed first:
+gaps are closed only between wall ends (so a bench near a wall is never
+"closed" onto it); a calibrated scale closes doorways up to 1.0 m; room
+labels in the text layer split rooms a door joins; the vector layer
+bridges doors at any angle; and on a bare scan with none of those, the
+sheet's own doorways, the gaps between facing wall ends, vote for a door
+width that is tried only where it cuts off a room-sized part. The
+accuracy bench now passes 23 of 24 room cases, the open one being a
+diagonal door on a scan with no vector layer. Lesson: ship the mechanism,
+name the limitation, then measure your way out of it.
 
 ## Numbers we can stand behind
 
@@ -143,8 +151,8 @@ mechanism, name the limitation, don't pretend.
 
 Three things, honestly scoped: a cross-machine relay for live sessions
 (Cloudflare Durable Objects — the same CRDT layer, new transport), a
-trained in-browser symbol detector that upgrades the scan for cluttered
-sheets (the seam is built; the model is training), and the phase our
+second generation of the in-browser symbol detector (v1 shipped with five
+synthetic classes; real drawings and estimator corrections are next), and the phase our
 strategy document has demanded all along — hardening against real tender
 sets, with published "works on X" numbers instead of adjectives.
 

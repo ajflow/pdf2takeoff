@@ -214,3 +214,37 @@ What a result would be worth: this is the only public counting benchmark with VL
 - https://zenodo.org/record/2613548 (CubiCasa5K data host, blocked) [reported]
 - Related, not the same benchmark: AEC-Bench by Nomic (arXiv 2603.29199, Apache-2.0, agentic tasks) https://github.com/nomic-ai/aec-bench [reported]
 - Local artefacts from this session (scratch, not committed): clone at `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/aecv/repo`; wrapped PDFs in `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/aecv/wrapped`; helper scripts `stats.py`, `leaderboard.py`, `png2pdf.mjs`, `probe.mjs`, `png-scan.mjs` in `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/tools`.
+
+## Status 2026-10-18: scripted harness and raster opening detector (WP3)
+
+Built, on branch `worktree-agent-a326235b864df9b25` (based on `enhance/benchmark-sweep`):
+
+- `src/engine/openings.ts`: environment-agnostic raster opening detector. `detectOpenings(raster)` returns door leaves, Window groups, open passages and a wall summary; `countEnclosedSpaces(raster)` bridges every detected gap and counts enclosed regions above a minimum area, exterior excluded. Pipeline: binarize; length-weighted stroke-width histogram restricted to long runs, with a floor at 1.6x the pen weight, picks the thinnest wall class t; an optional small closing (kept only when it clearly raises the share of ink in long wall-class bands) solidifies hatched and double-line walls; walls under 7 px work at an integer upsample; morphological opening just under t gives the wall mask; gaps are non-wall runs between a wall end and wall ink, stacked across the wall thickness; each gap is classified by thin ink (ink minus walls): an arc from one jamb with its hinge on the other jamb or inside the gap, counted only where the ink is a lone thin curve (hatch, text and stair treads score nothing), plus a leaf line, is a door; parallel lines along an otherwise empty band between two wall ends are a Window group (merged across mullions under one wall thickness); the rest are passages. Every tunable sits in `DEFAULT_OPENING_OPTIONS`.
+- `scripts/aecv-bench.mjs`: `node --experimental-strip-types scripts/aecv-bench.mjs --data <AECV-Bench clone> [--limit N] [--ids a,b] [--labels words.json] [--debug-dir dir] [--out f.csv] [--json f.json] [--opt key=value] [--verbose] [--probe x,y]`. Loads each PNG/JPG with @napi-rs/canvas at 1 px = 1 pt, writes the benchmark's `name,original,extracted` CSV and prints per-field exact match and MAPE exactly as `visualizer.py` computes them (zero ground truth: a zero prediction counts as a perfect row, anything else is skipped), plus the five-field and four-field means. Bedroom and Toilet go through `labelsFor(planId)`, which reads the optional `--labels` JSON and returns `[]` today; the headless OCR pass (WP2) plugs in there, and `countLabels` already applies the benchmark's word rules (Bedroom/Chambre/Zimmer/Camera/MH..., WC/Bath/Bain/Douche/SDB/Toilet/KPH..., Lavatory excluded). The data stays out of the repo.
+- `scripts/check-openings.mjs`, wired into `typecheck:engine`: a pdf-lib sheet at 1:100 with 0.2 m outer walls, 0.1 m partitions, four rooms, five door gaps (one double door, six leaves), four Window gaps (two adjacent across a 0.08 m mullion, one group), a bare passage, furniture and labels, rendered through the Node raster path, must count exactly 6 doors, 4 Window groups, 4 spaces and 1 passage. It fails without the detector and passes with it.
+
+Result on the 120 counting plans (clone e6f9364, default options, 518 s total, median 3.4 s per plan on one core):
+
+| field | pdf2takeoff EM | pdf2takeoff MAPE | best VLM EM (Gemini 3.5 Flash) | best VLM MAPE |
+|---|---|---|---|---|
+| Door | 0.117 | 72.9% | 0.43 | 12.4% |
+| Window | 0.092 | 184.5% | 0.39 | 16.6% |
+| Space | 0.058 | 221.4% | 0.14 (best anywhere 0.27) | n/a |
+| Bedroom | 0.092 | 90.8% | 0.93 | n/a |
+| Toilet | 0.033 | 96.7% | 0.82 | n/a |
+| mean (5 fields, visualizer.py) | 0.078 | 133.3% | 0.543 | 15.3% |
+| mean (4 fields, README) | 0.083 | 111.2% | 0.644 | n/a |
+
+Bedroom and Toilet are label fields and the harness has no OCR yet, so those rows are exactly the share of plans whose ground truth is zero (11 and 4 plans); they are reported, not claimed. Door and Window are within +-1 of the truth on 32 and 31 plans; Space on 19.
+
+Per family (Door / Window / Space EM, then Door / Window MAPE): `2000` US CAD exports, 15 plans: 0.07 / 0.07 / 0.00, 47% / 32%. `3000` hatched-floor residential, 8: 0.00 / 0.00 / 0.13, 45% / 28%. `4000` A4 300 dpi French plans, 17: 0.12 / 0.24 / 0.00, 44% / 19% (the cleanest family: 4000-0001 counts 12/11 doors, 12/12 windows, 12/13 spaces). `5000` CubiCasa-style Finnish scans, 35: 0.03 / 0.00 / 0.06, 84% / 279%. `6000` rendered plans, 40: 0.25 / 0.15 / 0.10, 86% / 218%. `0000` scanned French plans, 5: 0 everywhere, 115% / 527%. The ten worst plans are all `5000` and `0000`.
+
+Main failure modes seen in the overlays:
+
+1. Wall thickness on hatched scans. The `5000` and `0000` families draw walls as hatched bands; the estimator must close the hatch first, and the closing only wins when the closed histogram shows a wall-class peak. On about a third of the `5000` plans the thinnest "wall" peak is the 4 to 5 px hatch pen or closed furniture outlines, the kernel stays at 3 px, every thin line becomes wall, and hundreds of junk gaps follow (5000_0025: 166 doors, 61 windows, 243 spaces against 22, 18, 30). This single stage explains the whole tail of the error distribution.
+2. Over-counted windows. Furniture pairs, kitchen counters, stair stringers and bed outlines between two wall ends read as glazing; the clutter test and the two-wall-ends rule removed roughly half of them (Window MAPE 423% to 185%), the rest are indistinguishable from a window by lines alone.
+3. Doors. Half-open doors (45 degree leaf, short arc: `2000`, `3000`) and doors sharing a gap with an opening or a second door (`6000`) are handled; doors drawn over a continuous wall line with no gap (some `6000` plans), doors whose jamb detail boxes break the wall band, and arcs crossed by dense text are missed; false doors come from round fixtures and furniture arcs at a wall end. Door errors split evenly (49 plans over, 57 under).
+4. Spaces are over-counted on 90 plans: any leftover wall-mask junk cuts rooms into pieces, and stair blocks, shafts and the white boxes of jamb details survive the minimum-area filter. On clean plans the count is within one or two (4000-0001 12/13, 6000-0024 9/10).
+5. Ground-truth quirks: 6000-0001 shows eight door arcs and a dozen windows but is annotated 3 and 5, so even a perfect reading would miss there.
+
+Honest reading: the deterministic detector is nowhere near the VLM table on this benchmark (0.08 mean EM against 0.54). It is exact on a minority of clean CAD-export plans and collapses on hatched scans. The harness, metrics and overlay tooling are the reusable part; the next lever is the wall-thickness stage (a hatch-aware wall model, or using Dynamic Fill's room regions to validate wall classes), then OCR for the two label fields, which alone would add about 0.35 to the five-field mean if it matched the VLMs.

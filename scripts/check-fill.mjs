@@ -7,7 +7,11 @@
 // first can't see: an L-shaped room (the trace must follow concave corners,
 // not cut across them) and a door in a horizontal wall (row-wise closing).
 // A third covers the wall-end gate: a bench line near a wall must not be
-// closed onto it, and doors in thick filled walls still bridge.
+// closed onto it, and doors in thick filled walls still bridge. A fourth
+// covers label-driven splits, and a fifth bare doorways that never leak:
+// two rooms joined by a door-width gap split without labels or a scale, a
+// niche stays part of its room, and an opening wider than a door only
+// closes once a scale says it is still door-sized.
 
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
 
@@ -188,4 +192,78 @@ const aG = area(r.points);
 console.log(`room G (labelled rooms joined by a door): area ${aG.toFixed(0)} (ideal ~41561)`);
 if (Math.abs(aG - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split: ${aG}`); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; unbounded errors');
+// --- ink-edge area: the outline runs along the ink face, not through the
+// centres of the last free pixels (which inset every wall by half a pixel
+// and undercount a room by half its perimeter). On clean pixel rooms the
+// area must be exact to well under 1%.
+for (const [label, got, ideal] of [['room A', aA, 20511], ['room B', aB, 17331], ['L room', aL, 29601], ['room E', aE, 179025]]) {
+  if (Math.abs(got - ideal) / ideal > 0.005) { console.error(`FAIL ink-edge area ${label}: ${got} vs ${ideal} (${(100 * (got - ideal) / ideal).toFixed(2)}%)`); process.exit(1); }
+}
+console.log('ink-edge area: sealed, gapped, concave and thick-wall rooms exact to 0.5%');
+
+// --- fifth sheet: bare door gaps that never leak (P13) ------------------------
+const W5 = 900;
+const H5 = 500;
+const px5 = new Uint8ClampedArray(W5 * H5 * 4).fill(255);
+const box5 = (x0, y0, x1, y1) => {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = (y * W5 + x) * 4;
+    px5[i] = px5[i + 1] = px5[i + 2] = 0;
+  }
+};
+// rooms J and K: 20..420 x 20..320 inside a sealed outline, split by a wall at
+// x 220 with a 70px bare doorway between wall ends (y 150..219), no leaf, no
+// labels, no scale: the fill never leaks, so only the room-sized cut rule
+// can separate them
+box5(20, 20, 420, 20); box5(20, 320, 420, 320); box5(20, 20, 20, 320); box5(420, 20, 420, 320);
+box5(220, 20, 220, 149); box5(220, 220, 220, 320);
+// room L: 500..880 x 20..320 with a 1.2 m2-ish niche (60 x 80 px) off its
+// right wall, open through a 60px gap between wall ends: a niche is floor
+box5(500, 20, 820, 20); box5(500, 320, 820, 320); box5(500, 20, 500, 320);
+box5(820, 20, 820, 130); box5(820, 190, 820, 320);
+box5(820, 130, 880, 130); box5(820, 190, 880, 190); box5(880, 130, 880, 190);
+// rooms M and N: 20..420 x 350..490, split by a wall at x 220 whose two
+// stubs leave a 110px opening between wall ends (y 365..474): wider than any
+// unscaled rung, so without a scale the two stay one region; a scale that
+// makes the opening 1.2 m cuts it as a wide doorway, one that makes it
+// 1.5 m leaves it open
+box5(20, 350, 420, 350); box5(20, 490, 420, 490); box5(20, 350, 20, 490); box5(420, 350, 420, 490);
+box5(220, 350, 220, 364); box5(220, 475, 220, 490);
+const raster5 = { width: W5, height: H5, data: px5, toPdf: (x, y) => ({ x, y: H5 - y }), toRaster: (x, y) => ({ x, y: H5 - y }) };
+const at5 = (x, y) => ({ x, y: H5 - y });
+
+// 10. room J alone: 199 x 299 = 59501 (the merged pair would be 399 x 299 = 119301)
+r = dynamicFill(raster5, at5(120, 170));
+if ('error' in r) { console.error('FAIL room J (bare doorway, no hints):', r.error); process.exit(1); }
+const aJ = area(r.points);
+console.log(`room J (bare 70px doorway, no leak, no hints): area ${aJ.toFixed(0)} (ideal ~59501), gapPx ${r.gapPx}`);
+if (Math.abs(aJ - 59501) / 59501 > 0.01) { console.error(`FAIL room J not cut from K at the doorway: ${aJ}`); process.exit(1); }
+if (!(r.gapPx >= 70 && r.gapPx <= 72)) { console.error(`FAIL room J gap report: ${r.gapPx}`); process.exit(1); }
+
+// 11. room L keeps its niche: 319 x 299 + 59 x 59 = 95381 + 3481 = 98862
+r = dynamicFill(raster5, at5(660, 170));
+if ('error' in r) { console.error('FAIL room L (niche):', r.error); process.exit(1); }
+const aLn = area(r.points);
+console.log(`room L (niche through a 60px gap): area ${aLn.toFixed(0)} (ideal ~98862 with the niche)`);
+if (Math.abs(aLn - 98862) / 98862 > 0.01) { console.error(`FAIL room L lost its niche: ${aLn}`); process.exit(1); }
+
+// 12. a 110px opening is wider than the unscaled ladder closes: rooms M and N
+// stay one region (399 x 139 = 55461); at a scale where 110 px is 1.2 m the
+// wide-doorway rung cuts them (199 x 139 = 27661); at 1.5 m it does not
+r = dynamicFill(raster5, at5(120, 420));
+if ('error' in r) { console.error('FAIL room M (wide opening, no scale):', r.error); process.exit(1); }
+const aM = area(r.points);
+console.log(`room M (110px opening, no scale): area ${aM.toFixed(0)} (ideal ~55461, stays merged)`);
+if (Math.abs(aM - 55461) / 55461 > 0.01) { console.error(`FAIL room M unexpectedly cut or leaked: ${aM}`); process.exit(1); }
+r = dynamicFill(raster5, at5(120, 420), undefined, { metersPerPt: 1.2 / 110 });
+if ('error' in r) { console.error('FAIL room M (wide opening, 1.2 m):', r.error); process.exit(1); }
+const aMs = area(r.points);
+console.log(`room M (110px opening = 1.2 m): area ${aMs.toFixed(0)} (ideal ~27661, cut at the wide doorway)`);
+if (Math.abs(aMs - 27661) / 27661 > 0.01) { console.error(`FAIL room M not cut at the wide doorway: ${aMs}`); process.exit(1); }
+r = dynamicFill(raster5, at5(120, 420), undefined, { metersPerPt: 1.5 / 110 });
+if ('error' in r) { console.error('FAIL room M (wide opening, 1.5 m):', r.error); process.exit(1); }
+const aMw = area(r.points);
+console.log(`room M (110px opening = 1.5 m): area ${aMw.toFixed(0)} (ideal ~55461, an opening, not a door)`);
+if (Math.abs(aMw - 55461) / 55461 > 0.01) { console.error(`FAIL room M cut at a 1.5 m opening: ${aMw}`); process.exit(1); }
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; bare doorways cut without a leak; unbounded errors');

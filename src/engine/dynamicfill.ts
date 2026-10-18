@@ -14,13 +14,19 @@
 // shoelace-vs-pixel-count check rejects pathological traces
 // (docs/research/patch-plan.md, patch 2).
 //
-// Rooms joined by an interior door never leak, so two hints escalate the
-// closing further (patch-plan-2 P13): with a known scale, doorways up to
-// 1.0 m between wall ends are always closed; and a fill holding two or more
-// room labels from the text layer keeps escalating until the clicked room
-// holds one. On born-digital sheets the host can also pass doorway bridges
-// from the vector layer (fill-vector.ts, P18), which close doors at any
-// angle, including in diagonal walls.
+// Rooms joined by an interior door never leak, so the ladder also climbs
+// past a bounded fill (patch-plan-2 P13): a rung that closes a door-width
+// gap between wall ends and cuts a room-sized part off the fill wins, while
+// one that only shaves an alcove stops the climb. Two hints sharpen this:
+// with a known scale, doorways up to 1.0 m are always closed and openings
+// up to 1.3 m may be cut; and a fill holding exactly one room label from
+// the text layer is the clicked room. On born-digital sheets the host can
+// also pass doorway bridges from the vector layer (fill-vector.ts, P18),
+// which close doors at any angle, including in diagonal walls.
+//
+// The traced outline follows the pixel edges of the filled region, so the
+// polygon runs along the ink face and its area is the inside-face area
+// (scripts/room-bench.mjs scores this against ResPlan floor plans).
 
 import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
@@ -44,6 +50,12 @@ export type FillResult = { points: Pt[]; gapPx?: number; bridged?: boolean } | {
 
 /** Widest doorway closed automatically once the page scale is known (m). */
 const DOOR_MAX_M = 1.0;
+/**
+ * Widest opening a bounded fill may still be cut at with a known scale (m):
+ * entrance doors and framed openings run to about 1.2 m. Unlike DOOR_MAX_M
+ * the cut is guarded, it must separate room-sized parts (see the ladder).
+ */
+const DOOR_WIDE_M = 1.3;
 /** Ink at least this thick (PDF pt) counts as a heavy (wall-weight) line. */
 const HEAVY_PT = 0.9;
 /** Ink pieces spanning less than this (PDF pt) are marks, not structure (~1.3 m at 1:100). */
@@ -257,17 +269,23 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   });
 
   // flood fill (4-connectivity keeps the boundary tight), boundary = ink with
-  // gaps up to 2r closed; escalate only while the fill leaks or holds more
-  // than one room label. A fill stops the moment it passes the cap: a leak
-  // is a leak, however far it would run.
+  // gaps up to 2r closed; the ladder escalates while the fill leaks, and
+  // past that while a wider rung still cuts a room-sized part off (below).
+  // A fill stops the moment it passes the cap: a leak is a leak, however far
+  // it would run.
   const cap = MAX_FILL_FRACTION * w * h;
-  const mask = new Uint8Array(w * h);
   const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
   const thr = closingThresholds(ink, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt));
-  // a known scale puts the doorway rung on the ladder and starts there:
-  // every smaller rung only closes a subset of what it closes
-  const doorR = hints.metersPerPt ? Math.min(NEVER - 1, Math.ceil(((DOOR_MAX_M / hints.metersPerPt) * pxPerPt) / 2)) : 0;
-  const ladder = [...new Set([...GAP_HALF, doorR])].filter((r) => r >= doorR).sort((a, b) => a - b);
+  // a known scale puts the doorway rung on the ladder and starts there
+  // (every smaller rung only closes a subset of what it closes), and adds
+  // the wide-doorway rung: the widest gap a bounded fill may still be cut
+  // at. Rungs above it stay on the ladder for leaks only.
+  const rungFor = (m: number) => Math.min(NEVER - 1, Math.ceil(((m / hints.metersPerPt!) * pxPerPt) / 2));
+  const doorR = hints.metersPerPt ? rungFor(DOOR_MAX_M) : 0;
+  const wideR = hints.metersPerPt ? rungFor(DOOR_WIDE_M) : Infinity;
+  const ladder = [...new Set([...GAP_HALF, doorR, ...(hints.metersPerPt ? [wideR] : [])])].filter((r) => r >= doorR).sort((a, b) => a - b);
+  const cutMaxR = wideR;
+  const minRoomPx = hints.metersPerPt ? MIN_ROOM_M2 / (hints.metersPerPt / pxPerPt) ** 2 : 0;
   const labelIdx = (hints.labels ?? []).map((l) => {
     const c = raster.toRaster(l.x, l.y);
     const rp = LABEL_PROBE_PT * pxPerPt;
@@ -281,17 +299,23 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   });
   const labelsIn = (m: Uint8Array) => labelIdx.filter((probes) => probes.some((i) => m[i])).length;
 
-  let filled: Uint8Array | null = null;
-  let count = 0;
-  let gapR = 0;
-  let bridged = false;
-  let merged: { mask: Uint8Array; count: number; closedR: number; usedBridge: boolean } | null = null;
+  // The ladder climbs past the first bounded fill too (P13): a room joined
+  // to its neighbour by a doorway never leaks, so a rung that closes a
+  // door-width gap between wall ends and cuts off a room-sized part of the
+  // fill (MIN_SPLIT_SHARE, or MIN_ROOM_M2 with a scale) wins over the merged
+  // fill. A rung that cuts off less is shaving an alcove or a niche, and
+  // since every wider rung closes at least as much, the climb stops there.
+  // A fill holding exactly one room label is the clicked room and stops
+  // the climb at once.
+  let best: { mask: Uint8Array; count: number; closedR: number; usedBridge: boolean } | null = null;
+  let mask: Uint8Array = new Uint8Array(w * h);
   const stack: number[] = [];
   // lowest threshold among pixels the last fill reached: a rung below it
   // blocks none of them, so its fill would retrace the same region exactly
   let reachedMin = 0;
   for (const r of ladder) {
     if (r < reachedMin) continue;
+    if (best && r > cutMaxR) break;
     mask.fill(0);
     stack.length = 0;
     const seedIdx = sy * w + sx;
@@ -303,11 +327,12 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     // what actually stopped the fill: a closed gap (0 < thr <= r) or a bridge
     let closedR = 0;
     let usedBridge = false;
+    const m = mask;
     const step = (i: number) => {
-      if (mask[i]) return;
+      if (m[i]) return;
       const t = thr[i];
       if (t > r) {
-        mask[i] = 1;
+        m[i] = 1;
         n++;
         if (t < reachedMin) reachedMin = t;
         stack.push(i);
@@ -326,34 +351,29 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       if (idx + w < w * h) step(idx + w);
     }
     if (n > cap) continue; // leaked
-    if (labelIdx.length && labelsIn(mask) >= 2) {
-      // bounded but spans several labelled rooms: keep it as the fallback
-      // and try closing wider gaps
-      merged ??= { mask: mask.slice(), count: n, closedR, usedBridge };
-      continue;
+    if (best) {
+      const cut = best.count - n;
+      if (cut <= 0) continue; // this rung closed nothing on the room's boundary
+      if (cut < Math.max(MIN_SPLIT_SHARE * best.count, minRoomPx)) break; // an alcove, not a room
     }
-    if (merged) {
-      // a split found by escalating past labels must cut off a room-sized part
-      const cut = merged.count - n;
-      const minRoomPx = hints.metersPerPt ? MIN_ROOM_M2 / (hints.metersPerPt / pxPerPt) ** 2 : 0;
-      if (cut < Math.max(MIN_SPLIT_SHARE * merged.count, minRoomPx)) break;
-    }
-    filled = mask;
-    count = n;
-    gapR = closedR;
-    bridged = usedBridge;
-    break;
+    const freed = best?.mask ?? null;
+    best = { mask, count: n, closedR, usedBridge };
+    if (labelIdx.length && labelsIn(mask) === 1) break; // the clicked room holds its own label only
+    mask = freed ?? new Uint8Array(w * h);
   }
-  if (!filled && merged) {
-    filled = merged.mask;
-    count = merged.count;
-    gapR = merged.closedR;
-    bridged = merged.usedBridge;
-  }
-  if (!filled) return unbounded();
-  const region: Uint8Array = filled;
+  if (!best) return unbounded();
+  const region = best.mask;
+  const count = best.count;
+  const gapR = best.closedR;
+  const bridged = best.usedBridge;
 
-  // Moore-neighbour boundary trace, clockwise from the topmost-leftmost pixel
+  // Outer boundary trace along pixel EDGES (crack following), clockwise from
+  // the top-left corner of the topmost-leftmost pixel. The vertices sit on
+  // the lattice of pixel corners, so the polygon is the exact outline of the
+  // filled pixels and its area is their count: the boundary runs along the
+  // face of the ink, not through the centres of the last free pixels, which
+  // would inset every wall by half a pixel and undercount the room by half
+  // its perimeter in pixels.
   let startIdx = -1;
   for (let i = 0; i < region.length; i++) {
     if (region[i]) {
@@ -361,55 +381,50 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       break;
     }
   }
-  const dirs = [
-    [1, 0],
-    [1, 1],
-    [0, 1],
-    [-1, 1],
-    [-1, 0],
-    [-1, -1],
-    [0, -1],
-    [1, -1],
-  ] as const;
-  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && region[y * w + x];
+  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && region[y * w + x] === 1;
+  // headings E, S, W, N; the region stays on the right of the heading
+  const DX = [1, 0, -1, 0];
+  const DY = [0, 1, 0, -1];
+  // pixels ahead-left and ahead-right of a corner for each heading
+  const FLX = [0, 0, -1, -1];
+  const FLY = [-1, 0, 0, -1];
+  const FRX = [0, -1, -1, 0];
+  const FRY = [0, 0, -1, -1];
   const boundaryPts: { x: number; y: number }[] = [];
-  let cx = startIdx % w;
-  let cy = (startIdx / w) | 0;
-  let dir = 0; // entered heading east (nothing lies above or left of start)
-  const startX = cx;
-  const startY = cy;
-  let firstDir = -1;
-  for (let guard = 0; guard < 4 * region.length; guard++) {
-    // search clockwise starting 90° left of the heading, so the trace hugs
-    // the outside and follows concave corners instead of cutting across them
-    let d = -1;
-    for (let k = 0; k < 8; k++) {
-      const c = (dir + 6 + k) % 8;
-      if (at(cx + dirs[c][0], cy + dirs[c][1])) {
-        d = c;
-        break;
-      }
+  const startX = startIdx % w;
+  const startY = (startIdx / w) | 0;
+  let cx = startX;
+  let cy = startY;
+  let dir = 0; // heading east along the top edge of the start pixel
+  let perimeter = 0;
+  // the start corner is a true vertex: the trace leaves it eastward and,
+  // with nothing above or left of the start pixel, returns to it heading
+  // north, and no other pixel touches that corner
+  boundaryPts.push({ x: cx, y: cy });
+  for (let guard = 0; guard <= 4 * region.length + 4; guard++) {
+    // a filled pixel ahead-left means the boundary turns left (diagonal
+    // contacts stay joined, as the pixel trace did); ahead-right filled means
+    // straight on; nothing ahead means the outline turns right
+    const next = at(cx + FLX[dir], cy + FLY[dir]) ? (dir + 3) % 4 : at(cx + FRX[dir], cy + FRY[dir]) ? dir : (dir + 1) % 4;
+    if (next !== dir) {
+      boundaryPts.push({ x: cx, y: cy });
+      dir = next;
     }
-    // Jacob's stopping criterion: back at the start, leaving the way we first left
-    if (d >= 0 && cx === startX && cy === startY && d === firstDir) break;
-    boundaryPts.push({ x: cx, y: cy });
-    if (d < 0) break; // single-pixel region
-    if (firstDir < 0) firstDir = d;
-    cx += dirs[d][0];
-    cy += dirs[d][1];
-    dir = d;
+    cx += DX[dir];
+    cy += DY[dir];
+    perimeter++;
+    if (cx === startX && cy === startY) break;
   }
-  if (boundaryPts.length < 8) return { error: 'that region is too small to fill' };
+  if (perimeter < 12) return { error: 'that region is too small to fill' };
 
   const simplified = douglasPeucker(boundaryPts, 1.5);
   if (simplified.length < 3) return { error: 'that region is too small to fill' };
 
-  // plausibility: the polygon runs through the centres of the boundary
-  // pixels, so its area sits at roughly count minus half the perimeter (more
-  // when ink islands inside the room are excluded from count). Well under
-  // count minus the full perimeter means the trace cut across the region.
+  // plausibility: the outline encloses exactly the filled pixels (plus any
+  // ink islands inside the room, which count excludes), so its area is at
+  // least count. Well under it means the trace cut across the region.
   const area = shoelace(simplified);
-  if (area < 0.8 * (count - boundaryPts.length) || area > 5 * count) return unbounded();
+  if (area < 0.8 * count || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
   return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}), ...(bridged ? { bridged: true } : {}) };

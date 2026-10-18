@@ -187,3 +187,74 @@ Why ResPlan first: it is reachable, licence-clean for internal use, polygonal, c
 - CVC-FP: https://dag.cvc.uab.es/dataset/cvc-fp-database-for-structural-floor-plan-analysis/ ; R2V: https://openaccess.thecvf.com/content_iccv_2017/html/Liu_Raster-To-Vector_Revisiting_Floorplan_ICCV_2017_paper.html
 - Area underestimation study: EasyChair preprint https://easychair.org/publications/paper/pkrRp ; Togal net vs gross area definition https://help.togal.ai/en/articles/15602901-ai-powered-area-and-wall-detection
 - Session artefacts: `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/rooms/` (resplan, mlstruct-fp) and `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/tools/`.
+
+## Status 2026-10-18
+
+The ResPlan bench is checked in: `scripts/bench/resplan_to_pdf.py` renders
+the plans (variants A bare door gaps, B door leaf closed in the opening, C
+leaf plus swing arc, D rasterised image PDF) and `npm run bench:rooms`
+(`scripts/room-bench.mjs`) scores Dynamic Fill through the headless CLI path
+with scale, text-layer labels and vector bridges as hints. Setup in
+`scripts/bench/README.md`. Numbers below: 200 test-split plans (seed 1),
+1:100 on A3, 3 px/pt, 1,396 rooms of which 1,223 are enclosed (the other
+173 are open plan: a doorless opening wider than 1.3 m to another room,
+mostly kitchens, which no fill can separate) plus 267 balconies, gardens and
+parking bays outside the envelope, scored on their own rows. Variant D is
+generated but not scored: the Node renderer cannot open image PDFs yet.
+One run of 200 plans x 3 variants takes about 400 s with four jobs.
+
+Two engine changes came out of the trial findings, both in
+`src/engine/dynamicfill.ts`:
+
+1. Ink-edge trace. The outline now follows the pixel edges of the filled
+   region (crack following) instead of the centres of the last free pixels,
+   so the polygon sits on the ink face and its area is the pixel count. On
+   `scripts/check-fill.mjs` synthetic rooms the area is now exact (was 1.4
+   to 1.5 percent under); on the `npm run bench` fill cases the error fell
+   from 0.7 to 1.6 percent to 0.0 to 0.9 percent.
+2. Door-width cuts of bounded fills. The closing ladder now climbs past the
+   first bounded fill: a rung that closes a gap between wall ends and cuts a
+   room-sized part off (15 percent of the fill, or 2 m2 with a scale) wins;
+   a rung that cuts less stops the climb (an alcove or niche stays floor).
+   With a scale, doorways up to 1.0 m are closed outright as before and
+   openings up to 1.3 m may be cut this way (ResPlan wall gaps are 1.0 to
+   1.3 m for 57 percent of doors, wider than the door polygons). This closes
+   the known bench case `fill/interior-door-no-hints` (bench now 12/12).
+
+Enclosed rooms, before the two fixes (same PDFs, same bench):
+
+| Variant | Median rel err vs inside face | p90 abs err | Median vs polygon as is | Median IoU (as is / face) | Leak rate | Unbounded rate | Recovered (IoU >= 0.5, no leak) |
+|---|---|---|---|---|---|---|---|
+| A bare gaps | -2.6 pct | 16.8 pct | -7.7 pct | 0.837 / 0.873 | 2.4 pct | 43.4 pct | 53.8 pct |
+| B door leaf | -2.1 pct | 24.7 pct | -5.2 pct | 0.923 / 0.972 | 5.7 pct | 0.9 pct | 92.9 pct |
+| C leaf plus arc | -4.6 pct | 40.3 pct | -8.9 pct | 0.858 / 0.884 | 5.5 pct | 1.1 pct | 90.6 pct |
+
+After:
+
+| Variant | Median rel err vs inside face | p90 abs err | Median vs polygon as is | Median IoU (as is / face) | Leak rate | Unbounded rate | Recovered (IoU >= 0.5, no leak) |
+|---|---|---|---|---|---|---|---|
+| A bare gaps | -1.5 pct | 13.2 pct | -5.3 pct | 0.931 / 0.980 | 2.9 pct | 6.5 pct | 89.9 pct |
+| B door leaf | -1.7 pct | 6.0 pct | -5.1 pct | 0.944 / 0.981 | 1.6 pct | 0.7 pct | 96.8 pct |
+| C leaf plus arc | -5.0 pct | 33.7 pct | -8.5 pct | 0.873 / 0.899 | 2.1 pct | 0.6 pct | 93.9 pct |
+
+Per room type after the fixes (variant B): bedrooms -1.1 pct median, p90
+1.8 pct, IoU 0.960; bathrooms -2.3 pct, p90 4.6 pct, IoU 0.918; kitchens
+-2.6 pct (leak 4.3 pct, was 45 pct: doorless kitchen openings up to 1.3 m
+are now cut); living -1.3 pct, IoU 0.944. Variant A living rooms are the
+remaining weak spot (20 pct unbounded: the front door gap is wider than
+1.3 m or sits against a corner of a thin wall). Variant C errors are the
+door swing sectors the arcs wall off: against the face area minus the
+swings the median is -1.5 pct (column `no-swing` in the bench).
+
+Reading the residual: the -1.5 to -1.7 pct median against the inside face
+is mostly a convention gap, not a trace bias. ResPlan room polygons include
+part of each door opening, which the fill never does (the leaf outline or
+the closed gap runs between the jambs). Against the inside face minus door
+openings (`gt_face_nodoor_m2`, printed under the table) the median is
+-0.9 pct (A) and -1.1 pct (B); the rest is the 0.5 pt window and leaf
+strokes and the 150/255 ink threshold. Before the fixes those were -2.0 and
+-1.6 pct, so the ink-edge trace recovered about one percent.
+
+Open: distance-transform neck cuts at any angle (diagonal doorways without
+a vector layer); front doors wider than 1.3 m; variant D needs the headless
+raster path to open image PDFs; CubiCasa5K and MSD as in the plan above.

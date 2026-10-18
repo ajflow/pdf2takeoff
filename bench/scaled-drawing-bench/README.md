@@ -4,7 +4,28 @@ A public, deterministic benchmark for measuring quantities from a scaled
 construction drawing: the drawing scale, wall lengths, room areas and
 perimeters, symbol counts, printed dimensions, and what changed between two
 revisions. Every sheet is generated from a seed, so every answer is exact,
-and the set regenerates byte-for-byte from the generator in this repository.
+and the vector half regenerates byte-for-byte from the generator in this
+repository. The raster half is JPEG pixels rendered by pdf.js +
+@napi-rs/canvas, which shift slightly across versions and platforms; the
+manifest's `environment` stamp (node, pdfjs-dist, @napi-rs/canvas,
+tesseract.js) records the stack a set was built with, and raster-half
+scores are comparable only within the same stamp.
+
+## Scope limits, honestly
+
+- The generator deliberately draws inside the engine's design assumptions:
+  symbols are filled connected components placed clear of walls and labels,
+  and dimension text sits at the offsets the reference reader accepts. A
+  perfect score here means the engine handles this distribution — stroked
+  or wall-touching symbols, or dimension strings in unfamiliar positions,
+  are out of scope for v0.1 and are exactly where a real sheet will differ.
+- CI (`scripts/check-scaled-bench.mjs`) runs the reference solver on the
+  committed sample and asserts the vector half scores 100 percent — the
+  sample therefore cannot contain a vector case the engine fails; the full
+  200-sheet set is where honest failures live.
+- The reference solver is the engine itself reading its own generator's
+  conventions; a third-party engine evaluated on this set should treat the
+  answer key, not the reference's methods, as the contract.
 
 The survey in [docs/research/benchmarks](../../docs/research/benchmarks/README.md)
 found no public benchmark that asks for a length or an area measured off a

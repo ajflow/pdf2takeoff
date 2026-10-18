@@ -170,7 +170,11 @@ async function openSheet(setDir, entry, opts) {
   const isVector = textWords.length > 0 && !!vec && vec.segs.length > 20;
   // OCR cache entries are keyed by the file's content, so sets sharing sheet ids never collide
   const cacheKey = `${entry.id}-${createHash('sha1').update(bytes).digest('hex').slice(0, 12)}`;
-  const ctx = { id: entry.id, bytes, pdf, isVector, notes: [], fills: new Map(), scans: new Map(), opts, setDir, entry, cacheKey };
+  // the solver gets only the sheet's identity — never the manifest's
+  // answer-adjacent fields (ratio, symbols, rooms, legend), so no future
+  // edit can accidentally solve from the ground truth
+  const sheet = { id: entry.id, revB: entry.revB };
+  const ctx = { id: entry.id, bytes, pdf, isVector, notes: [], fills: new Map(), scans: new Map(), opts, setDir, sheet, cacheKey };
   if (isVector) {
     ctx.words = textWords;
     ctx.items = items;
@@ -711,7 +715,7 @@ async function answerQuestion(ctx, q) {
       return { answer: round(value, 4), note: `read "${cands[0].w.text}"` };
     }
     case 'compare': {
-      const revB = ctx.entry.revB;
+      const revB = ctx.sheet.revB;
       if (!revB || !existsSync(join(ctx.setDir, revB))) return { answer: UNANS, note: 'no revision B file' };
       const r = ctx.isVector ? await compareVector(ctx, revB) : await compareRaster(ctx, revB);
       return { answer: r.changes, note: r.note };

@@ -5,7 +5,8 @@
 // answers.csv, manifest.json and report.md.
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { PDFDocument } from 'pdf-lib';
 import { createCanvas } from '@napi-rs/canvas';
@@ -16,6 +17,34 @@ import { renderRasterNode } from '../../src/headless/raster-node.ts';
 
 export const BENCH_VERSION = '0.1';
 export const RASTER_DPI = 150;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * The stack that rendered the raster half. The raster sheets are JPEG images
+ * produced by pdf.js + @napi-rs/canvas (and OCR runs tesseract.js), whose
+ * pixel output shifts a little across versions and platforms — the raster
+ * half's bytes and scores are comparable only within an identical stamp,
+ * which is why it travels with the manifest (the vector half is pure
+ * geometry and regenerates identically everywhere).
+ */
+export function environmentStamp() {
+  const pkg = (name) => {
+    try {
+      return JSON.parse(readFileSync(join(__dirname, '..', '..', 'node_modules', name, 'package.json'), 'utf8')).version;
+    } catch {
+      return 'unknown';
+    }
+  };
+  return {
+    node: process.version,
+    packages: {
+      'pdfjs-dist': pkg('pdfjs-dist'),
+      '@napi-rs/canvas': pkg('@napi-rs/canvas'),
+      'tesseract.js': pkg('tesseract.js'),
+    },
+  };
+}
 
 export const LICENCE = {
   code: 'Apache-2.0 (the generator, scorer and reference solver, like the rest of pdf2takeoff)',
@@ -127,6 +156,7 @@ export async function generateSet(opts) {
     seed,
     count,
     generator: 'scripts/scaled-drawing-bench.mjs generate',
+    environment: environmentStamp(),
     licence: LICENCE,
     conventions: {
       area: 'between the inside faces of the walls (net floor area)',

@@ -36,6 +36,22 @@ export async function terminateOcr() {
 }
 
 /**
+ * Engine identity for the OCR cache key: without it, upgrading tesseract.js
+ * or pointing at a different tessdata pack would silently serve stale words
+ * from the cache and a "re-run" would not measure the new engine at all.
+ */
+function engineStamp(tessdata) {
+  let ver = '';
+  try {
+    ver = JSON.parse(readFileSync(join(__dirname, '..', '..', 'node_modules', 'tesseract.js', 'package.json'), 'utf8')).version;
+  } catch { /* checkout without the dep installed: stamp what we know */ }
+  const lang = `${tessdata ?? process.env.SDB_TESSDATA ?? DEFAULT_TESSDATA}`;
+  let h = 0;
+  for (let i = 0; i < lang.length; i++) h = ((h * 31 + lang.charCodeAt(i)) | 0) >>> 0;
+  return `tesseract.js-${ver}-lang${h.toString(36)}`;
+}
+
+/**
  * OCR scale: the page raster (RASTER_SCALE px/pt) is resampled to this many
  * px per point. 2 (144 dpi) read the speckled and blurred sample sheets
  * better than the raster's own 3 px/pt in tests; the browser app OCRs at 3.
@@ -47,7 +63,7 @@ export const OCR_PX_PER_PT = 2;
  * { text, conf, xPt, yPt, wPt, hPt, angleDeg: 0 } in the page's point frame.
  */
 export async function ocrWords(rgba, scale, cacheKey, opts = {}) {
-  const cacheFile = cacheKey ? join(CACHE_DIR, 'ocr', `${cacheKey}.json`) : null;
+  const cacheFile = cacheKey ? join(CACHE_DIR, 'ocr', `${cacheKey}-${engineStamp(opts.tessdata)}.json`) : null;
   if (cacheFile && existsSync(cacheFile)) return JSON.parse(readFileSync(cacheFile, 'utf8'));
   const factor = OCR_PX_PER_PT / scale;
   const png = rgbaToPng(rgba, factor);

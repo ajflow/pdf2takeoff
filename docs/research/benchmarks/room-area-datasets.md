@@ -308,7 +308,9 @@ Four engine changes, all in `src/engine/dynamicfill.ts`:
    quarter may fail, for scans skewed a degree or two).
 
 Wide-door failure classification (variant A before, 79 unbounded enclosed
-rooms, 24 of them living rooms, by the ResPlan geometry): 63 rooms touch a
+rooms, 24 of them living rooms, by the ResPlan geometry). The causes are
+per-room findings, not disjoint classes — a room can touch a wide door and
+also have a corner jamb — which is why they sum past 79: 63 rooms touch a
 door wider than 1.3 m (21 of the 24 living rooms; of the 54 wide doors on
 those living rooms, 23 are the front door, 31 are interior doors of 1.3 to
 1.85 m), 6 rooms have a door whose jamb is the side of a wall (a corner), 13

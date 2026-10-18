@@ -129,6 +129,25 @@ const DOOR_WIDEST = 1.5;
 const DOOR_SLACK = 1.1;
 /** Cell size (px) of the grid the doorway enclosure test floods. */
 const ENCLOSURE_CELL = 4;
+/**
+ * Narrowest gap (PDF pt) that can be a doorway at any drawing scale: a
+ * 0.7 m door at 1:250 is 8 pt. Exploded CAD text and hatching leave
+ * thousands of 2 to 4 pt two-ended slots that would otherwise cluster.
+ */
+const MIN_DOOR_PT = 8;
+/**
+ * Largest raster (px) the door-width scale check runs on: an A1 sheet at
+ * 3 px/pt. Beyond that the threshold pass alone takes seconds, too slow for
+ * a calibration hint; the check reports nothing instead of guessing.
+ */
+export const DOOR_CHECK_MAX_PX = 40_000_000;
+/**
+ * Narrowest agreed door width (PDF pt) the scale CHECK will act on: a 0.7 m
+ * door at 1:140. The fill may still try narrower widths (guarded by its
+ * split test), but a warning needs stronger evidence: real Revit sheets
+ * carry 9 pt two-ended slots in schedules and legends that cluster.
+ */
+const MIN_DOOR_CHECK_PT = 14;
 
 /**
  * A bridgeable ink-free run along `pos` (row or column), from a up to b.
@@ -172,7 +191,7 @@ interface Gap {
  * (a downlight's flat top edge looks like a short heavy wall end) are
  * isolated pieces, so they never anchor a closing.
  */
-function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number): { thr: Uint8Array; doors: () => SheetDoors } {
+function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number, minDoorPx: number): { thr: Uint8Array; doors: () => SheetDoors } {
   const thr = new Uint8Array(w * h).fill(NEVER);
   // interior wall-end gaps (t < NEVER on an interior run means bridgeable),
   // the raw material for the sheet's own door-width estimate
@@ -305,7 +324,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
   for (let x = 0; x < w; x++) if (runStart[x] >= 0) flush(x, h);
   // the doorway reading is only needed without a scale (and for scale checks)
   let doors: SheetDoors | undefined;
-  return { thr, doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h)) };
+  return { thr, doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)) };
 }
 
 /**
@@ -330,7 +349,7 @@ interface SheetDoors {
  * best-supported cluster (ties to the narrower) sets doorPx by its widest
  * member.
  */
-function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, h: number): SheetDoors {
+function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, h: number, minDoorPx: number): SheetDoors {
   // ink-free px from (x, y) stepping (dx, dy) before ink or the sheet edge
   const clearRun = (x: number, y: number, dx: number, dy: number, limit: number): number => {
     for (let k = 0; k < limit; k++) {
@@ -353,7 +372,7 @@ function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, 
     gaps.sort((p, q) => p.pos - q.pos || p.a - q.a);
     const finish = (t: Track) => {
       const L = t.b - t.a;
-      if (L > 2 * (NEVER - 1)) return; // no rung could close it
+      if (L < minDoorPx || L > 2 * (NEVER - 1)) return; // not a door at any scale, or beyond every rung
       const need = Math.ceil(DOOR_CLEARANCE * L);
       const m = (t.a + t.b - 1) >> 1;
       const [u, v] = rows
@@ -494,12 +513,15 @@ function pxPerPtOf(raster: RasterPage): number {
  * The door width the sheet itself shows (raster px): the best-supported
  * width among its two-jamb doorways when at least two agree, else 0. The
  * same reading Dynamic Fill uses without a scale; here for scale checks
- * (a calibration that makes these doors 2 m wide is wrong).
+ * (a calibration that makes these doors 2 m wide is wrong). Rasters above
+ * DOOR_CHECK_MAX_PX return 0 rather than spend seconds on a hint.
  */
 export function sheetDoorWidthPx(raster: RasterPage, tolerance = 150): number {
+  if (raster.width * raster.height > DOOR_CHECK_MAX_PX) return 0;
   const pxPerPt = pxPerPtOf(raster);
   const ink = inkOf(raster, tolerance);
-  return closingThresholds(ink, raster.width, raster.height, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt)).doors().doorPx;
+  const doorPx = closingThresholds(ink, raster.width, raster.height, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt), Math.round(MIN_DOOR_PT * pxPerPt)).doors().doorPx;
+  return doorPx >= MIN_DOOR_CHECK_PT * pxPerPt ? doorPx : 0;
 }
 
 export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
@@ -549,7 +571,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   const cap = MAX_FILL_FRACTION * w * h;
   const mask = new Uint8Array(w * h);
   const pxPerPt = pxPerPtOf(raster);
-  const { thr, doors: sheetDoorsLazy } = closingThresholds(ink, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt));
+  const { thr, doors: sheetDoorsLazy } = closingThresholds(ink, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt), Math.round(MIN_DOOR_PT * pxPerPt));
   // a known scale puts the doorway rung on the ladder and starts there:
   // every smaller rung only closes a subset of what it closes. Without a
   // scale the ladder starts at 0 and the sheet's own doorway widths are

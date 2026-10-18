@@ -33,10 +33,28 @@ const BLACK = rgb(0, 0, 0);
 // block with text. Rules that read the sheet (door widths, scale notes) must
 // hold with those present, and an "outside" bounded by a frame must still
 // read as unbounded.
+// Real title blocks carry a logo: an embedded raster image. Headless
+// rendering must survive it (pdf.js draws images through a temporary canvas,
+// which once came from a second copy of the canvas module and segfaulted).
+let logoPng = null;
+async function logo(doc) {
+  if (!logoPng) {
+    const { createCanvas } = await import('@napi-rs/canvas');
+    const c = createCanvas(48, 24);
+    const g = c.getContext('2d');
+    g.fillStyle = '#1b5e9e';
+    g.fillRect(0, 0, 48, 24);
+    g.fillStyle = '#fff';
+    g.fillRect(6, 6, 36, 12);
+    logoPng = await doc.embedPng(c.toBuffer('image/png'));
+  }
+  return logoPng;
+}
 let sheetNo = 0;
 function sheet(doc, width = 842, height = 595) {
   const page = doc.addPage([width, height]);
   sheetNo++;
+  if (logoPng) page.drawImage(logoPng, { x: width - 12 - 56, y: 12 + 26, width: 48, height: 24 });
   page.drawRectangle({ x: 12, y: 12, width: width - 24, height: height - 24, borderColor: BLACK, borderWidth: 0.8 });
   const tb = { x: width - 12 - 190, y: 12, w: 190, h: 44 };
   page.drawRectangle({ x: tb.x, y: tb.y, width: tb.w, height: tb.h, borderColor: BLACK, borderWidth: 0.8 });
@@ -64,6 +82,7 @@ const cases = [];
 let PAGE_1C = 0; // set when page 1c is built
 const doc = await PDFDocument.create();
 const font = await doc.embedFont(StandardFonts.Helvetica);
+await logo(doc);
 
 // Page 1: rooms. Thin 0.7 pt walls unless noted. Areas are between wall
 // centrelines minus half the stroke each side (what the ink leaves open).

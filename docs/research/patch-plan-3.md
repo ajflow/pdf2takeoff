@@ -394,9 +394,18 @@ Working through the recommendations that came out of section 6:
 - **Blog synced (done).** The engineering post's "Dynamic Fill leaks
   through doors" section now tells the layered fix and the bench number;
   the detector line says v1 shipped.
-- **Real CAD exports (in progress).** A search for redistributable
-  AutoCAD, Revit and ArchiCAD PDF exports is running; results go into
-  [vector-spike.md](vector-spike.md)'s open items.
+- **Real CAD exports (done, with consequences).** Five redistributable
+  born-digital sheets (two native AutoCAD 2025, a Revit-course sheet, a
+  redacted AutoCAD benchmark sheet, an OpeningDesign permit set) were run
+  through the engine; findings and the table are in
+  [vector-spike.md](vector-spike.md). The single most important one: the
+  headless renderer segfaulted on every sheet with an embedded image, from
+  pdfjs-dist's nested second copy of `@napi-rs/canvas`. Fixed with a canvas
+  factory in `pdfjs-node.ts`, guarded by a logo on every bench sheet. Three
+  open items came out of it (thin pens dissolving in the ink mask, vector
+  door bridges over-firing on exploded exports, room-label detection far
+  too loose on real text layers); each is documented there with the fix
+  it needs.
 - **P25 benchmark run and P27 flywheel (not started).** The first needs a
   model harness this environment lacks; the second needs the product
   decision noted above.

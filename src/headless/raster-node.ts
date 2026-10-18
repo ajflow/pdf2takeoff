@@ -3,7 +3,7 @@
 // adapter, so both environments see equivalent pixels (see the H2 golden
 // raster check in specs/headless-engine.md).
 
-import { createCanvas, Path2D, ImageData } from '@napi-rs/canvas';
+import { createCanvas, Path2D, ImageData, DOMMatrix } from '@napi-rs/canvas';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { RasterPage } from '../engine/ports.ts';
 import type { RGBA } from '../engine/compare.ts';
@@ -18,6 +18,7 @@ import type { Pt } from '../engine/types.ts';
 const g = globalThis as unknown as Record<string, unknown>;
 g.Path2D = Path2D;
 g.ImageData = ImageData;
+g.DOMMatrix = DOMMatrix;
 
 function pageTransforms(vp: { convertToPdfPoint: (x: number, y: number) => number[]; convertToViewportPoint: (x: number, y: number) => number[] }) {
   return {

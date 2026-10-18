@@ -354,6 +354,15 @@ Running pdf.js v5's legacy build on @napi-rs/canvas in Node:
    symbols) in both environments. Reproduce with `scripts/golden-raster.mjs`
    + the in-browser compare-canvas recipe.
 
+   **Sequel (2026-10-18):** pdfjs-dist also declares its own
+   `@napi-rs/canvas` (0.1.x), which npm nests under `node_modules/pdfjs-dist`.
+   pdf.js's `NodeCanvasFactory` requires that copy, so every image's
+   temporary canvas came from a second skia binary and `drawImage` into our
+   page context segfaulted on the first real sheet with a logo. The fix is a
+   `CanvasFactory` passed to `getDocument` that creates canvases from our
+   module (`pdfjs-node.ts`), plus our `DOMMatrix` on the global. The bench
+   embeds a PNG logo on every sheet so the path is exercised in CI.
+
 H2 ships without the ONNX detector in Node (no model exists yet — training
 is in flight); the `DetectorSession` port is ready for `onnxruntime-node`
 the moment `symbols.onnx` lands (H4 prep).

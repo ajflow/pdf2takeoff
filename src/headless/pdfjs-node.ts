@@ -4,11 +4,42 @@
 // @ts-ignore -- pdfjs-dist's legacy build ships without type declarations
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { createCanvas, DOMMatrix } from '@napi-rs/canvas';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
+
+// pdf.js's own NodeCanvasFactory requires "@napi-rs/canvas" relative to
+// pdfjs-dist, which resolves to the copy nested under node_modules/pdfjs-dist
+// (0.1.x), not to ours (1.x). Every image on a page is first drawn into a
+// temporary canvas from that factory and then drawImage'd into the page
+// context, which comes from our copy: an object from one skia binary handed
+// to another, a segfault on the first sheet with a logo. One canvas module
+// for everything: this factory builds pdf.js's temporary canvases from ours.
+class OurCanvasFactory {
+  create(width: number, height: number) {
+    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
+    const canvas = createCanvas(width, height);
+    return { canvas, context: canvas.getContext('2d') };
+  }
+  reset(pair: { canvas: { width: number; height: number } }, width: number, height: number) {
+    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
+    pair.canvas.width = width;
+    pair.canvas.height = height;
+  }
+  destroy(pair: { canvas: { width: number; height: number } | null; context: unknown }) {
+    if (!pair.canvas) return;
+    pair.canvas.width = 0;
+    pair.canvas.height = 0;
+    pair.canvas = null;
+    pair.context = null;
+  }
+}
+// pdf.js also publishes DOMMatrix from its nested copy on import; getTransform
+// results and setTransform arguments must come from the same binary as ours
+(globalThis as unknown as Record<string, unknown>).DOMMatrix = DOMMatrix;
 
 // Standard-14 font data for PDFs that reference Helvetica & co. without
 // embedding them (the bundled samples do). pdf.js's Node font loader needs a
@@ -33,5 +64,6 @@ export async function openPdf(data: Uint8Array): Promise<PDFDocumentProxy> {
     data: data.slice(),
     verbosity: 0,
     standardFontDataUrl: standardFontsUrl(),
+    CanvasFactory: OurCanvasFactory,
   }).promise;
 }

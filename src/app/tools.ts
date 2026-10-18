@@ -13,7 +13,7 @@ import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
 import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
 import { scaleVotesFromWords, checkAgainstSheet, doorWidthCheck } from '../engine/scale';
-import { dynamicFill, sheetDoorWidthPx } from '../engine/dynamicfill';
+import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
 import { scanDeps } from './adapters';
 import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
@@ -634,9 +634,11 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
     hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);
     return;
   }
-  // no printed scale to disagree with (scans): do the doors come out door-sized?
+  if (c.status === 'agrees') return; // the printed scale is the stronger witness
+  // no printed scale to lean on (scans): do the doors come out door-sized?
+  // (sheets larger than A1 are not checked: the pass would take seconds)
   const raster = await renderRaster(page, 3).catch(() => null);
-  if (!raster) return;
+  if (!raster || raster.width * raster.height > DOOR_CHECK_MAX_PX) return;
   const doors = doorWidthCheck(metersPerPt, sheetDoorWidthPx(raster), 3);
   if (doors?.status !== 'implausible') return;
   const why = doors.likely ? `, likely ${doors.likely}` : '';

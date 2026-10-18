@@ -440,22 +440,24 @@ export async function runMcpServer(): Promise<void> {
     'scan_symbol',
     {
       description:
-        'Click-to-teach auto-count: give one instance of a repeated symbol (its centre in PDF points) and the CV scan finds and counts every match on the sheet, adding each as a count markup. Look at render_page output first to pick a symbol.',
+        'Click-to-teach auto-count: give one instance of a repeated symbol (its centre in PDF points) and the scan finds and counts every match on the sheet (vector match, then the trained ONNX detector when a local model is present, else the CV scan), adding each as a count markup. Look at render_page output first to pick a symbol. The detector loads from model_dir, else the PDF2TAKEOFF_MODEL_DIR environment variable, else public/models/.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point on the symbol to teach from, PDF points'),
         label: z.string().optional().describe('label for the count markups'),
         all_pages: z.boolean().default(false).describe('scan every sheet and return a per-page schedule (counts added per page)'),
+        model_dir: z.string().optional().describe('folder holding symbols.json + symbols.onnx for the trained detector (default: PDF2TAKEOFF_MODEL_DIR, then public/models/)'),
       },
     },
-    async ({ id, page, at, label, all_pages }) => {
+    async ({ id, page, at, label, all_pages, model_dir }) => {
       const d = getDoc(id);
+      const scanOpts = { modelDir: model_dir };
       if (all_pages) {
-        const schedule = await scanDocAllPages(d.doc, { x: at[0], y: at[1] });
+        const schedule = await scanDocAllPages(d.doc, { x: at[0], y: at[1] }, scanOpts);
         for (const p of schedule.pages) {
           if (p.count === 0) continue;
-          const result = await scanDocAt(d.doc, p.page, { x: at[0], y: at[1] });
+          const result = await scanDocAt(d.doc, p.page, { x: at[0], y: at[1] }, scanOpts);
           if ('error' in result) continue;
           for (const hit of result.hits) {
             d.markups.push({
@@ -470,7 +472,7 @@ export async function runMcpServer(): Promise<void> {
         }
         return text({ schedule, label: label ?? 'Scanned symbol' });
       }
-      const result = await scanDocAt(d.doc, page, { x: at[0], y: at[1] });
+      const result = await scanDocAt(d.doc, page, { x: at[0], y: at[1] }, scanOpts);
       if ('error' in result) throw new Error(result.error);
       const fallback = label ?? 'Scanned symbol';
       for (const hit of result.hits) {

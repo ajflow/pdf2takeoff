@@ -7,9 +7,9 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
 import { openPdf } from './pdfjs-node.ts';
-import { RASTER_SCALE } from '../engine/ports.ts';
-import { cvScan } from '../engine/scan-cv.ts';
-import { vectorScan } from '../engine/scan-vector.ts';
+import { RASTER_SCALE, type ScanDeps } from '../engine/ports.ts';
+import { scanForSimilar } from '../engine/scan.ts';
+import { loadDetectorNode } from './detector-node.ts';
 import { vectorize } from '../engine/vector.ts';
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
@@ -40,13 +40,25 @@ export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
   return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => layers.isVisible(g as never) });
 }
 
-/** Scan at a click point (PDF points): vector match on born-digital symbols, else tier-1 CV. */
-export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt) {
-  const vec = await vectorDocPage(doc, page).catch(() => null);
-  const byVector = vec ? vectorScan(vec, at) : null;
-  if (byVector) return byVector;
-  const raster = await renderRasterNode(doc, page, RASTER_SCALE);
-  return cvScan(raster, at);
+export interface ScanOptions {
+  /** Directory holding symbols.json + the model (see detector-node.ts); default: PDF2TAKEOFF_MODEL_DIR, then public/models/. */
+  modelDir?: string;
+}
+
+/** The engine's scan ports bound to an open document: pdf.js vectors and raster, the local ONNX model when one is present. */
+export function scanDeps(doc: PDFDocumentProxy, opts: ScanOptions = {}): ScanDeps {
+  return {
+    renderRaster: (page, scale) => renderRasterNode(doc, page, scale),
+    detector: () => loadDetectorNode(opts.modelDir),
+    vector: (page) => vectorDocPage(doc, page).catch(() => null),
+    // stdout carries JSON (CLI) or the MCP protocol, so recoverable tier failures go to stderr
+    warn: (message) => process.stderr.write(`pdf2takeoff: ${message}\n`),
+  };
+}
+
+/** Scan at a click point (PDF points): vector match on born-digital symbols, then the trained detector when a model is present, else tier-1 CV. */
+export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt, opts: ScanOptions = {}) {
+  return scanForSimilar(page, at, scanDeps(doc, opts));
 }
 
 /** A sheet counts as changed above this fraction of changed pixels. */
@@ -393,11 +405,11 @@ export async function compareFolders(
 }
 
 /** Scan a symbol across every page; pages without it count 0. */
-export async function scanDocAllPages(doc: PDFDocumentProxy, at: Pt) {
+export async function scanDocAllPages(doc: PDFDocumentProxy, at: Pt, opts: ScanOptions = {}) {
   const pages: { page: number; count: number }[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     try {
-      const result = await scanDocAt(doc, p, at);
+      const result = await scanDocAt(doc, p, at, opts);
       pages.push({ page: p, count: 'error' in result ? 0 : result.hits.length });
     } catch {
       pages.push({ page: p, count: 0 });

@@ -30,10 +30,13 @@ Usage:
       revision sets, with added/removed sheets listed. --png writes the
       overlay of the first changed sheet; --png-dir (folder mode) writes
       an overlay per changed pair.
-  pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages]
-      Click-point auto-count (tier-1 CV): every match on the page as JSON.
+  pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages] [--model dir]
+      Click-point auto-count: every match on the page as JSON (vector match,
+      then the trained ONNX detector when a model is present, else tier-1 CV).
       --at is in PDF points; run "info" first to see page sizes.
       --all-pages scans every sheet and returns a per-page schedule.
+      --model names a folder with symbols.json + symbols.onnx; without it the
+      PDF2TAKEOFF_MODEL_DIR environment variable, then public/models/, is used.
   pdf2takeoff export <file.pdf> [--scale 1:100] [--unit m] [--format csv|tsv|xlsx] [-o out]
       Read pdf2takeoff annotations back out as a quantities table.
       csv/tsv print to stdout without -o; xlsx requires -o.
@@ -83,7 +86,7 @@ async function cmdInfo(file: string): Promise<unknown> {
   };
 }
 
-async function cmdScan(file: string, pageArg: string, atArg: string, allPages: boolean): Promise<unknown> {
+async function cmdScan(file: string, pageArg: string, atArg: string, allPages: boolean, modelDir?: string): Promise<unknown> {
   const page = parseInt(pageArg, 10);
   if (!Number.isInteger(page) || page < 1) throw new Error('--page must be a positive integer');
   const xy = atArg.split(',').map((v) => parseFloat(v));
@@ -92,10 +95,10 @@ async function cmdScan(file: string, pageArg: string, atArg: string, allPages: b
   }
   const doc = await openPdf(readPdf(file));
   if (allPages) {
-    const schedule = await scanDocAllPages(doc, { x: xy[0], y: xy[1] });
+    const schedule = await scanDocAllPages(doc, { x: xy[0], y: xy[1] }, { modelDir });
     return { file, ...schedule };
   }
-  const result = await scanDocAt(doc, page, { x: xy[0], y: xy[1] });
+  const result = await scanDocAt(doc, page, { x: xy[0], y: xy[1] }, { modelDir });
   if ('error' in result) throw new Error(result.error);
   return {
     file,
@@ -305,10 +308,10 @@ export async function run(argv: string[]): Promise<void> {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { page: { type: 'string', default: '1' }, at: { type: 'string' }, 'all-pages': { type: 'boolean', default: false } },
+        options: { page: { type: 'string', default: '1' }, at: { type: 'string' }, 'all-pages': { type: 'boolean', default: false }, model: { type: 'string' } },
       });
-      if (positionals.length !== 1 || !values.at) throw new Error('usage: pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages]');
-      process.stdout.write(JSON.stringify(await cmdScan(positionals[0], values.page, values.at, values['all-pages']), null, 2) + '\n');
+      if (positionals.length !== 1 || !values.at) throw new Error('usage: pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages] [--model dir]');
+      process.stdout.write(JSON.stringify(await cmdScan(positionals[0], values.page, values.at, values['all-pages'], values.model), null, 2) + '\n');
       return;
     }
     if (cmd === 'compare') {

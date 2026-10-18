@@ -51,7 +51,7 @@ npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 npm run bench      # takeoff accuracy bench on synthetic sheets (rooms, counts, scales)
 ```
 
-`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)).
+`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)). `npm run bench:ledger` runs the fast benches and appends their headline numbers, with the commit, to [bench/results/ledger.jsonl](bench/results/README.md) (`--compare` prints the delta against the previous run).
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 

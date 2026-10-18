@@ -47,11 +47,20 @@ body {
 }
 
 /* app section fills the viewport exactly regardless of topbar wrapping;
-   marketing content below extends the document and stays scrollable */
+   marketing content below extends the document and stays scrollable.
+   #shell isolates the app chrome from #seo's flex sizing — without it the
+   marketing section's height eats all free space and the app never grows
+   or shrinks to the viewport, clipping the hero at the fold. */
 body {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+}
+
+#shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
 }
 
 button {
@@ -294,10 +303,10 @@ select.btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 16px;
   text-align: center;
-  padding: 24px;
+  padding: 24px 24px 64px;
+  overflow-y: auto;
   background:
     radial-gradient(600px 300px at 50% 20%, rgba(45, 212, 191, 0.09), transparent 70%),
     radial-gradient(500px 260px at 70% 80%, rgba(56, 189, 248, 0.06), transparent 70%),
@@ -318,6 +327,16 @@ select.btn {
 
 #dropzone.hidden {
   display: none;
+}
+
+/* Growable pseudo-spacers instead of justify-content: center: when the hero
+   is taller than the workspace (short windows, wrapped topbar) it aligns to
+   the top and scrolls inside #dropzone instead of being clipped at both
+   ends under the topbar and statusbar. */
+#dropzone::before,
+#dropzone::after {
+  content: "";
+  flex: 1;
 }
 
 #dropzone.drag {
@@ -565,6 +584,7 @@ select.btn {
   background: var(--navy-1);
   border-left: 1px solid var(--line);
   min-height: 0;
+  overflow-y: auto;
 }
 
 #sidebar h2 {
@@ -1267,12 +1287,76 @@ td.empty {
 
 /* ---------- responsive ---------- */
 
+/* compact hero on short windows so the whole card stays on screen */
+@media (max-height: 800px) {
+  #dropzone {
+    gap: 10px;
+    padding: 16px 24px 54px;
+  }
+  #dropzone h1 {
+    font-size: clamp(21px, 3vw, 30px);
+  }
+  #dropzone .sub {
+    font-size: 13.5px;
+  }
+  .widget-card {
+    margin-top: 12px;
+  }
+  .widget-io {
+    padding: 9px 18px;
+  }
+  .widget-drop {
+    padding: 20px 24px 16px;
+    margin: 10px;
+    gap: 5px;
+  }
+  .widget-drop svg {
+    width: 27px;
+    height: 27px;
+  }
+  .drop-title {
+    font-size: 14.5px;
+  }
+  .drop-hint {
+    margin-bottom: 8px;
+  }
+  #dropzone .hero-actions {
+    margin-top: 4px;
+  }
+  #dropzone .hero-actions .btn {
+    font-size: 13px;
+    padding: 9px 18px;
+  }
+  .widget-foot {
+    padding: 9px 16px;
+  }
+  #dropzone .privacy-note {
+    margin-top: 4px;
+  }
+  #dropzone .scroll-cue {
+    bottom: 8px;
+  }
+}
+
+/* very short windows: the badge restates the privacy note, drop it */
+@media (max-height: 620px) {
+  #dropzone .badge {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
+  #shell {
+    height: auto;
+    min-height: 100dvh;
+  }
   #app {
     flex-direction: column;
     height: auto;
+    flex: none;
   }
   #workspace {
+    flex: none;
     height: 70dvh;
   }
   #sidebar {

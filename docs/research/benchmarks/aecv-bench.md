@@ -285,3 +285,19 @@ What is left:
 - The 1x first pass is unchanged; a cleaned 1x read of every window would catch the fixture-adjacent labels of the 4000 family deterministically at about 1.3x the first-pass time.
 
 Local artefacts (scratch, not committed): `/tmp/claude-0/-home-user-pdf2takeoff/db387ea9-d3a7-5ddc-8c81-f410e6f4815f/scratchpad/r3/labels-after.json` (the full labels JSON, 120 plans with every word), `labels-after.harness.json` next to it (the flat file for `scripts/aecv-bench.mjs --labels`), `labels-before.json` (round-1 code, same machine), `debug-after/<id>.png` (word overlays), `before.log` and `after.log`.
+
+## Status 2026-10-18, round 2 combined: harness plus OCR labels on the merged engine
+
+`scripts/aecv-bench.mjs --labels` run on the integration branch with the R3 labels file, all 120 plans, 406 s:
+
+| Field | pdf2takeoff EM | pdf2takeoff MAPE | Best VLM EM |
+|---|---|---|---|
+| Door | 0.117 | 72.9% | 0.43 |
+| Window | 0.092 | 184.5% | 0.39 |
+| Space | 0.058 | 221.4% | 0.14 |
+| Bedroom | 0.708 | 20.1% | 0.93 |
+| Toilet | 0.500 | 39.5% | 0.82 |
+| Mean of five | 0.295 | 107.7% | 0.543 |
+| Mean of four | 0.354 | 79.3% | 0.644 |
+
+Before OCR the five-field mean was 0.078. The label fields now carry the score; doors, windows and spaces are unchanged and remain the gap. The worst ten plans by door plus window plus space error are all 5000-family hatched scans plus two 0000 scans, which is the wall-thickness estimate locking onto the hatch pen (round-1 failure mode 1). Next levers in order: a hatch-aware wall model (or validating wall classes against Dynamic Fill room regions), feeding the enclosed-space mask into the OCR `isInsideRoom` hook, and a label-crop detector for the 5 px 5000-family labels.

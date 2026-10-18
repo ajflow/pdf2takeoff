@@ -71,3 +71,26 @@ From this container only github.com, raw.githubusercontent.com and PyPI were
 reachable. arxiv.org, huggingface.co, Zenodo, Kaggle, Google Drive, Roboflow,
 CVF and all GitHub Pages sites returned 403 at the proxy. Anything marked
 [reported] could not be re-read at source and should be checked before citing.
+
+## Round 1 and round 2 results, 2026-10-18
+
+Twelve work packages landed on `enhance/benchmark-sweep` after the survey. Headline numbers, before the sweep and after:
+
+| Benchmark | Metric | Before | After |
+|---|---|---|---|
+| ResPlan 200 plans, variant A (bare door gaps) | rooms recovered | 53.8% | 94.1% |
+| ResPlan variant C (leaf plus arc) | median area error | -5.0% | -1.8% |
+| ResPlan variant D (150 dpi raster) | rooms recovered | not scorable (crash) | 97.1% |
+| Dataset-P&ID sheet 134 | mean recall / precision | 0.046 / 0.18 | 0.658 / 0.879 |
+| Dataset-P&ID sheet 134 | classes counted exactly | 1 of 30 | 11 of 30 |
+| AECV-Bench 120 plans | five-field mean exact match | 0.078 (no OCR) | 0.295 (best VLM 0.543) |
+| AECV-Bench | bedroom / toilet exact match | 0 / 0 | 0.708 / 0.500 |
+| ScaledDrawingBench raster half | overall accuracy | 16.5% | 23.0% |
+| ScaledDrawingBench raster half | count exact | 0% | 30.1% |
+| ScaledDrawingBench vector half | overall accuracy | 99.8% | 99.8% |
+| FloorPlanCAD synthetic, size jitter 0.2 | exact-count rate | 22% | 83% |
+| Internal bench | fill cases | 11 of 12 | 12 of 12 |
+
+Engine changes behind these numbers: image-only PDF rendering fixed and PNG/JPG input everywhere headless; headless OCR with a room-label dictionary; line removal, dihedral matching, per-sheet threshold, template expansion and a look-alike gate in Scan tier 1; a size band in the vector tier; the ONNX detector reachable headless; ink-edge tracing, door-width cuts, swing-arc erasure, text masking and exterior-aware wide doors in Dynamic Fill; a raster opening detector; and the ScaledDrawingBench generator, scorer and reference solver. Every bench writes to `bench/results/ledger.jsonl`.
+
+Open gaps, in the order they block scores: hatch-aware wall estimation for scanned plans (AECV doors, windows, spaces); OCR of imperial and engineer scale notations and scale bars on degraded rasters (ScaledDrawingBench raster, everything downstream of scale); a distance-transform neck finder for diagonal bare gaps (ResPlan rotated); a label-crop detector for 5 px labels (AECV 5000 family); outline-versus-interior matching for valve siblings (Dataset-P&ID); a trained detector on the new Dataset-P&ID training layout.

@@ -49,8 +49,9 @@ Per plan it writes `<id>_A.pdf` (walls and window outlines, door openings
 left as bare gaps), `<id>_B.pdf` (plus the door leaf drawn closed in the
 opening), `<id>_C.pdf` (plus an open-door symbol: perpendicular leaf and
 swing arc), optionally `<id>_D.pdf` (`--raster`: B rasterised at 150 dpi as
-an image PDF; the Node renderer cannot open image PDFs at the moment, so the
-scorer skips D unless asked), and `<id>_tasks.json` with, per room, click
+an image PDF, scored like the others when named in `--variants ABCD`; the
+scorer leaves D out by default because it is the slow one), and
+`<id>_tasks.json` with, per room, click
 points, the room type, `doors`, flags `expectLeak` (balcony, garden,
 parking, pool: outside the building) and `open` (a doorless opening wider
 than 1.3 m to another room: open kitchens, stairs in halls), and the
@@ -58,7 +59,11 @@ ground-truth area in m2 under three conventions: `gt_m2` (polygon as is),
 `gt_face_m2` (polygon minus walls, the inside-face area a floor finish
 takeoff wants), `gt_centre_m2` (buffered by half the wall depth, clipped to
 the envelope). `--labels` adds room names as text so the text-layer label
-hint runs too.
+hint runs too. `--rotate 15,30 --rotate-share 0.1` turns every tenth plan
+about its envelope centre, cycling through the angles (the diagonal-wall
+subset); the task file records `rotationDeg` and the scorer adds a row per
+angle. The checked-in run uses a separate 20-plan folder: `--ids` with every
+tenth id of the 200-plan sample and `--rotate 15,30`.
 
 ## Score
 

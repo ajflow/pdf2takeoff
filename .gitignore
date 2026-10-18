@@ -28,3 +28,6 @@ FRIEND-ONBOARDING.md
 
 # ZCode session state
 .zcode/
+
+# python bytecode from the bench generator
+__pycache__/

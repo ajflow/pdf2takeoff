@@ -18,15 +18,14 @@ import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta, pageWordsWithOcr } from './ops.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor } from './ops.ts';
 import { terminateOcr } from './ocr-node.ts';
-import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { METERS_PER_PT, toMeters, metersPerPtForRatio } from '../engine/units.ts';
-import { findScaleRatio, roomLabelPoints } from '../engine/ocr.ts';
+import { findScaleRatio } from '../engine/ocr.ts';
 import { dynamicFill } from '../engine/dynamicfill.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet } from '../engine/scale.ts';
@@ -333,17 +332,19 @@ export async function runMcpServer(): Promise<void> {
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point inside the room, PDF points'),
         label: z.string().optional(),
+        ocr: z.boolean().optional().describe('also OCR the sheet and mask the recognised text out of the fill boundary (scans and raster imports have no text layer); slower'),
       },
     },
-    async ({ id, page, at, label }) => {
+    async ({ id, page, at, label, ocr }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
       const raster = await renderRasterNode(d.doc, page, RASTER_SCALE);
-      const items = (await (await d.doc.getPage(page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
-      const labels = roomLabelPoints(items);
       const cal = d.calibrations.get(page);
-      const bridges = doorBridgesFor(await vectorDocPage(d.doc, page), cal?.metersPerPt);
-      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, bridges, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
+      // text-layer labels and word boxes, vector doorway bridges, the scale, OCR boxes on request
+      const hints = await fillHintsFor(d.doc, page, raster, { metersPerPt: cal?.metersPerPt, ocr });
+      const labels = hints.labels ?? [];
+      const bridges = hints.bridges ?? [];
+      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, hints);
       if ('error' in result) throw new Error(result.error);
       const markup: Markup = {
         id: nextId('mcp'),
@@ -370,8 +371,10 @@ export async function runMcpServer(): Promise<void> {
           // only gaps that actually bound this room; absent for a sealed room
           ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
           ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
+          ...(result.swings ? { doorSwingArcErased: true } : {}),
           roomLabelsOnSheet: labels.length,
           vectorDoorBridges: bridges.length,
+          textBoxesMasked: hints.textBoxes?.length ?? 0,
         },
       });
     },

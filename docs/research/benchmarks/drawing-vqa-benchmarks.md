@@ -437,3 +437,65 @@ Web (reported):
 - MMArch: https://arxiv.org/abs/2608.09281 ; https://dcx-swjtu.github.io/MMArch/.
 - DesignQA: https://arxiv.org/abs/2404.07917 ; https://design-qa.github.io/ ; MCERF https://arxiv.org/abs/2604.09552 (reproduces DesignQA's baseline table).
 - Pricing: claude-api skill model table cached 2026-10-06.
+
+## Status 2026-10-18
+
+ScaledDrawingBench v0.1 is built: `scripts/scaled-drawing-bench.mjs` (generate,
+score, reference), `scripts/bench/*.mjs`, the 5-sheet sample and the README under
+`bench/scaled-drawing-bench/`, `npm run bench:scaled`, and
+`scripts/check-scaled-bench.mjs` in `typecheck:engine` (the sample regenerates to
+the committed questions.jsonl, and the reference solver is 100 percent within 2
+percent on the vector sample's scale, length, area and count questions). The
+spec above was followed with these changes: 150 dpi rasters (not 200), five
+notations as listed in the brief (ratio, 1/4" = 1'-0", 1" = 20', graphic bar,
+printed dimensions only) plus NTS sheets for the unanswerable 5 percent, walls as
+filled rectangles, sheet sizes A3, A1 and ARCH D, and one sheet in five rotated.
+Generated 200 sheets at seed 20261018: 2,040 questions (92 unanswerable by
+design, 4.5 percent), 100 vector and 100 raster sheets, 18 with a revision B.
+
+pdf2takeoff reference (deterministic, no model), accuracy = within 2 percent for
+numeric types, exact for counts, exact change set for compare, abstentions wrong:
+
+| Type | Vector: answerable | Vector: accuracy | Vector: MAPE | Raster: answerable | Raster: accuracy | Raster: MAPE |
+|---|---|---|---|---|---|---|
+| scale | 95 | 100% | 0% | 93 | 34.4% | 36.7% |
+| length | 190 | 100% | 0% | 186 | 17.2% | 19.8% |
+| area | 234 | 100% | 0.7% | 235 | 26.4% | 278.5% |
+| perimeter | 95 | 100% | 0.3% | 93 | 26.9% | 33% |
+| count | 263 | 99.2% (exact) | 0% | 256 | 0% (exact) | 99.9% |
+| dimension_read | 95 | 100% | 0% | 93 | 9.7% | 65.8% |
+| compare | 8 | F1 100% | | 12 | F1 37.7% | |
+| all | 980 | 99.8% | 0.2% | 968 | 16.5% | 111.5% |
+
+Hallucination rate 0/37 (vector) and 0/55 (raster): every failure is an
+abstention. Raster accuracy by recipe: photocopy 25.4, contrast 25.9, noise
+14.2, rotate 12.3, blur 7.7 percent.
+
+Engine findings from the run (all in the raster half; nothing under src/ was
+changed by this work package):
+
+1. The image-only PDF render still segfaults (finding 1 above, WP1), so the
+   reference decodes the embedded JPEG directly into the same 3 px/pt raster
+   layout and says so in its notes; the generation report marks the raster
+   half "generated, unverified" until the render path works.
+2. Tier-1 CV scan (`scan-cv.ts`) matches components by a 20 x 20 coverage
+   signature with an L1 tolerance of 0.16, which only pixel-identical
+   components pass: a legend click finds 1 to 3 of 8 to 21 anti-aliased
+   instances of a 9 pt symbol even on a clean render. Raster counts are 0
+   percent exact for that reason alone.
+3. The vector doorway bridging (`fill-vector.ts`) pairs the free ends of any
+   stroked segment at least 3 pt long, so symbols drawn with stroked inner
+   lines (a downlight's cross) bridged a 54 pt "door" between two downlights
+   and cut the room; the generator now draws symbol strokes as filled quads,
+   and real CAD exports with stroked symbol parts will show the same cut.
+4. OCR (tesseract.js in Node, same recognizer as the browser) reads title-block
+   scale notes on most degraded sheets but loses 7 pt scale-bar labels and
+   dimension strings under blur and speckle, and never reads vertical text.
+5. `compareDocs` flags a sheet as changed above 0.05 percent of pixels, which a
+   moved partition on an A1 sheet does not reach; the vector and text diffs
+   still report it, so the reference uses those directly.
+
+Open: VLM-only and VLM plus tools baselines (the harness and budget in "How
+pdf2takeoff would run on them"), a held-out set of real sheets scored by hand,
+and re-running the reference once WP1 lands so the raster numbers come from the
+engine's own render path.

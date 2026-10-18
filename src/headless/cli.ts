@@ -4,7 +4,7 @@
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
-import { openAny } from './image-node.ts';
+import { openAny, imageToPdf, sniffImage, imageKindByExt } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
 import { ocrRaster, terminateOcr } from './ocr-node.ts';
@@ -23,18 +23,24 @@ import { PDFDocument } from 'pdf-lib';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
+Every <file.pdf> below also takes a PNG or JPG: the image opens as one
+page of width/3 x height/3 points (scale 3 renders the native pixels), and
+commands that write a PDF wrap the image into one.
+
 Usage:
   pdf2takeoff info <file.pdf>
       Pages, page sizes, and annotation counts as JSON.
   pdf2takeoff set <folder> -o current-issue.pdf
       Slip-sheet: walk the folder, keep the newest file per sheet name
-      (by modified time), merge into one sorted multi-sheet PDF.
+      (PDF, PNG or JPG, paired by file stem, by modified time), merge into
+      one sorted multi-sheet PDF.
   pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
-      Two PDFs: per-sheet change fractions and changed regions.
-      Two folders: batch compare — sheets paired by filename across the
-      revision sets, with added/removed sheets listed. --png writes the
-      overlay of the first changed sheet; --png-dir (folder mode) writes
-      an overlay per changed pair.
+      Two PDFs (or images): per-sheet change fractions and changed regions.
+      Two folders: batch compare, sheets paired by file stem across the
+      revision sets (a PNG scan pairs with the PDF of the same sheet), with
+      added/removed sheets listed. --png writes the overlay of the first
+      changed sheet; --png-dir (folder mode) writes an overlay per changed
+      pair.
   pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages] [--model dir]
       Click-point auto-count: every match on the page as JSON (vector match,
       then the trained ONNX detector when a model is present, else tier-1 CV).
@@ -70,15 +76,21 @@ its language pack, once).
 
 export { openPdf, renderRasterNode };
 
-function readPdf(path: string): Uint8Array {
-  return new Uint8Array(readFileSync(path));
-}
-
-// info / scan / export also take a PNG or JPG: one page of W/3 x H/3 points
-// (see image-node.ts); annotate / run / compare / set stay PDF-only
+// every file argument also takes a PNG or JPG: one page of W/3 x H/3 points
+// (see image-node.ts); commands that write a PDF get the image wrapped as one
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
   const { doc } = await openAny(file);
   return { doc, markups: await readMarkups(doc) };
+}
+
+/** PDF, PNG or JPG by extension (the file walkers of set and compare). */
+function isDrawingFile(name: string): boolean {
+  return name.toLowerCase().endsWith('.pdf') || imageKindByExt(name) !== null;
+}
+
+/** The sheet name a file stands for: its basename without the extension. */
+function sheetStem(name: string): string {
+  return basename(name).replace(/\.(pdf|png|jpe?g)$/i, '');
 }
 
 async function cmdInfo(file: string): Promise<unknown> {
@@ -145,7 +157,7 @@ async function cmdOcr(file: string, pageArg: string, regionArg: string | undefin
   if (rotations && !rotations.every((n) => Number.isFinite(n))) throw new Error('--rotate must be degrees, e.g. 90 or 90,270');
   const threshold = thresholdArg ? parseFloat(thresholdArg) : undefined;
   if (threshold !== undefined && !(threshold > 0 && threshold < 255)) throw new Error('--threshold must be 1..254');
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   if (page > doc.numPages) throw new Error(`page ${page} out of range (1..${doc.numPages})`);
   const raster = await renderRasterNode(doc, page, RASTER_SCALE);
   const words = await ocrRaster(raster, { region, rotations, threshold });
@@ -174,8 +186,8 @@ async function cmdCompare(fileA: string, fileB: string, png: string | undefined,
     if (pngDir) mkdirSync(pngDir, { recursive: true });
     return await compareFolders(fileA, fileB, { pngDir, threshold });
   }
-  const docA = await openPdf(readPdf(fileA));
-  const docB = await openPdf(readPdf(fileB));
+  const { doc: docA } = await openAny(fileA);
+  const { doc: docB } = await openAny(fileB);
   const result = await compareDocs(docA, docB, { png, threshold });
   return {
     a: fileA,
@@ -231,10 +243,11 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
   const output = outOverride ?? spec.output;
   if (!output) throw new Error('no output path: pass -o out.pdf or set "output" in the spec');
 
+  // an image comes back wrapped as a one-page PDF, so the writer has real PDF bytes
+  const { doc, bytes: source } = await openAny(file);
   const calibrations = new Map<number, Calibration>();
   if (spec.scale) {
     const metersPerPt = parseScaleSpec(spec.scale);
-    const doc = await openPdf(readPdf(file));
     for (let p = 1; p <= doc.numPages; p++) calibrations.set(p, { metersPerPt, source: `spec scale ${spec.scale}` });
   }
 
@@ -247,10 +260,10 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
     createdAt: Date.now(),
   }));
   // the writer replaces our earlier annotations, so carry them over to keep them
-  const existing = keepExisting ? (await readMarkupsFromPdf(file)).markups : [];
+  const existing = keepExisting ? await readMarkups(doc) : [];
 
   const bytes = await buildAnnotatedPdf({
-    bytes: readPdf(file),
+    bytes: source,
     markups: [...existing, ...markups],
     calibrations,
     displayUnit: (spec.unit ?? 'm') as DisplayUnit,
@@ -262,8 +275,8 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
 /** Execute a takeoff spec: calibrate, scan-count each symbol type, write exports. */
 async function cmdRun(specPath: string, prevPath: string | undefined): Promise<unknown> {
   const spec = parseRunSpec(readFileSync(specPath, 'utf8'), specPath);
-  const bytes = readPdf(spec.source);
-  const doc = await openPdf(bytes);
+  // PDF, or an image wrapped as a one-page PDF for the annotated-pdf export
+  const { doc, bytes } = await openAny(spec.source);
   const calibrations = new Map<number, Calibration>();
   if (spec.scale) {
     const metersPerPt = parseScaleSpec(spec.scale);
@@ -451,30 +464,33 @@ export async function run(argv: string[]): Promise<void> {
   }
 }
 
-/** Slip-sheet a folder of per-sheet PDFs into one current-issue set:
- *  sheets pair by filename, the newest file (mtime) wins, output is sorted. */
+/** Slip-sheet a folder of per-sheet PDFs (and PNG / JPG scans) into one
+ *  current-issue set: sheets pair by file stem, the newest file (mtime)
+ *  wins, output is sorted; an image becomes a page of its pixels / 3 points. */
 async function cmdSet(dir: string, out: string): Promise<unknown> {
   const byBase = new Map<string, { file: string; mtime: number }>();
   const walk = (d: string) => {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.toLowerCase().endsWith('.pdf')) {
+      else if (isDrawingFile(entry.name)) {
         const mtime = statSync(full).mtimeMs;
-        const key = basename(entry.name);
+        const key = sheetStem(entry.name);
         const prev = byBase.get(key);
         if (!prev || mtime > prev.mtime) byBase.set(key, { file: full, mtime });
       }
     }
   };
   walk(dir);
-  if (byBase.size === 0) throw new Error(`no PDFs found under ${dir}`);
+  if (byBase.size === 0) throw new Error(`no PDFs or images found under ${dir}`);
   const merged = await PDFDocument.create();
   merged.setProducer('pdf2takeoff 0.1.0');
   const sheets: { sheet: string; from: string; superseded: number }[] = [];
   for (const sheet of [...byBase.keys()].sort()) {
     const { file } = byBase.get(sheet)!;
-    const src = await PDFDocument.load(readFileSync(file));
+    const raw = new Uint8Array(readFileSync(file));
+    const kind = sniffImage(raw) ?? imageKindByExt(file);
+    const src = await PDFDocument.load(kind ? await imageToPdf(raw, kind) : raw);
     const count = await merged.copyPages(src, src.getPageIndices());
     for (const page of count) merged.addPage(page);
     // count how many files shared this sheet name (superseded = losers)
@@ -483,7 +499,7 @@ async function cmdSet(dir: string, out: string): Promise<unknown> {
       for (const entry of readdirSync(d, { withFileTypes: true })) {
         const full = join(d, entry.name);
         if (entry.isDirectory()) recount(full);
-        else if (basename(entry.name) === sheet && full !== file) dupes++;
+        else if (isDrawingFile(entry.name) && sheetStem(entry.name) === sheet && full !== file) dupes++;
       }
     };
     recount(dir);

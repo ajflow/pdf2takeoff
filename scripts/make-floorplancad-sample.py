@@ -19,7 +19,12 @@ scripts/floorplancad-convert.py and scripts/floorplancad-count-bench.mjs can
 be exercised end to end. Deterministic for a given seed. The true per-class
 counts are printed as JSON for cross-checking the converter.
 
-    python3 scripts/make-floorplancad-sample.py --out <dir> [--count 3] [--seed 7]
+    python3 scripts/make-floorplancad-sample.py --out <dir> [--count 3] [--seed 7] [--size-jitter 0.2]
+
+`--size-jitter F` scales every chair, table, toilet and window instance by a
+factor drawn from [1 - F, 1 + F] (default 0: one size per class per drawing),
+the way one drawing inserts the same block at several scales; it exercises the
+vector tier's size band without changing the shapes.
 """
 
 from __future__ import annotations
@@ -198,7 +203,7 @@ def parking(d: Drawing, x, y):
     d.line("parking", PARKING, None, x, y, x + 12, y)
 
 
-def make_drawing(rng: random.Random) -> Drawing:
+def make_drawing(rng: random.Random, size_jitter: float = 0.0) -> Drawing:
     d = Drawing()
     # faint background grid, unlabelled (loaders treat it as background)
     for i in range(1, 7):
@@ -223,16 +228,17 @@ def make_drawing(rng: random.Random) -> Drawing:
             sx, sy = slots.pop()
             cx, cy = sx + rng.uniform(-2, 2), sy + rng.uniform(-2, 2)
             angle = rng.choice([0, 90, 180, 270])
+            j = rng.uniform(1 - size_jitter, 1 + size_jitter) if size_jitter > 0 else 1.0
             if kind == "door":
                 door(d, cx, cy, door_size, angle, rng.random() < 0.5)
             elif kind == "window":
-                window(d, cx, cy, window_size, angle)
+                window(d, cx, cy, window_size * j, angle)
             elif kind == "chair":
-                chair(d, cx, cy, chair_size, angle)
+                chair(d, cx, cy, chair_size * j, angle)
             elif kind == "table":
-                table(d, cx, cy, table_size)
+                table(d, cx, cy, table_size * j)
             elif kind == "toilet":
-                toilet(d, cx, cy, toilet_size, angle)
+                toilet(d, cx, cy, toilet_size * j, angle)
             else:
                 stairs(d, cx, cy, rng.uniform(5, 8), rng.randint(4, 8), angle)
     return d
@@ -243,12 +249,15 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--count", type=int, default=3)
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--size-jitter", type=float, default=0.0, help="per-instance scale jitter for chairs, tables, toilets and windows (0 = one size per class)")
     args = ap.parse_args()
+    if not 0 <= args.size_jitter < 1:
+        ap.error("--size-jitter must be in [0, 1)")
     args.out.mkdir(parents=True, exist_ok=True)
     rng = random.Random(args.seed)
     truth = {}
     for i in range(args.count):
-        d = make_drawing(rng)
+        d = make_drawing(rng, args.size_jitter)
         stem = f"synth-{i + 1:03d}"
         (args.out / f"{stem}.svg").write_text(d.to_svg())
         truth[stem] = dict(sorted(d.counts.items()))

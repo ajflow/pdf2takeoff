@@ -1,12 +1,12 @@
 // Document operations shared by the CLI and the MCP server: one code path
 // for scanning, comparing and annotation reading, whatever drives it.
 
-import { writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { writeFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
-import { openPdf } from './pdfjs-node.ts';
+import { imageKindByExt, openAny } from './image-node.ts';
 import { RASTER_SCALE, type RasterPage, type ScanDeps } from '../engine/ports.ts';
 import { scanForSimilar } from '../engine/scan.ts';
 import { cvScan, type TextBox } from '../engine/scan-cv.ts';
@@ -403,21 +403,27 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
 
 // --- batch compare across folders ---
 
-function listPdfs(dir: string): string[] {
+/** PDFs and PNG / JPG scans under a folder, recursively. */
+function listDrawings(dir: string): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.toLowerCase().endsWith('.pdf')) out.push(full);
+      else if (entry.name.toLowerCase().endsWith('.pdf') || imageKindByExt(entry.name)) out.push(full);
     }
   };
   walk(dir);
   return out;
 }
 
+/** The sheet a file stands for: its basename without the .pdf / .png / .jpg extension, so a scan pairs with the PDF of the same sheet. */
+export function sheetStem(file: string): string {
+  return basename(file).replace(/\.(pdf|png|jpe?g)$/i, '');
+}
+
 export interface FolderPairResult {
-  sheet: string; // basename
+  sheet: string; // file stem (basename without extension)
   aPages: number;
   bPages: number;
   changedSheets: number[];
@@ -434,7 +440,7 @@ export interface FolderCompareResult {
   notes: string[];
 }
 
-/** Recursively pair PDFs across two revision folders by filename and diff every pair. */
+/** Recursively pair PDFs and images across two revision folders by file stem and diff every pair. */
 export async function compareFolders(
   dirA: string,
   dirB: string,
@@ -442,8 +448,8 @@ export async function compareFolders(
 ): Promise<FolderCompareResult> {
   const byBase = (dir: string) => {
     const map = new Map<string, string[]>();
-    for (const f of listPdfs(dir)) {
-      const key = basename(f);
+    for (const f of listDrawings(dir)) {
+      const key = sheetStem(f);
       map.set(key, [...(map.get(key) ?? []), f]);
     }
     return map;
@@ -468,11 +474,11 @@ export async function compareFolders(
     const fb = b.get(sheet)?.[0];
     if (fa && !fb) continue; // handled by removedFromA below
     if (!fa && fb) continue;
-    const docA = await openPdf(new Uint8Array(readFileSync(fa!)));
-    const docB = await openPdf(new Uint8Array(readFileSync(fb!)));
+    const { doc: docA } = await openAny(fa!);
+    const { doc: docB } = await openAny(fb!);
     const result = await compareDocs(docA, docB, {
       threshold: opts.threshold,
-      ...(opts.pngDir ? { png: join(opts.pngDir, `${sheet.replace(/\.pdf$/i, '')}-overlay.png`) } : {}),
+      ...(opts.pngDir ? { png: join(opts.pngDir, `${sheet}-overlay.png`) } : {}),
     });
     pairs.push({
       sheet,

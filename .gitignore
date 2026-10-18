@@ -8,6 +8,11 @@ dist/
 # generated training data — regenerate with scripts/generate-synthetic-dataset.mjs
 training/synthetic/
 
+# ScaledDrawingBench generated sets and caches (npm run bench:scaled -- generate);
+# only the generator, scorer, README and the 5-sheet sample are committed
+bench/scaled-drawing-bench/v*/
+bench/scaled-drawing-bench/.cache/
+
 # trained detector artifacts — drop into public/models/ to ship (see its README)
 # model binaries live on the model-v1 branch (raw.githubusercontent, CORS-enabled)
 # public/models/symbols.json IS committed (manifest)

@@ -17,7 +17,8 @@
     "preview": "vite preview",
     "sample": "node scripts/make-sample.mjs",
     "soak": "node scripts/make-soak.mjs",
-    "bench": "node --experimental-strip-types scripts/takeoff-bench.mjs"
+    "bench": "node --experimental-strip-types scripts/takeoff-bench.mjs",
+    "bench:rooms": "node --experimental-strip-types scripts/room-bench.mjs"
   },
   "keywords": [
     "pdf",

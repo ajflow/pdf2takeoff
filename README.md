@@ -48,7 +48,10 @@ drawing" and do it yourself.
 ```bash
 npm run build      # type-check + production build in dist/
 npm run sample     # regenerate public/examples/sample-floor-plan.pdf
+npm run bench      # takeoff accuracy bench on synthetic sheets (rooms, counts, scales)
 ```
+
+`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)).
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 

@@ -197,7 +197,8 @@ non-zero exit on failure, nothing interactive.
 | `mcp` | start the MCP server (§6) | stdio |
 
 All file processing is local; the CLI makes no network calls (model files come
-from a local path or are absent → CV fallback).
+from a local path or are absent → CV fallback), with one exception: `ocr`
+fetches its 3 MB language pack once (see §6, OCR on scans).
 
 ---
 
@@ -236,6 +237,31 @@ Design rules:
   caller provides; the server never uploads, never phones home.
 - Human verification loop is built in: `save_annotated` output opens in the
   web app / Revu / Acrobat with every markup visible.
+
+**OCR on scans (2026-10-18).** `read_text` falls back to OCR of the render
+when a sheet has no text layer (or with `ocr: true`), reporting
+`source: "ocr"` and the recogniser's confidence per word; `set_scale` with
+neither `ratio` nor `from_points` reads the printed scale note the same way;
+the CLI gains `ocr <pdf> --page N [--region x,y,w,h] [--rotate 90]
+[--threshold 190]`. The Node adapter (`src/headless/ocr-node.ts`) is the twin
+of the browser one on tesseract.js: pages are read in 640 px windows with a
+quarter overlap (tesseract's whole-page layout pass loses labels scattered
+over a drawing, while a window around them reads cleanly), a second pass at
+2 to 4x runs when the confident words are under 20 px (scans at screen
+resolution), extra reading angles catch vertical text, and dimensions use the
+same rotated, line-art-pruned corridor read as the app. Language data loads
+from `PDF2TAKEOFF_TESSDATA` or `~/.cache/pdf2takeoff/tessdata` and is fetched
+once (3 MB, from the tessdata mirror on raw.githubusercontent.com) when
+absent: the only network access in the headless engine, and never the
+drawing. `src/engine/room-labels.ts` maps printed room names (English,
+French, Finnish, German, Italian, Spanish, Swedish, plus drafting
+abbreviations such as MH, KPH, SDB, CH) to room classes, keeps the
+AECV-Bench counting rules as data (`Lavatory` is not a toilet, `Bath` is)
+and counts labels from positioned words (`countRoomsByClass`), so a scanned
+set can yield a bedroom and bathroom schedule without a text layer.
+Measured on AECV-Bench plans in `docs/research/benchmarks/aecv-bench.md`
+(status line): labels print at 8 to 14 px on the smaller plans, which is the
+limit of this approach, not of the dictionary.
 
 ---
 

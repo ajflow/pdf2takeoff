@@ -6,6 +6,10 @@ import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'n
 import { openPdf } from './pdfjs-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
+import { ocrRaster, terminateOcr } from './ocr-node.ts';
+import { RASTER_SCALE } from '../engine/ports.ts';
+import { findScaleRatio } from '../engine/ocr.ts';
+import { countRoomsByClass } from '../engine/room-labels.ts';
 import { basename, join } from 'node:path';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
@@ -45,10 +49,19 @@ Usage:
       Takeoff-as-code: calibrate, scan-count every symbol type in the spec,
       write the exports (csv / xlsx / annotated-pdf / summary JSON).
       --prev diffs quantities against a previous run — the revision loop.
+  pdf2takeoff ocr <file.pdf> --page N [--region x,y,w,h] [--rotate 90] [--threshold 190]
+      OCR the rendered page (scans have no text layer): words with positions
+      in PDF points, the scale note read, and room labels counted by class,
+      as JSON. --region clips to a rectangle (PDF points, bottom-left origin);
+      --rotate adds a reading of text running bottom to top; --threshold
+      binarises soft scans. First use fetches the English language pack
+      (about 3 MB) into ~/.cache/pdf2takeoff/tessdata; set PDF2TAKEOFF_TESSDATA
+      to a folder holding eng.traineddata to run fully offline.
   pdf2takeoff mcp
       Start the MCP server on stdio (for AI agents; see specs/headless-engine.md).
 
-Everything runs locally; drawings never leave the machine.
+Everything runs locally; drawings never leave the machine (OCR fetches only
+its language pack, once).
 `;
 
 export { openPdf, renderRasterNode };
@@ -107,6 +120,41 @@ async function cmdScan(file: string, pageArg: string, atArg: string, allPages: b
       y: Math.round(h.y * 100) / 100,
       ...(h.label !== undefined ? { label: h.label } : {}),
     })),
+  };
+}
+
+/** OCR a rendered page: words in PDF points, the scale note found, room labels by class. */
+async function cmdOcr(file: string, pageArg: string, regionArg: string | undefined, rotateArg: string | undefined, thresholdArg: string | undefined): Promise<unknown> {
+  const page = parseInt(pageArg, 10);
+  if (!Number.isInteger(page) || page < 1) throw new Error('--page must be a positive integer');
+  let region: { x0: number; y0: number; x1: number; y1: number } | undefined;
+  if (regionArg) {
+    const v = regionArg.split(',').map((s) => parseFloat(s));
+    if (v.length !== 4 || !v.every((n) => Number.isFinite(n)) || v[2] <= 0 || v[3] <= 0) {
+      throw new Error('--region must be "x,y,w,h" in PDF points (bottom-left origin)');
+    }
+    region = { x0: v[0], y0: v[1], x1: v[0] + v[2], y1: v[1] + v[3] };
+  }
+  const rotations = rotateArg ? rotateArg.split(',').map((s) => parseFloat(s)) : undefined;
+  if (rotations && !rotations.every((n) => Number.isFinite(n))) throw new Error('--rotate must be degrees, e.g. 90 or 90,270');
+  const threshold = thresholdArg ? parseFloat(thresholdArg) : undefined;
+  if (threshold !== undefined && !(threshold > 0 && threshold < 255)) throw new Error('--threshold must be 1..254');
+  const doc = await openPdf(readPdf(file));
+  if (page > doc.numPages) throw new Error(`page ${page} out of range (1..${doc.numPages})`);
+  const raster = await renderRasterNode(doc, page, RASTER_SCALE);
+  const words = await ocrRaster(raster, { region, rotations, threshold });
+  const scale = findScaleRatio(words, 'OCR');
+  const rooms = countRoomsByClass(words);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    file,
+    page,
+    source: 'ocr',
+    wordCount: words.length,
+    words: words.map((w) => ({ text: w.text, conf: Math.round(w.conf), xPt: r2(w.xPt), yPt: r2(w.yPt), wPt: r2(w.wPt), hPt: r2(w.hPt) })),
+    scaleRatio: scale ? { ratio: scale.ratio, source: scale.source } : null,
+    rooms: rooms.counts,
+    roomLabels: rooms.labels.map((l) => ({ ...l, xPt: r2(l.xPt), yPt: r2(l.yPt) })),
   };
 }
 
@@ -369,6 +417,20 @@ export async function run(argv: string[]): Promise<void> {
       });
       if (positionals.length !== 1) throw new Error('usage: pdf2takeoff run <takeoff.yaml> [--prev previous-summary.json]');
       process.stdout.write(JSON.stringify(await cmdRun(positionals[0], values.prev), null, 2) + '\n');
+      return;
+    }
+    if (cmd === 'ocr') {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { page: { type: 'string', default: '1' }, region: { type: 'string' }, rotate: { type: 'string' }, threshold: { type: 'string' } },
+      });
+      if (positionals.length !== 1) throw new Error('usage: pdf2takeoff ocr <file.pdf> --page N [--region x,y,w,h] [--rotate 90] [--threshold 190]');
+      try {
+        process.stdout.write(JSON.stringify(await cmdOcr(positionals[0], values.page, values.region, values.rotate, values.threshold), null, 2) + '\n');
+      } finally {
+        await terminateOcr(); // the recogniser's worker thread would otherwise keep the process alive
+      }
       return;
     }
     if (cmd === 'mcp') {

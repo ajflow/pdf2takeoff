@@ -66,6 +66,7 @@ npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantitie
 npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantities
 npm run cli -- set tender/ -o current-issue.pdf     # slip-sheet: newest per sheet, sorted
+npm run cli -- ocr scan.pdf --page 1 [--region x,y,w,h]  # scanned sheet: OCR words, scale note, room labels by class
 ```
 
 `run` is takeoff-as-code: the spec names the scale, one click-point per

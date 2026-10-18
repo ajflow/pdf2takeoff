@@ -4,11 +4,19 @@
 // the opposite reading is offered as a fallback only near vertical, and the
 // reading picker prefers a parsed value without a spurious leading zero
 // (an upside-down "1200" reads "0021"). Also checks that text-layer words
-// (read_text) land where they are drawn at 0°, 90° and 270°.
+// (read_text) land where they are drawn at 0°, 90° and 270°, the room-label
+// dictionary (engine/room-labels.ts), and the Node OCR adapter
+// (headless/ocr-node.ts) on a rendered label sheet: labels counted by
+// class, the scale note read off the pixels, region clipping, vertical
+// text, and a corridor dimension read.
 
-import { PDFDocument, StandardFonts, degrees } from 'pdf-lib';
-import { corridorAngles, pickCorridorReading, roomLabelPoints, wordsFromTextItem } from '../src/engine/ocr.ts';
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { corridorAngles, pickCorridorReading, roomLabelPoints, wordsFromTextItem, findScaleRatio, nearestDimensionValue } from '../src/engine/ocr.ts';
+import { classifyRoomLabel, countRoomsByClass, normalizeLabel, ROOM_LABEL_RULES } from '../src/engine/room-labels.ts';
+import { RASTER_SCALE } from '../src/engine/ports.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
+import { renderRasterNode } from '../src/headless/raster-node.ts';
+import { ensureTessdata, ocrRaster, ocrCorridorRaster, terminateOcr } from '../src/headless/ocr-node.ts';
 
 let failed = false;
 const check = (label, cond, detail = '') => {
@@ -86,5 +94,111 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
   check('room labels: annotations and dimensions dropped', notNames.every((s) => !kept(s)), JSON.stringify(notNames.filter(kept)));
 }
 
+// room-label dictionary: printed labels in several languages and drafting
+// abbreviations map to classes; the benchmark rules are data (Lavatory is
+// not a toilet, Bath is); labels never match inside longer words
+{
+  const want = [
+    ['BEDROOM 2', 'bedroom'], ['Bed 1', 'bedroom'], ['MASTER BEDROOM', 'bedroom'], ['Chambre 1', 'bedroom'], ['CH1', 'bedroom'],
+    ['MH', 'bedroom'], ['Schlafzimmer', 'bedroom'], ['Zimmer', 'bedroom'], ['Camera da letto', 'bedroom'], ['Dormitorio', 'bedroom'], ['Sovrum 2', 'bedroom'],
+    ['W.C.', 'toilet'], ['wc', 'toilet'], ['BATH', 'toilet'], ['BATHROOM 2', 'toilet'], ['Salle de bain', 'toilet'], ['SDB', 'toilet'], ['Douche', 'toilet'],
+    ['KPH', 'toilet'], ['PH', 'toilet'], ['Bad', 'toilet'], ['Bagno', 'toilet'], ['Baño', 'toilet'], ['Badrum', 'toilet'], ['TOIL.', 'toilet'], ['EN-SUITE', 'toilet'], ['HALL BATH', 'toilet'],
+    ['KITCHEN', 'kitchen'], ['Cuisine', 'kitchen'], ['K', 'kitchen'], ['KT', 'kitchen'], ['Küche', 'kitchen'], ['Cucina', 'kitchen'], ['Cocina', 'kitchen'], ['Kök', 'kitchen'],
+    ['LIVING ROOM', 'living'], ['Séjour', 'living'], ['OH', 'living'], ['TUPA', 'living'], ['Wohnen', 'living'], ['Soggiorno', 'living'], ['Salón', 'living'], ['Vardagsrum', 'living'],
+    ['HALL', 'hall'], ['Entrée', 'hall'], ['ET', 'hall'], ['Flur', 'hall'], ['Ingresso', 'hall'], ['Pasillo', 'hall'],
+    ['CLOSET', 'closet'], ['Placard', 'closet'], ['VH', 'closet'], ['Abstellraum', 'closet'], ['Ripostiglio', 'closet'], ['Armario', 'closet'], ['Klädkammare', 'closet'], ['STORE', 'closet'],
+    ['LAVATORY', 'other'], ['Lav', 'other'], ['GARAGE', 'other'], ['S', 'other'], ['Sauna', 'other'],
+    ['we', 'toilet'], // tesseract's reading of a printed W.C.
+    ['1200', null], ['SCALE 1:100', null], ['DN', null], ['12.5 m2', null], ['ROOM', null], ['STORES', null], ['WCS', null],
+  ];
+  const wrong = want.filter(([label, cls]) => classifyRoomLabel(label) !== cls).map(([label, cls]) => `${label}: got ${classifyRoomLabel(label)}, want ${cls}`);
+  check(`dictionary: ${want.length} labels classify as expected`, wrong.length === 0, wrong.join('; '));
+  check('dictionary: W.C. normalises to the WC token', normalizeLabel('W.C.') === 'WC' && normalizeLabel('Chambre 1') === 'CHAMBRE 1' && normalizeLabel('CH1') === 'CH 1');
+  check('dictionary: benchmark rules are data', ROOM_LABEL_RULES.some((r) => r.label === 'lavatory' && r.cls === 'other') && ROOM_LABEL_RULES.some((r) => r.label === 'bath' && r.cls === 'toilet'));
+
+  // counting from positioned words (PDF pt, y up): lines, then stacked fragments
+  const w = (text, x, y, conf = 95) => ({ text, conf, xPt: x, yPt: y, wPt: text.length * 5, hPt: 8 });
+  const count = (words) => countRoomsByClass(words).counts;
+  let c = count([w('BEDROOM', 100, 300), w('1', 125, 300), w('BEDROOM', 300, 300), w('2', 325, 300)]);
+  check('count: adjacent words form one label each', c.bedroom === 2, JSON.stringify(c));
+  c = count([w('WC', 100, 300), w('BATH', 100, 290)]);
+  check('count: two complete labels stacked in neighbouring rooms stay two toilets', c.toilet === 2, JSON.stringify(c));
+  c = count([w('SALLE', 100, 300), w('DE', 125, 300), w('BAIN', 105, 290)]);
+  check('count: a label split over two lines reads as one toilet', c.toilet === 1 && c.bedroom === 0, JSON.stringify(c));
+  c = count([w('MASTER', 100, 300), w('BEDROOM', 105, 290)]);
+  check('count: MASTER over BEDROOM is one bedroom', c.bedroom === 1, JSON.stringify(c));
+  c = count([w('WALK', 100, 300), w('IN', 122, 300), w('CLOSET', 103, 290)]);
+  check('count: WALK IN over CLOSET is one closet', c.closet === 1, JSON.stringify(c));
+  c = count([w('LAVATORY', 100, 300), w('BATH', 300, 300), w('SHOWER', 328, 300)]);
+  check('count: Lavatory is not a toilet, a BATH SHOWER label counts once', c.toilet === 1 && c.other === 1, JSON.stringify(c));
+  c = count([w('ET', 100, 300, 70), w('ar', 200, 300, 85), w('BEDROOM', 300, 300, 40), w('HALL', 400, 300, 50)]);
+  check('count: low-confidence and junk words are ignored', c.hall === 0 && c.closet === 0 && c.bedroom === 0, JSON.stringify(c));
+  c = count([w('BATHROOM', 100, 300, 50), w('BATH', 300, 300, 62)]);
+  check('count: the floor relaxes for long words and tightens for short ones', c.toilet === 2, JSON.stringify(c));
+}
+
+// Node OCR on a rendered label sheet: the words come from pixels only (the
+// sheet's text layer is never consulted), so this is the scanned-sheet path.
+// Skipped, not failed, when the language data cannot be loaded here.
+{
+  let ready = null;
+  try {
+    ready = await ensureTessdata('eng');
+  } catch (err) {
+    console.log(`skip: OCR cases (${err instanceof Error ? err.message : err})`);
+  }
+  if (ready) {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([600, 400]);
+    const font = await doc.embedFont(StandardFonts.HelveticaBold);
+    const size = 14;
+    const labels = [
+      ['BEDROOM 1', 60, 320],
+      ['BEDROOM 2', 320, 320],
+      ['BATH', 60, 220],
+      ['W.C.', 320, 220],
+      ['KITCHEN', 60, 130],
+      ['LAVATORY', 320, 130],
+    ];
+    for (const [t, x, y] of labels) page.drawText(t, { x, y, size, font });
+    page.drawText('SCALE 1:100', { x: 400, y: 30, size: 12, font });
+    page.drawText('WC', { x: 575, y: 200, size, font, rotate: degrees(90) });
+    // some line work, as on a plan: an outer wall and a dimension line with its value
+    page.drawRectangle({ x: 40, y: 100, width: 520, height: 260, borderWidth: 2, borderColor: rgb(0, 0, 0) });
+    page.drawLine({ start: { x: 100, y: 70 }, end: { x: 300, y: 70 }, thickness: 1, color: rgb(0, 0, 0) });
+    page.drawText('3600', { x: 185, y: 74, size: 10, font });
+    const pdf = await openPdf(await doc.save());
+    const raster = await renderRasterNode(pdf, 1, RASTER_SCALE);
+
+    const words = await ocrRaster(raster);
+    const rooms = countRoomsByClass(words);
+    const seen = rooms.labels.map((l) => `${l.cls}:${l.text}`).join(', ') + ' | words: ' + words.map((x) => `${x.text}@${Math.round(x.conf)}`).join(' ');
+    check('ocr: bedrooms counted from pixels', rooms.counts.bedroom === 2, seen);
+    check('ocr: BATH and W.C. count as toilets, LAVATORY does not', rooms.counts.toilet === 2 && rooms.counts.other === 1, seen);
+    check('ocr: kitchen counted', rooms.counts.kitchen === 1, seen);
+    const hit = findScaleRatio(words, 'OCR');
+    check('ocr: SCALE 1:100 read off the rasterised sheet', hit?.ratio === 100, JSON.stringify(hit));
+    const bath = words.find((x) => x.text === 'BATH');
+    const ex = 60 + font.widthOfTextAtSize('BATH', size) / 2;
+    const ey = 220 + (font.heightAtSize(size, { descender: false }) ?? size * 0.72) / 2;
+    const err = bath ? Math.hypot(bath.xPt - ex, bath.yPt - ey) : Infinity;
+    check('ocr: word centre lands in PDF points within 4 pt', err < 4, `got (${bath?.xPt.toFixed(1)}, ${bath?.yPt.toFixed(1)}), want (${ex.toFixed(1)}, ${ey.toFixed(1)})`);
+
+    const clipped = await ocrRaster(raster, { region: { x0: 300, y0: 200, x1: 480, y1: 350 } });
+    check(
+      'ocr: region clip keeps only the words inside',
+      clipped.some((x) => x.text === 'BEDROOM') && !clipped.some((x) => x.text === 'KITCHEN') && clipped.every((x) => x.xPt >= 295 && x.xPt <= 485),
+      clipped.map((x) => x.text).join(' '),
+    );
+    const rotated = await ocrRaster(raster, { region: { x0: 555, y0: 180, x1: 600, y1: 260 }, rotations: [90] });
+    check('ocr: vertical text read with rotations: [90]', rotated.some((x) => x.text === 'WC'), rotated.map((x) => `${x.text}@${Math.round(x.conf)}`).join(' '));
+
+    const corridor = await ocrCorridorRaster(raster, { x: 100, y: 70 }, { x: 300, y: 70 });
+    const dim = nearestDimensionValue(corridor, { x: 100, y: 70 }, { x: 300, y: 70 });
+    check('ocr: corridor read finds the dimension along the line', dim?.value === 3600 && dim.unit === 'mm', JSON.stringify(corridor.map((x) => x.text)));
+    await terminateOcr();
+  }
+}
+
 if (failed) process.exit(1);
-console.log('PASS: corridor orientation rules');
+console.log('PASS: corridor orientation rules, room-label dictionary, Node OCR');

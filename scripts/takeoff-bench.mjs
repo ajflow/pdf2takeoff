@@ -94,7 +94,7 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     cases.push({ id: 'fill/interior-door', kind: 'fill', page: 1, at, expectM2: inner(3, 3) });
     cases.push({ id: 'fill/interior-door-labels-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'labels' });
     cases.push({ id: 'fill/interior-door-scale-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'scale' });
-    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none', known: 'P13 neck cuts' });
+    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none' });
   }
   // F: 4 x 3 m room in 0.2 m filled walls (drawn as filled rectangles), 0.9 m door to outside
   {

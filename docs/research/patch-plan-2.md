@@ -18,6 +18,7 @@
 > | P3b, P5b, P2b, P20 | open: need a dependency decision (PaddleOCR.js), model artifacts (DINOv2), a dataset licence check and training run (ResPlan), or an agent harness with model access (public benchmarks) |
 >
 > Bench after phase 3: fill 11/12, count 2/2, scale 9/9.
+> Continued in [patch-plan-3.md](patch-plan-3.md): counting without asking the model to count (P21 to P26).
 > Bench after the sheet door width (2026-10-18): fill 21/22, count 2/2, scale 9/9; the open case is a diagonal door on a sheet with no vector layer (axis-aligned closing cannot bridge it).
 
 ## Principles

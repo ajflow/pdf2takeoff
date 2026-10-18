@@ -23,7 +23,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
@@ -68,12 +68,17 @@ const GRID = S / CELL;
 }
 
 // --- a PDF scanned through scanDocAt reaches the detector ---------------------
-// 300 x 200 pt page -> 900 x 600 px raster at RASTER_SCALE -> letterboxed into
-// S x S. Filled-square glyphs (text, invisible to the vector tier) sit at cell
-// centres; the stub reports each inked cell as a box, so every hit must land
-// on its cell centre with the class the inked fraction implies.
-const PAGE_W = 300;
-const PAGE_H = 200;
+// The fixture page carries one embedded raster image (invisible to the vector
+// tier) with black squares at cell centres. Font glyphs are deliberately NOT
+// used: their rendered ink depends on pdf.js's per-platform font fallback and
+// made this check flake across platforms. The image is placed 1:1 on a
+// 256 x 256 pt page (768 x 768 px at RASTER_SCALE), so the raster render is an
+// exact pixel copy and the only resampling is letterboxCHW's pure-JS bilinear
+// 6:1 downsample to S x S — deterministic everywhere. The stub reports each
+// inked cell as a box, so every hit must land on its cell centre with the class
+// the inked fraction implies.
+const PAGE_W = 256;
+const PAGE_H = 256;
 const scale = Math.min(S / (PAGE_W * RASTER_SCALE), S / (PAGE_H * RASTER_SCALE));
 const dw = (S - PAGE_W * RASTER_SCALE * scale) / 2;
 const dh = (S - PAGE_H * RASTER_SCALE * scale) / 2;
@@ -85,21 +90,38 @@ const cellCentrePt = (gx, gy) => ({
 const inputPxToPt = (px) => px / scale / RASTER_SCALE;
 const sparseCells = [[1, 2], [4, 3], [6, 5], [2, 4]];
 const denseCells = [[3, 2], [7, 4]];
+const SPARSE_PX = 7; // 19% of the cell inked -> sparse score ~0.81
+const DENSE_PX = 13; // 66% inked -> dense score ~0.66; both far from the 0.5 boundary
 
 async function squaresPdf() {
-  const doc = await PDFDocument.create();
-  // ZapfDingbats U+25A0: ink box is 0.483 x size, offset (0.308, 0.175) x size from the text origin
-  const font = await doc.embedFont(StandardFonts.ZapfDingbats);
-  const square = (page, gx, gy, sidePx) => {
-    const c = cellCentrePt(gx, gy);
-    const size = inputPxToPt(sidePx) / 0.483;
-    page.drawText('■', { x: c.x - 0.308 * size, y: c.y - 0.175 * size, size, font });
+  // raster pixels: 3 per pt, row 0 at the top; one model px = 6 raster px
+  const W = PAGE_W * RASTER_SCALE;
+  const { createCanvas } = await import('@napi-rs/canvas');
+  const squaresImage = (squares) => {
+    const cnv = createCanvas(W, W);
+    const ctx = cnv.getContext('2d');
+    ctx.fillStyle = '#fff'; // opaque white: transparent pixels would read as ink
+    ctx.fillRect(0, 0, W, W);
+    ctx.fillStyle = '#000';
+    const px = W / S;
+    for (const [gx, gy, sidePx] of squares) {
+      const cx = (gx * CELL + CELL / 2) * px;
+      const cy = (gy * CELL + CELL / 2) * px;
+      const half = (sidePx * px) / 2;
+      ctx.fillRect(Math.round(cx - half), Math.round(cy - half), Math.round(half * 2), Math.round(half * 2));
+    }
+    return cnv.toBuffer('image/png');
   };
+  const p1Squares = [
+    ...sparseCells.map(([gx, gy]) => [gx, gy, SPARSE_PX]),
+    ...denseCells.map(([gx, gy]) => [gx, gy, DENSE_PX]),
+  ];
+
+  const doc = await PDFDocument.create();
   const p1 = doc.addPage([PAGE_W, PAGE_H]);
-  for (const [gx, gy] of sparseCells) square(p1, gx, gy, 8); // 25% of the cell inked
-  for (const [gx, gy] of denseCells) square(p1, gx, gy, 12); // 56% inked
+  p1.drawImage(await doc.embedPng(squaresImage(p1Squares)), { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
   const p2 = doc.addPage([PAGE_W, PAGE_H]);
-  square(p2, 5, 3, 8);
+  p2.drawImage(await doc.embedPng(squaresImage([[5, 3, SPARSE_PX]])), { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
   return openPdf(await doc.save());
 }
 

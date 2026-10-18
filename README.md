@@ -57,8 +57,9 @@ Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`pu
 
 ## Headless CLI (agents & scripts)
 
-The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, no
-network calls:
+The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, and
+no network calls except one: the first `ocr` run on a scan downloads a ~3 MB
+language pack (cached; see `PDF2TAKEOFF_TESSDATA` below):
 
 ```bash
 npm run cli -- info drawing.pdf                      # pages, sizes, annotation counts
@@ -78,24 +79,30 @@ symbol type (a `class:` field activates automatically once a model ships),
 and the exports. Re-run it on every revision with `--prev` to see exactly
 which quantities changed — the CI-friendly revision loop.
 
-`info`, `scan` and `export` (and the MCP `open_document`) also take a PNG or
-JPG directly, as do image-only (scanned) PDFs: an image is one page of
-width/3 by height/3 points, so a click at pixel (px, py) is `--at px/3,(H - py)/3`
-and the scan sees the native pixels. `compare --json` is designed for
-pipelines (`jq '.changedSheets'`); `scan`
+Every `<file.pdf>` above also takes a PNG or JPG directly (the MCP
+`open_document` included), as well as image-only (scanned) PDFs: an image is
+one page of width/3 by height/3 points, so a click at pixel (px, py) is
+`--at px/3,(H - py)/3` and the scan sees the native pixels. `compare --json`
+is designed for pipelines (`jq '.changedSheets'`); `scan`
 returns the same hits the web Scan tool finds. This is the substrate for the
 agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
 
+Environment variables: `PDF2TAKEOFF_MODEL_DIR` (or `scan --model <dir>`)
+selects a trained ONNX detector directory — without it the scan stays on the
+CV tier; `PDF2TAKEOFF_TESSDATA` points the OCR language pack at an
+offline/frozen copy instead of downloading it; `PDF2TAKEOFF_OCR_DUMP`
+writes the binarised OCR crops to a folder for debugging.
+
 ## Agent API (MCP)
 
-`pdf2takeoff mcp` starts a local MCP server on stdio with twelve tools —
+`pdf2takeoff mcp` starts a local MCP server on stdio with thirteen tools —
 `open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
 `read_text` (the sanctioned way to read printed scales/dimensions/labels —
 exact, positioned, never off the rendered image), `set_scale`, `measure`,
-`scan_symbol`, `compare_revisions`, `list_markups`, `set_status`,
-`delete_markup`, `export`, `save_annotated` — so an AI agent can run a whole
-takeoff and hand the marked-up PDF to a human for review. Local process,
-local files, nothing uploaded.
+`fill_area`, `scan_symbol`, `compare_revisions`, `list_markups`,
+`set_status`, `delete_markup`, `export`, `save_annotated` — so an AI agent
+can run a whole takeoff and hand the marked-up PDF to a human for review.
+Local process, local files, nothing uploaded.
 
 Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 

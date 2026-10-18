@@ -303,7 +303,11 @@ and every cloud AI takeoff:
 - The MCP server is a **local stdio process**. Drawings are opened, rendered
   and measured on the user's machine; the model sees only what the local
   server sends it (page images the user's agent asked for).
-- The CLI makes **zero network calls**.
+- The CLI makes **zero network calls**, with one documented exception: the
+  first `ocr` run on a scan fetches a ~3 MB language pack (cached under
+  `~/.cache/pdf2takeoff/tessdata`, redirectable via `PDF2TAKEOFF_TESSDATA`;
+  see §6). Everything else — rendering, scanning, detection, measurement,
+  export — never touches the network.
 - No accounts, no telemetry, unchanged from the web app's promises.
 - Threat model note: an MCP client can already read files the user gives it;
   our server adds no privileged access — it only formalizes takeoff verbs.
@@ -316,7 +320,7 @@ and every cloud AI takeoff:
 |---|---|---|
 | pdfjs-dist (legacy build) | Node PDF rendering | Apache-2.0 |
 | @napi-rs/canvas | Node rasterizer | MIT |
-| onnxruntime-node | Node ONNX inference | MIT |
+| onnxruntime-web | ONNX inference in Node (WASM backend via its Node entry — §11c) | MIT |
 | @modelcontextprotocol/sdk | MCP server | MIT |
 | pdf-lib / xlsx / pdfjs-dist | unchanged | MIT / Apache-2.0 / Apache-2.0 |
 
@@ -406,9 +410,13 @@ the CV tier. The CLI `info`, `scan` and `export` commands and the MCP
 `fill_area` and `read_text` work on them, and `save_annotated` writes a PDF
 with the image embedded at the same geometry.
 
-H2 ships without the ONNX detector in Node (no model exists yet — training
-is in flight); the `DetectorSession` port is ready for `onnxruntime-node`
-the moment `symbols.onnx` lands (H4 prep).
+The ONNX detector tier ships in Node: `src/headless/detector-node.ts` loads
+the model directory (manifest + `symbols.onnx`) selected by `--model dir` or
+`PDF2TAKEOFF_MODEL_DIR`, running inference on `onnxruntime-web`'s Node entry
+(the WASM backend in-process — one dependency, no native addon; the earlier
+`onnxruntime-node` plan was dropped in favour of it). Without a model
+directory the scan path stays on the CV tier; asking for a directory without
+a model is an error, not a silent fallback.
 
 ## 12. Risks & mitigations
 

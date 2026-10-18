@@ -158,6 +158,20 @@ export interface FuzzyRoomMatch {
 const MIXED_CASE_SHORT = /^(?:[A-ZÀ-Þ][a-zà-ÿ]|[a-zà-ÿ][A-ZÀ-Þ])$/;
 
 /**
+ * A one-word line whose only path into the dictionary is an OCR_ALIAS ("WE"
+ * for W.C.): the recogniser could not read the label as printed, so like a
+ * confusion-rule read it counts only when corroborated (see
+ * countRoomsByClass), never on its own.
+ */
+export function aliasRoomTerm(text: string): { term: string; cls: RoomClass } | null {
+  const tokens = normalizeLabel(text).split(' ').filter(Boolean);
+  if (tokens.length !== 1) return null;
+  const t = alias(tokens[0]);
+  if (t === tokens[0] || TERMS.has(tokens[0]) || !TERMS.has(t)) return null;
+  return { term: t, cls: TERMS.get(t)! };
+}
+
+/**
  * A short token (two to four letters or digits, one word) that is not in
  * the dictionary as read but is one OCR_CONFUSIONS substitution away from
  * a term, or is a term read in mixed case ("Mh"). Returns the term with its
@@ -430,26 +444,32 @@ export function countRoomsByClass(words: OcrWord[], opts: CountRoomsOptions = {}
       ...(fuzzy ? { fuzzy } : {}),
     });
   };
-  // complete labels first
+  // complete labels first; a lone alias read ("WE" for W.C.) is not complete —
+  // it only classifies through the alias, so it waits for corroboration below
   lines.forEach((ln, i) => {
     const cls = classified[i];
     if (!cls) return;
+    if (ln.words.length === 1 && aliasRoomTerm(ln.text)) return;
     consumed.add(i);
     emit([ln], cls);
   });
-  // confusion-rule reads: a lone short token one known OCR slip away from a
-  // term never counts on its own; it counts when corroborated (inside a room
-  // per the host, or an area figure stacked against it), and then carries
-  // the penalty in its confidence
+  // confusion-rule and alias reads: a lone short token one known OCR slip (or
+  // a whole-token alias) away from a term never counts on its own; it counts
+  // when corroborated (inside a room per the host, or an area figure stacked
+  // against it), and then carries the penalty in its confidence
   lines.forEach((ln, i) => {
     if (consumed.has(i) || ln.words.length !== 1) return;
     const fz = fuzzyRoomTerm(ln.text);
-    if (!fz) return;
+    const al = fz ? null : aliasRoomTerm(ln.text);
+    if (!fz && !al) return;
+    const cls = (fz ?? al!).cls;
     const conf = ln.words[0].conf;
     const corroborated = opts.isInsideRoom?.({ x: ln.words[0].xPt, y: ln.words[0].yPt }) === true || figures.some((f) => stacked(ln, f) || stacked(f, ln));
     if (!corroborated || conf < FUZZY_MIN_CONF) return;
     consumed.add(i);
-    emit([{ ...ln, words: [{ ...ln.words[0], conf: Math.max(0, conf - fz.penalty) }] }], fz.cls, `${fz.read} as ${fz.term} via ${fz.via}`);
+    const note = fz ? `${fz.read} as ${fz.term} via ${fz.via}` : `${normalizeLabel(ln.text)} as ${al!.term} via alias`;
+    const penalty = fz ? fz.penalty : CONFUSION_PENALTY.short;
+    emit([{ ...ln, words: [{ ...ln.words[0], conf: Math.max(0, conf - penalty) }] }], cls, note);
   });
   // fragments: join with an unclassified or classified neighbour stacked against them
   lines.forEach((ln, i) => {

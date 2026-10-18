@@ -155,10 +155,23 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
   c = count([w('BATM', 100, 300, 90)]);
   check('count: a lone four-letter slip (BATM@90) does not create a toilet either', c.toilet === 0, JSON.stringify(c));
   check('count: a corroborated slip carries the penalty in its confidence', countRoomsByClass([w('HH', 100, 300, 85), w('5.7', 102, 290, 90)]).labels[0]?.conf === 55);
+  // the alias path ("we"/"Wwe" for W.C.) is a guess about ink the recogniser
+  // could not read as printed: it needs the same corroboration as a slip
+  c = count([w('we', 100, 300, 61)]);
+  check('count: a lone alias read (we@61) does not create a toilet', c.toilet === 0, JSON.stringify(c));
+  c = count([w('we', 100, 300, 61), w('5.7', 102, 290, 90)]);
+  check('count: we@61 over an area figure counts as a toilet', c.toilet === 1, JSON.stringify(c));
+  check('count: ...and the label says how it read', countRoomsByClass([w('Wwe', 100, 300, 61), w('5.7', 102, 290, 90)]).labels[0]?.fuzzy === 'WWE as WC via alias');
+  check('count: a corroborated alias carries the penalty in its confidence', countRoomsByClass([w('we', 100, 300, 61), w('5.7', 102, 290, 90)]).labels[0]?.conf === 31);
   c = count([w('XQ', 100, 300, 95), w('5.7', 102, 290, 90)]);
   check('count: a random token over an area figure stays nothing', c.bedroom === 0 && c.toilet === 0, JSON.stringify(c));
+  // an alias never counts alone, however confident: "we" is also an English
+  // word, and the alias floor only admits it as a *candidate* for the
+  // corroborated path above
   c = count([w('we', 100, 300, 74)]);
-  check('count: "we" (a printed W.C.) at 74 counts, the alias floor being that of a longer word', c.toilet === 1, JSON.stringify(c));
+  check('count: a lone "we"@74 does not create a toilet (corroboration required)', c.toilet === 0, JSON.stringify(c));
+  c = count([w('we', 100, 300, 74), w('5.7', 102, 290, 90)]);
+  check('count: "we"@74 over an area figure counts as a toilet', c.toilet === 1, JSON.stringify(c));
 }
 
 // Node OCR on a rendered label sheet: the words come from pixels only (the

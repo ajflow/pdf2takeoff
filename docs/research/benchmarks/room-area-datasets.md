@@ -258,3 +258,139 @@ strokes and the 150/255 ink threshold. Before the fixes those were -2.0 and
 Open: distance-transform neck cuts at any angle (diagonal doorways without
 a vector layer); front doors wider than 1.3 m; variant D needs the headless
 raster path to open image PDFs; CubiCasa5K and MSD as in the plan above.
+
+## Status 2026-10-18, round 2
+
+Same 200 plans, 1,223 enclosed rooms, same bench; variant D (B rasterised
+at 150 dpi, embedded as an image PDF) now scores since the headless raster
+path opens image PDFs. One run of 200 plans x 4 variants takes about 22
+minutes with four jobs (the fills themselves got faster: the median A fill
+fell from 889 to 682 ms at 3 px/pt on A3, because the ladder bounds sooner).
+JSON outputs and logs of both runs are in the session scratchpad
+(`roombench/r2/before.json`, `after.json`, `rot-after2.json`).
+
+Four engine changes, all in `src/engine/dynamicfill.ts`:
+
+1. Arcs are not walls. Thin curvy ink (stroke at most a third of the
+   dominant stroke from `estimateStrokeWidth`, on no straight run of 32 px
+   or more) is grouped into 8-connected pieces; a piece that fits a circle
+   (Kasa least squares, one inlier refit so a leaf drawn off-axis and joined
+   to its arc drops out) of door radius (0.35 to 2.5 m with a scale) over
+   45 to 200 degrees with ink at its centre is a door swing. It is erased
+   and its two chords drawn instead, hinge to leaf tip and hinge to far
+   jamb, each stopping on the first ink it meets, so the door line closes at
+   any angle and the fill runs to it as for a leaf drawn closed. The arc is
+   first grown along its circle through any thin ink joined to it, so no
+   tangent stub is left to make a false wall end.
+2. Text mask. `FillHints.textBoxes` (raster px) erases the thin curvy ink
+   inside word boxes before any closing; a wall through a box is thick or
+   straight and stays. `src/headless/ops.ts` `fillHintsFor` builds labels,
+   word boxes, vector bridges and the scale in one call for the MCP
+   `fill_area` tool (OCR word boxes too with its new `ocr` option) and the
+   quantity delta. The bench PDFs carry no text, so this has no effect on
+   the tables; `scripts/check-fill.mjs` covers it (a dimension string in a
+   doorway stops every rung until masked).
+3. Wide front doors. A leak rung (2 m) runs only while every narrower rung
+   leaked. Because it closes every gap up to 2 m at once, the fill it bounds
+   is redone with only the gaps that face the page exterior sealed (the
+   free space reachable from the page border with the gaps closed is the
+   outside world), climbing through the closing widths the sheet actually
+   has between the door and leak widths, so each interior opening is judged
+   on its own by the cut rule. The cut rule itself changed: a cut smaller
+   than a room (an alcove) is kept as floor and the climb goes on, since a
+   wider doorway to a whole room may lie ahead; the kept alcoves that open
+   onto the final fill are put back at the end.
+4. Flat wall ends. The side of a wall crossed at a shallow angle is long
+   along the run and wall-thick across it, like an end, so on a plan 15
+   degrees off the axes the row and column closing cut the corners off every
+   room. A wall end now needs a flat face: the free pixels just before it,
+   offset across the run by up to half the thickness, must be free too (a
+   quarter may fail, for scans skewed a degree or two).
+
+Wide-door failure classification (variant A before, 79 unbounded enclosed
+rooms, 24 of them living rooms, by the ResPlan geometry): 63 rooms touch a
+door wider than 1.3 m (21 of the 24 living rooms; of the 54 wide doors on
+those living rooms, 23 are the front door, 31 are interior doors of 1.3 to
+1.85 m), 6 rooms have a door whose jamb is the side of a wall (a corner), 13
+are neither (the wall gap is wider than the door polygon, which ResPlan
+draws narrower than its opening). No unbounded room has an exterior wall
+thinner than 0.12 m. So the fix chosen is the width one, the exterior-aware
+leak rung; a distance-transform neck finder is still the answer for
+diagonal gaps (below). Effect on variant A: 53 rooms unbounded to ok, 10
+unbounded to a merged fill (the clicked room joins a neighbour through an
+interior opening of 1.3 to 2 m that the sheet gives no reason to cut, such
+as a 1.5 m wardrobe door into a 1.6 m2 store), 1 to a low-IoU fill, 2 ok
+rooms to unbounded. Living rooms: unbounded 20.3 to 2.5 percent, recovered
+75.4 to 91.5 percent.
+
+Enclosed rooms before:
+
+| Variant | Median rel err vs inside face | p90 abs err | Median vs polygon as is | Median IoU (as is / face) | Leak rate | Unbounded rate | Recovered (IoU >= 0.5, no leak) |
+|---|---|---|---|---|---|---|---|
+| A bare gaps | -1.5 pct | 13.2 pct | -5.3 pct | 0.931 / 0.980 | 2.9 pct | 6.5 pct | 89.9 pct |
+| B door leaf | -1.7 pct | 6.0 pct | -5.1 pct | 0.944 / 0.981 | 1.6 pct | 0.7 pct | 96.8 pct |
+| C leaf plus arc | -5.0 pct | 33.7 pct | -8.5 pct | 0.873 / 0.899 | 2.1 pct | 0.6 pct | 93.9 pct |
+| D raster 150 dpi | -1.6 pct | 5.8 pct | -5.1 pct | 0.944 / 0.980 | 1.5 pct | 0.7 pct | 96.9 pct |
+
+After:
+
+| Variant | Median rel err vs inside face | p90 abs err | Median vs polygon as is | Median IoU (as is / face) | Leak rate | Unbounded rate | Recovered (IoU >= 0.5, no leak) |
+|---|---|---|---|---|---|---|---|
+| A bare gaps | -1.3 pct | 16.6 pct | -4.8 pct | 0.935 / 0.982 | 3.7 pct | 1.4 pct | 94.1 pct |
+| B door leaf | -1.4 pct | 4.7 pct | -5.0 pct | 0.947 / 0.983 | 1.4 pct | 0.7 pct | 97.1 pct |
+| C leaf plus arc | -1.8 pct | 15.7 pct | -5.1 pct | 0.929 / 0.972 | 1.5 pct | 0.6 pct | 96.7 pct |
+| D raster 150 dpi | -1.4 pct | 4.6 pct | -4.9 pct | 0.947 / 0.983 | 1.4 pct | 0.7 pct | 97.1 pct |
+
+Per room type: variant C bedrooms -5.6 to -1.2 pct, bathrooms -4.5 to -2.3
+pct (recovered 92.3 to 97.1), kitchens leak 10.4 to 2.6 pct, living rooms
+-8.6 to -4.3 pct. Living rooms are where C still trails B (-1.2 pct): their
+front door swings are wide and often touch a window outline or another
+swing, and a merged piece fits no circle, so the arc stays. Variant B and D
+moved a little from the flat-end rule and the kept alcoves (B p90 6.0 to
+4.7 pct, bathrooms -2.3 to -2.0). Variant A leak rate rose 2.9 to 3.7 pct:
+the ten unbounded-to-merged rooms above. Against the inside face minus
+door openings the medians are -0.7 (A), -0.9 (B), -1.2 (C), -0.8 (D) pct.
+
+Variant D exposed no raster-specific weakness: at 150 dpi upsampled to the
+216 dpi render the 0.5 pt leaf outlines stay above the 150/255 ink
+threshold and D tracks B to 0.1 pct on every row, so no threshold change
+was made. The remaining raster risk is thinner strokes or lower dpi (a
+0.25 pt leaf at 100 dpi would drop out and the door would be judged as a
+bare gap, variant A).
+
+Diagonal-wall subset (`scripts/bench/resplan_to_pdf.py --rotate 15,30`,
+every tenth plan of the sample, 20 plans, 132 enclosed rooms, 57 at 15 and
+75 at 30 degrees, all four variants), after the changes:
+
+| Variant | Rows | Median rel err vs inside face | p90 abs err | Median IoU (as is / face) | Leak rate | Unbounded rate | Recovered |
+|---|---|---|---|---|---|---|---|
+| A bare gaps | 15 deg | -2.4 pct | 54.5 pct | 0.789 / 0.810 | 7.0 pct | 24.6 pct | 66.7 pct |
+| A bare gaps | 30 deg | -1.1 pct | 337.4 pct | 0.717 / 0.741 | 9.3 pct | 34.7 pct | 56.0 pct |
+| B door leaf | 15 deg | -1.3 pct | 8.2 pct | 0.939 / 0.980 | 3.5 pct | 0.0 pct | 96.5 pct |
+| B door leaf | 30 deg | -1.0 pct | 15.1 pct | 0.952 / 0.982 | 4.0 pct | 0.0 pct | 96.0 pct |
+| C leaf plus arc | 15 deg | -2.3 pct | 30.8 pct | 0.873 / 0.904 | 5.3 pct | 0.0 pct | 93.0 pct |
+| C leaf plus arc | 30 deg | -0.7 pct | 30.9 pct | 0.879 / 0.912 | 5.3 pct | 1.3 pct | 93.3 pct |
+| D raster 150 dpi | 15 deg | -1.1 pct | 8.1 pct | 0.938 / 0.980 | 3.5 pct | 0.0 pct | 96.5 pct |
+| D raster 150 dpi | 30 deg | -1.1 pct | 15.1 pct | 0.951 / 0.981 | 4.0 pct | 0.0 pct | 96.0 pct |
+
+Before the flat-end rule the 15 degree rows read -5.0 pct (B) and -5.5 pct
+(C) with IoU 0.896 (B): the corner cuts. With sealed doors (B, C, D) rotated
+plans now score as the axis-aligned ones. Bare diagonal gaps (A) stay the
+open gap: the row and column closing cannot bridge a doorway at 30 degrees
+(a quarter of the rooms unbounded at 15 degrees, a third at 30), and the
+vector bridges do not apply because ResPlan walls are filled polygons, not
+stroked segments. The next step is the distance-transform neck finder:
+constrictions of the free space narrower than the door width whose cut
+separates a room-sized region, at any angle.
+
+Verification: `scripts/check-fill.mjs` has three new failing-first sheets
+(a door swing arc, glyphs in a doorway with and without a text box, and a
+1.6 m front door beside a 1.6 m interior opening and a 1.9 m alcove); `npm
+run typecheck:engine` and `npm run bench` pass (fill 12/12), `npx tsc
+--noEmit` is clean.
+
+Open: distance-transform neck cuts for diagonal bare gaps; variant C living
+rooms (swings merged with other thin ink); the ten A rooms that now merge
+with a neighbour through a 1.3 to 2 m interior opening (a label hint or the
+text layer splits most of them on a real sheet); CubiCasa5K and MSD as in
+the plan above.

@@ -195,6 +195,7 @@ async function runPlan(id) {
         rec.unbounded = false;
         if (res.gapPx) rec.gapPx = res.gapPx;
         if (res.bridged) rec.bridged = true;
+        if (res.swings) rec.swings = true;
         rec.vertices = res.points.length;
       }
       out.push(rec);

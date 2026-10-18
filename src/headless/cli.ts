@@ -4,6 +4,7 @@
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
+import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
 import { basename, join } from 'node:path';
@@ -57,13 +58,15 @@ function readPdf(path: string): Uint8Array {
   return new Uint8Array(readFileSync(path));
 }
 
+// info / scan / export also take a PNG or JPG: one page of W/3 x H/3 points
+// (see image-node.ts); annotate / run / compare / set stay PDF-only
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   return { doc, markups: await readMarkups(doc) };
 }
 
 async function cmdInfo(file: string): Promise<unknown> {
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   const markups = await readMarkups(doc);
   let other = 0;
   const pages: { page: number; widthPt: number; heightPt: number }[] = [];
@@ -90,7 +93,7 @@ async function cmdScan(file: string, pageArg: string, atArg: string, allPages: b
   if (xy.length !== 2 || !xy.every((v) => Number.isFinite(v))) {
     throw new Error('--at must be "x,y" in PDF points');
   }
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   if (allPages) {
     const schedule = await scanDocAllPages(doc, { x: xy[0], y: xy[1] });
     return { file, ...schedule };

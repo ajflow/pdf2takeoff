@@ -354,6 +354,32 @@ Running pdf.js v5's legacy build on @napi-rs/canvas in Node:
    symbols) in both environments. Reproduce with `scripts/golden-raster.mjs`
    + the in-browser compare-canvas recipe.
 
+5. **Image XObjects segfaulted (exit 139, silent) until one skia instance
+   was enforced.** `pdfjs-dist` pins its own nested `@napi-rs/canvas` 0.1.x
+   under `node_modules/pdfjs-dist/node_modules`, and its `NodeCanvasFactory`
+   requires that copy, so two skia binaries load in one process. Vector
+   drawing never leaves our canvas, but an image is painted through a
+   factory-made temporary canvas, and handing that foreign `CanvasElement`
+   to `drawImage()` on our canvas crashes native code. Fix: `openPdf` passes
+   a `CanvasFactory` built on our `@napi-rs/canvas` (`pdfjs-node.ts`) and
+   `raster-node.ts` also pins the `DOMMatrix` global. Guarded by
+   `scripts/check-raster-input.mjs`.
+
+### 11c. Raster input (PNG / JPG and image-only PDFs)
+
+`src/headless/image-node.ts` opens a PNG or JPG as a one-page, document-like
+object that every PDF code path accepts unchanged (`openAny(path)` picks
+PDF or image by magic bytes, then extension). Convention: the image's native
+pixels are the `RASTER_SCALE` render, so a W x H px image is a page of
+W/3 by H/3 PDF points; `toPdf`/`toRaster` match the pdf.js viewport of the
+same image wrapped as a PDF (y flipped, origin bottom-left), and a click at
+pixel (px, py) is `--at px/3,(H - py)/3`. The page has no text layer
+(`read_text` returns no words), no annotations and no vectors, so scans take
+the CV tier. The CLI `info`, `scan` and `export` commands and the MCP
+`open_document` accept images; `render_page`, `scan_symbol`, `count`,
+`fill_area` and `read_text` work on them, and `save_annotated` writes a PDF
+with the image embedded at the same geometry.
+
 H2 ships without the ONNX detector in Node (no model exists yet — training
 is in flight); the `DetectorSession` port is ready for `onnxruntime-node`
 the moment `symbols.onnx` lands (H4 prep).

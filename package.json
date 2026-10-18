@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node --experimental-strip-types scripts/check-fill.mjs && node --experimental-strip-types scripts/check-detector.mjs && node --experimental-strip-types scripts/check-ocr.mjs && node --experimental-strip-types scripts/check-scale.mjs && node --experimental-strip-types scripts/check-vector.mjs",
+    "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node --experimental-strip-types scripts/check-fill.mjs && node --experimental-strip-types scripts/check-detector.mjs && node --experimental-strip-types scripts/check-ocr.mjs && node --experimental-strip-types scripts/check-scale.mjs && node --experimental-strip-types scripts/check-vector.mjs && node --experimental-strip-types scripts/check-raster-input.mjs",
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",

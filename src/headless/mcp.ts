@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { openPdf } from './pdfjs-node.ts';
+import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta } from './ops.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
@@ -120,12 +121,12 @@ export async function runMcpServer(): Promise<void> {
     'open_document',
     {
       description:
-        'Open a local PDF drawing for takeoff. Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
-      inputSchema: { path: z.string().describe('path to the PDF on this machine') },
+        'Open a local PDF drawing for takeoff (a PNG or JPG scan works too: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
+      inputSchema: { path: z.string().describe('path to the PDF (or PNG/JPG) on this machine') },
     },
     async ({ path }) => {
-      const bytes = new Uint8Array(readFileSync(path));
-      const doc = await openPdf(bytes);
+      // images come back wrapped as PDF bytes so save_annotated still works
+      const { doc, bytes } = await openAny(path);
       const id = `doc-${++docSeq}`;
       const markups = await readMarkups(doc);
       const pages: { page: number; widthPt: number; heightPt: number }[] = [];

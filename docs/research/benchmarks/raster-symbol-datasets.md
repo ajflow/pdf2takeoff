@@ -136,6 +136,7 @@ Reading: on P&IDs, tier 1 cannot even start, because the symbol and the line are
 - SESYD: try the official page from an unproxied machine, or the hyper.ai torrent (11 zips, the floorplans one is a few hundred MB). The 3gT XML needs a 30-line converter to YOLO.
 - Dataset-P&ID full download: 1.5 GB LFS zip; the range-fetch script pulls any sheet in about 12 s, so a 50-sheet eval set is minutes of work and no full download.
 - CLI image-PDF segfault: reproduce outside this container before filing; if it reproduces, try `pdfjs-dist` with `isImageDecoderSupported: false` / `canvasFactory` options or upgrade @napi-rs/canvas, and add an image-PDF case to `scripts/check-engine.mjs`.
+- Status 2026-10-18: fixed. Root cause was pdfjs-dist's nested @napi-rs/canvas 0.1.x loading a second skia binary; `openPdf` now passes a `CanvasFactory` on the project's copy. The CLI and MCP also open PNG/JPG directly (no wrapping needed; same `--at` convention as the wrapped PDF). Regression case: `scripts/check-raster-input.mjs`.
 - The tile split in the mirror leaks sheets between train and val; re-split by sheet.
 
 ## Open questions

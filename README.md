@@ -62,6 +62,7 @@ npm run cli -- info drawing.pdf                      # pages, sizes, annotation 
 npm run cli -- compare r2.pdf r3.pdf --png diff.png  # per-sheet change fractions + regions
 npm run cli -- compare r2/ r3/ --png-dir ov/         # folders: batch the whole set, pair by filename
 npm run cli -- scan drawing.pdf --page 1 --at 88,271 # click-point auto-count, JSON hits
+npm run cli -- scan plan.png --page 1 --at 318,447   # PNG/JPG input: one page of W/3 x H/3 points
 npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantities CSV
 npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantities
@@ -73,7 +74,11 @@ symbol type (a `class:` field activates automatically once a model ships),
 and the exports. Re-run it on every revision with `--prev` to see exactly
 which quantities changed — the CI-friendly revision loop.
 
-`compare --json` is designed for pipelines (`jq '.changedSheets'`); `scan`
+`info`, `scan` and `export` (and the MCP `open_document`) also take a PNG or
+JPG directly, as do image-only (scanned) PDFs: an image is one page of
+width/3 by height/3 points, so a click at pixel (px, py) is `--at px/3,(H - py)/3`
+and the scan sees the native pixels. `compare --json` is designed for
+pipelines (`jq '.changedSheets'`); `scan`
 returns the same hits the web Scan tool finds. This is the substrate for the
 agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
 

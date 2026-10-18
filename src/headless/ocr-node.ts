@@ -229,9 +229,10 @@ export interface OcrPageOptions {
   psm?: string;
   /**
    * Upscale factor before recognising. Default auto: a pass at 1x measures
-   * the height of the words it is sure of and, when they are under 20 px
-   * (scans at screen resolution), a second pass at 2 to 4x reads the small
-   * print; both passes are merged. Pass 1 to skip the second pass.
+   * the height of the words it is sure of and the windows with unread print
+   * are read again, at 3 to 4x when those words are under 20 px (scans at
+   * screen resolution) and cleaned at 1x otherwise (see `smallPrint`); the
+   * passes are merged. A number reads once at that factor.
    */
   upsample?: number;
   /**
@@ -244,17 +245,54 @@ export interface OcrPageOptions {
   /** tesseract language codes ('eng', 'eng+fra'); each pack is fetched once */
   langs?: string;
   /**
-   * Binarise at this luminance (0..255) before recognising. Off by default:
-   * it rescues blurred scans whose thin strokes read as grey (a 10 px "MH"
-   * otherwise reads "HH") but wipes light-grey line work and labels, so
-   * callers choose it per sheet; 190 suits soft scans.
+   * Binarise at this global luminance (0..255) before recognising. Off by
+   * default: it wipes light-grey line work and labels on some sheets, so
+   * callers choose it per sheet; 190 suits soft scans. The small-print pass
+   * binarises adaptively instead (see `binarize`), which is what rescues
+   * blurred 10 px labels without that cost.
    */
   threshold?: number;
+  /**
+   * Adaptive (Sauvola) binarisation per window, the threshold following the
+   * local mean and contrast with a window about three text heights wide,
+   * so faint strokes on a blurred scan go black while light-grey plans keep
+   * their labels. 'small' (default) applies it to the upsampled small-print
+   * windows only; 'all' to the first pass too; 'off' never.
+   */
+  binarize?: 'small' | 'all' | 'off';
+  /**
+   * Second pass (default true): after the 1x read, windows holding
+   * glyph-sized ink that no sure word accounts for, or whose sure words are
+   * small (under 12 px), or that read nothing with confidence, are read
+   * again, twice: as printed in sparse-text mode and cleaned (adaptive
+   * binarisation, line work and large glyphs removed, words already read
+   * masked) in block mode, at 3 to 4x for small print and 1x for sheets
+   * printed large. Windows that read well are not re-read, so sheets
+   * printed large keep most of their first-pass time. false reads once at
+   * 1x (same as upsample: 1).
+   */
+  smallPrint?: boolean;
+  /**
+   * White out walls, furniture and other ink far larger than a glyph before
+   * recognising, so the layout pass is not sized by them (dropNonGlyphs).
+   * 'small' (default) on the second-pass windows, 'all' on the first pass
+   * too, 'off' never.
+   */
+  glyphsOnly?: 'small' | 'all' | 'off';
 }
 
 const TILE = 640;
 /** glyph height (raster px) the recogniser is comfortable with */
 const TARGET_GLYPH_PX = 30;
+/** words shorter than this (raster px) on the first pass mark a window as small print */
+const SMALL_PRINT_PX = 12;
+/** a first-pass word this sure, with two or more letters or digits, counts as read */
+const SURE_CONF = 70;
+/** share of a window's pixels that must be ink for it to be worth a second read */
+const MIN_INK = 0.001;
+/** Sauvola parameters: k scales the contrast term, R is the dynamic range of the standard deviation */
+const SAUVOLA_K = 0.2;
+const SAUVOLA_R = 128;
 
 interface Rect {
   x0: number;
@@ -281,24 +319,173 @@ function windowsOf(rect: Rect, tile: number | false): Rect[] {
   return out;
 }
 
-async function readWindows(page: Canvas, raster: RasterPage, rect: Rect, factor: number, opts: OcrPageOptions): Promise<OcrWord[]> {
-  const psm = opts.psm ?? PSM_SPARSE;
-  const readings: OcrWord[][] = [[]];
-  for (const win of windowsOf(rect, opts.tile ?? TILE)) {
-    const w = win.x1 - win.x0;
-    const h = win.y1 - win.y0;
-    const centre = { x: (win.x0 + win.x1) / 2, y: (win.y0 + win.y1) / 2 };
-    for (const deg of [0, ...(opts.rotations ?? [])]) {
-      // raster y runs down, so a counter-clockwise PDF angle is a clockwise raster angle
-      const theta = (-deg * Math.PI) / 180;
-      const cos = Math.abs(Math.cos(theta));
-      const sin = Math.abs(Math.sin(theta));
-      const crop = cropRotated(page, centre, w * cos + h * sin, w * sin + h * cos, theta, factor);
-      const raw = await recognize(crop.cnv, psm, opts.whitelist ?? '', opts.langs);
-      readings.push(wordsToPdf(raw, crop.toRaster, raster));
+/**
+ * Sauvola binarisation in place: a pixel is ink when it is darker than
+ * m * (1 + k * (s / R - 1)) for the mean m and standard deviation s of the
+ * `window` x `window` neighbourhood (integral images, so the cost is a few
+ * passes over the crop whatever the window). Flat white stays white (s is
+ * 0, the threshold sits k below the mean), faint grey strokes next to
+ * dark ones go black, and an all-grey region keeps its own contrast.
+ */
+function sauvola(ctx: SKRSContext2D, w: number, h: number, window: number, k = SAUVOLA_K, R = SAUVOLA_R): void {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const W = w + 1;
+  const sum = new Float64Array(W * (h + 1));
+  const sq = new Float64Array(W * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    let rowSq = 0;
+    for (let x = 0; x < w; x++) {
+      const p = (y * w + x) * 4;
+      const v = (d[p] * 299 + d[p + 1] * 587 + d[p + 2] * 114) / 1000;
+      rowSum += v;
+      rowSq += v * v;
+      const i = (y + 1) * W + (x + 1);
+      sum[i] = sum[i - W] + rowSum;
+      sq[i] = sq[i - W] + rowSq;
     }
   }
-  return mergeReadings(readings);
+  const r = Math.max(1, window >> 1);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r);
+    const y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r);
+      const x1 = Math.min(w, x + r + 1);
+      const n = (x1 - x0) * (y1 - y0);
+      const a = y0 * W + x0;
+      const b = y0 * W + x1;
+      const c = y1 * W + x0;
+      const e = y1 * W + x1;
+      const mean = (sum[e] - sum[b] - sum[c] + sum[a]) / n;
+      const variance = Math.max(0, (sq[e] - sq[b] - sq[c] + sq[a]) / n - mean * mean);
+      const t = mean * (1 + k * (Math.sqrt(variance) / R - 1));
+      const p = (y * w + x) * 4;
+      const v = (d[p] * 299 + d[p + 1] * 587 + d[p + 2] * 114) / 1000 < t ? 0 : 255;
+      d[p] = d[p + 1] = d[p + 2] = v;
+      d[p + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/** Debug aid: PDF2TAKEOFF_OCR_DUMP=<dir> writes every crop the recogniser sees. */
+let dumpSeq = 0;
+function dumpCrop(cnv: Canvas, tag: string): void {
+  const dir = process.env.PDF2TAKEOFF_OCR_DUMP!;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${String(dumpSeq++).padStart(4, '0')}-${tag}.png`), cnv.toBuffer('image/png'));
+}
+
+/** Share of a crop's pixels darker than mid grey. */
+function inkFraction(ctx: SKRSContext2D, w: number, h: number): number {
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let ink = 0;
+  for (let p = 0; p < d.length; p += 4) if ((d[p] * 299 + d[p + 1] * 587 + d[p + 2] * 114) / 1000 < 160) ink++;
+  return ink / (w * h);
+}
+
+interface WindowRead {
+  win: Rect;
+  words: OcrWord[];
+  /** share of the window that is ink (first pass only) */
+  ink: number;
+  /** glyph-sized ink components no sure word accounts for (first pass only) */
+  stray: number;
+}
+
+interface WindowReadOptions {
+  factor: number;
+  psm: string;
+  /** Sauvola window in crop px (0 = no binarisation) */
+  binWindow: number;
+  /** white out line work and furniture, leaving glyph-sized ink (dropNonGlyphs); the number is the tallest glyph kept, in 1x px */
+  glyphsOnly: number | false;
+  /** measure ink and stray glyphs after reading (first pass) */
+  measure: boolean;
+  /** raster-px boxes of words already read, whited out before the re-read so the layout pass is sized by the unread print */
+  mask?: Rect[];
+}
+
+/**
+ * Glyph-sized ink components (5 to 40 px tall at 1x) that lie outside every
+ * box in `boxes` (crop px): labels the first pass did not read, plus some
+ * hatching and symbols. Cleans the canvas in place (call after recognising).
+ */
+function countStrayGlyphs(ctx: SKRSContext2D, w: number, h: number, boxes: Rect[]): number {
+  sauvola(ctx, w, h, 3 * SMALL_PRINT_PX + 1);
+  dropNonGlyphs(ctx, w, h, 1);
+  let stray = 0;
+  dropComponents(ctx, w, h, 128, (cw, chh, px, x0, y0) => {
+    if (chh < 5 || px < 8) return false;
+    const cx = x0 + cw / 2;
+    const cy = y0 + chh / 2;
+    if (!boxes.some((b) => cx >= b.x0 && cx <= b.x1 && cy >= b.y0 && cy <= b.y1)) stray++;
+    return false;
+  });
+  return stray;
+}
+
+/** Read one window at every requested rotation and merge the rotations. */
+async function readWindow(page: Canvas, raster: RasterPage, win: Rect, opts: OcrPageOptions, ro: WindowReadOptions): Promise<WindowRead> {
+  const w = win.x1 - win.x0;
+  const h = win.y1 - win.y0;
+  const centre = { x: (win.x0 + win.x1) / 2, y: (win.y0 + win.y1) / 2 };
+  const readings: OcrWord[][] = [[]];
+  let ink = 1;
+  let stray = 0;
+  for (const deg of [0, ...(opts.rotations ?? [])]) {
+    // raster y runs down, so a counter-clockwise PDF angle is a clockwise raster angle
+    const theta = (-deg * Math.PI) / 180;
+    const cos = Math.abs(Math.cos(theta));
+    const sin = Math.abs(Math.sin(theta));
+    const crop = cropRotated(page, centre, w * cos + h * sin, w * sin + h * cos, theta, ro.factor);
+    if (ro.mask?.length && deg === 0) {
+      crop.ctx.fillStyle = '#fff';
+      for (const b of ro.mask) crop.ctx.fillRect((b.x0 - win.x0) * ro.factor, (b.y0 - win.y0) * ro.factor, (b.x1 - b.x0) * ro.factor, (b.y1 - b.y0) * ro.factor);
+    }
+    if (ro.measure && deg === 0) ink = inkFraction(crop.ctx, crop.cnv.width, crop.cnv.height);
+    if (ro.binWindow > 0) sauvola(crop.ctx, crop.cnv.width, crop.cnv.height, ro.binWindow);
+    if (ro.glyphsOnly) dropNonGlyphs(crop.ctx, crop.cnv.width, crop.cnv.height, ro.factor, ro.glyphsOnly);
+    if (process.env.PDF2TAKEOFF_OCR_DUMP) dumpCrop(crop.cnv, `${Math.round(win.x0)}-${Math.round(win.y0)}-x${ro.factor}-psm${ro.psm}-r${deg}`);
+    const raw = await recognize(crop.cnv, ro.psm, opts.whitelist ?? '', opts.langs);
+    const words = wordsToPdf(raw, crop.toRaster, raster);
+    readings.push(words);
+    if (ro.measure && deg === 0 && ro.factor === 1 && ink >= MIN_INK) {
+      // what the sure words cover, in crop px (deg 0, 1x: crop px = raster px minus the window origin)
+      const boxes = words
+        .filter((x) => x.conf >= SURE_CONF && alnumCount(x) >= 2)
+        .map((x) => {
+          const a = raster.toRaster(x.xPt - x.wPt / 2, x.yPt - x.hPt / 2);
+          const b = raster.toRaster(x.xPt + x.wPt / 2, x.yPt + x.hPt / 2);
+          return { x0: Math.min(a.x, b.x) - win.x0 - 2, x1: Math.max(a.x, b.x) - win.x0 + 2, y0: Math.min(a.y, b.y) - win.y0 - 2, y1: Math.max(a.y, b.y) - win.y0 + 2 };
+        });
+      stray = countStrayGlyphs(crop.ctx, crop.cnv.width, crop.cnv.height, boxes);
+    }
+  }
+  return { win, words: mergeReadings(readings), ink, stray };
+}
+
+const alnumCount = (w: OcrWord): number => (w.text.match(/[0-9A-Za-zÀ-ÿ]/g) ?? []).length;
+const letterCount = (w: OcrWord): number => (w.text.match(/[A-Za-zÀ-ÿ]/g) ?? []).length;
+/** confidence edge a sure first-pass reading gets over the re-read of the same ink */
+const FIRST_PASS_EDGE = 10;
+/** stray glyph components in a window that call for a second read (a short label's worth) */
+const STRAY_GLYPHS = 3;
+
+/**
+ * Whether a first-pass window deserves the small-print read: it holds
+ * glyph-sized ink that no sure word accounts for (labels too small or faint
+ * for the 1x layout pass), or the words it is sure of are themselves small.
+ */
+function wantsSmallPrint(read: WindowRead, pxPerPt: number): boolean {
+  if (read.ink < MIN_INK) return false;
+  if (read.stray >= STRAY_GLYPHS) return true;
+  const sure = read.words.filter((w) => w.conf >= SURE_CONF && alnumCount(w) >= 3);
+  if (sure.some((w) => w.hPt * pxPerPt < SMALL_PRINT_PX)) return true;
+  // something was read but nothing with confidence: doubted words are worth a second look
+  return sure.length === 0 && read.words.some((w) => letterCount(w) >= 2);
 }
 
 /**
@@ -320,20 +507,62 @@ export async function ocrRaster(raster: RasterPage, opts: OcrPageOptions = {}): 
     rect.y1 = Math.min(raster.height, Math.ceil(Math.max(...pts.map((p) => p.y))));
     if (rect.x1 - rect.x0 < 2 || rect.y1 - rect.y0 < 2) return [];
   }
-  const first = await readWindows(page, raster, rect, opts.upsample ?? 1, opts);
-  if (opts.upsample !== undefined) return first;
-  // small print: measure the words the recogniser was sure of, in raster px
   const o = raster.toRaster(0, 0);
   const u = raster.toRaster(0, 1);
   const pxPerPt = Math.hypot(u.x - o.x, u.y - o.y) || 1;
-  const heights = first
-    .filter((w) => w.conf >= 70 && (w.text.match(/[0-9A-Za-z]/g) ?? []).length >= 3)
-    .map((w) => w.hPt * pxPerPt)
-    .sort((a, b) => a - b);
+  const psm = opts.psm ?? PSM_SPARSE;
+  const binarize = opts.binarize ?? 'small';
+  const secondPass = opts.upsample === undefined && opts.smallPrint !== false;
+  // first pass at 1x (or the caller's factor); a window about three text heights for 'all'
+  const reads: WindowRead[] = [];
+  for (const win of windowsOf(rect, opts.tile ?? TILE)) {
+    reads.push(await readWindow(page, raster, win, opts, { factor: opts.upsample ?? 1, psm, binWindow: binarize === 'all' ? 3 * TARGET_GLYPH_PX : 0, glyphsOnly: opts.glyphsOnly === 'all' ? 40 : false, measure: secondPass }));
+  }
+  const first = mergeReadings(reads.map((r) => r.words));
+  if (!secondPass) return first;
+  // small print: measure the words the recogniser was sure of, in raster px
+  const measured = (minConf: number) =>
+    first
+      .filter((w) => w.conf >= minConf && alnumCount(w) >= 2)
+      .map((w) => w.hPt * pxPerPt)
+      .sort((a, b) => a - b);
+  // sure words size the print; failing any, the doubted ones do
+  const heights = measured(SURE_CONF).length ? measured(SURE_CONF) : measured(40);
   const median = heights.length ? heights[heights.length >> 1] : TARGET_GLYPH_PX / 3;
-  const factor = Math.min(4, Math.max(1, Math.round(TARGET_GLYPH_PX / median)));
-  if (factor === 1) return first;
-  return mergeReadings([first, await readWindows(page, raster, rect, factor, opts)]);
+  // printed large: the 1x read stands, and only windows with stray glyphs are read again at 1x, cleaned
+  // (a label touching a fixture or wall, which the layout pass drops); small print gets 3x or 4x
+  const lower = heights.length ? heights[heights.length >> 2] : median;
+  // "printed large" takes a few sure words with even the smaller ones near the target: one big title over 8 px labels is not
+  const large = measured(SURE_CONF).length >= 4 && Math.round(TARGET_GLYPH_PX / median) <= 1 && lower >= 15;
+  const factor = large ? 1 : lower < 8 ? 4 : 3;
+  const textPx = Math.min(lower, SMALL_PRINT_PX);
+  const binWindow = binarize === 'off' ? 0 : Math.max(15, Math.round(3 * (large ? TARGET_GLYPH_PX : textPx) * factor)) | 1;
+  // the tallest glyph kept by the cleaning: small print only, so one large glyph cannot size the layout pass
+  const maxGlyph = large ? Math.max(40, Math.round(2 * median)) : Math.round(Math.max(1.6 * SMALL_PRINT_PX, 1.5 * lower));
+  // what the first pass read with confidence at a readable size is whited out before the re-read
+  // (three or more characters and well above the sure floor, so a confident junk fragment cannot hide a label)
+  const mask: Rect[] = first
+    .filter((w) => w.conf >= SURE_CONF + 10 && alnumCount(w) >= 3 && (large || w.hPt * pxPerPt >= SMALL_PRINT_PX))
+    .map((w) => {
+      const a = raster.toRaster(w.xPt - w.wPt / 2, w.yPt - w.hPt / 2);
+      const b = raster.toRaster(w.xPt + w.wPt / 2, w.yPt + w.hPt / 2);
+      return { x0: Math.min(a.x, b.x) - 2, x1: Math.max(a.x, b.x) + 2, y0: Math.min(a.y, b.y) - 2, y1: Math.max(a.y, b.y) + 2 };
+    });
+  // each window chosen is read twice and both readings merged: as printed in
+  // sparse-text mode, which keeps clean small print whole ("BEDROOM" at 8 px),
+  // and cleaned (binarised, line work and large glyphs removed) in block mode,
+  // which finds blurred or fixture-adjacent labels the layout pass drops
+  const second: OcrWord[][] = [];
+  for (const read of reads) {
+    if (!wantsSmallPrint(read, pxPerPt)) continue;
+    if (factor > 1) second.push((await readWindow(page, raster, read.win, opts, { factor, psm: opts.psm ?? PSM_SPARSE, binWindow: 0, glyphsOnly: false, measure: false, mask })).words);
+    second.push((await readWindow(page, raster, read.win, opts, { factor, psm: opts.psm ?? PSM_BLOCK, binWindow, glyphsOnly: opts.glyphsOnly === 'off' ? false : maxGlyph, measure: false, mask })).words);
+  }
+  if (!second.length) return first;
+  // the re-read is for print the first pass missed or doubted: a sure first-pass reading keeps its ink
+  const kept = new Set(first.filter((w) => w.conf >= SURE_CONF));
+  const merged = mergeReadings([first.map((w) => (kept.has(w) ? { ...w, conf: Math.min(100, w.conf + FIRST_PASS_EDGE), orig: w } : w)), ...second]);
+  return merged.map((w) => ('orig' in w ? (w as { orig: OcrWord }).orig : w));
 }
 
 /**
@@ -343,6 +572,27 @@ export async function ocrRaster(raster: RasterPage, opts: OcrPageOptions = {}): 
  * Same rule as the browser adapter.
  */
 function dropLineArt(ctx: SKRSContext2D, w: number, h: number, threshold = 150): void {
+  dropComponents(ctx, w, h, threshold, (cw, chh, px) => (cw > 3.5 * chh && cw > 40) || (chh > 3.5 * cw && chh > 40) || px < 5);
+}
+
+/**
+ * Keep glyph-sized ink only, for the small-print read of a drawing: walls,
+ * furniture and door swings are far larger than any glyph, and tesseract's
+ * layout pass, which sizes its text expectations from the biggest
+ * components, drops the small labels next to them. `scale` is the upsample
+ * factor; a component taller than about 40 px or wider than about 100 px
+ * at 1x, an elongated one, or a speck is removed.
+ */
+function dropNonGlyphs(ctx: SKRSContext2D, w: number, h: number, scale: number, maxGlyphPx = 40): void {
+  const maxH = maxGlyphPx * scale;
+  const maxW = 100 * scale;
+  const minLine = 40 * scale;
+  const speck = 5 * scale * scale;
+  dropComponents(ctx, w, h, 128, (cw, chh, px) => chh > maxH || cw > maxW || (cw > 3.5 * chh && cw > minLine) || (chh > 3.5 * cw && chh > minLine) || px < speck);
+}
+
+/** White out every connected ink component (4-connected, darker than `threshold`) for which `drop(width, height, pixels)` holds. */
+function dropComponents(ctx: SKRSContext2D, w: number, h: number, threshold: number, drop: (cw: number, ch: number, px: number, x0: number, y0: number) => boolean): void {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   const mask = new Uint8Array(w * h);
@@ -384,11 +634,7 @@ function dropLineArt(ctx: SKRSContext2D, w: number, h: number, threshold = 150):
         }
       }
     }
-    const cw = x1 - x0 + 1;
-    const chh = y1 - y0 + 1;
-    const lineLike = (cw > 3.5 * chh && cw > 40) || (chh > 3.5 * cw && chh > 40);
-    const speck = pxs.length < 5;
-    if (!lineLike && !speck) continue;
+    if (!drop(x1 - x0 + 1, y1 - y0 + 1, pxs.length, x0, y0)) continue;
     for (const i of pxs) {
       const p = i * 4;
       d[p] = d[p + 1] = d[p + 2] = 255;

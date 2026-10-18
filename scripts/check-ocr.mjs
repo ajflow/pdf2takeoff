@@ -12,7 +12,7 @@
 
 import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { corridorAngles, pickCorridorReading, roomLabelPoints, wordsFromTextItem, findScaleRatio, nearestDimensionValue } from '../src/engine/ocr.ts';
-import { classifyRoomLabel, countRoomsByClass, normalizeLabel, ROOM_LABEL_RULES } from '../src/engine/room-labels.ts';
+import { classifyRoomLabel, countRoomsByClass, fuzzyRoomTerm, normalizeLabel, OCR_CONFUSIONS, ROOM_LABEL_RULES } from '../src/engine/room-labels.ts';
 import { RASTER_SCALE } from '../src/engine/ports.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
@@ -135,6 +135,30 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
   check('count: low-confidence and junk words are ignored', c.hall === 0 && c.closet === 0 && c.bedroom === 0, JSON.stringify(c));
   c = count([w('BATHROOM', 100, 300, 50), w('BATH', 300, 300, 62)]);
   check('count: the floor relaxes for long words and tightens for short ones', c.toilet === 2, JSON.stringify(c));
+
+  // confusion rule: a short token one known OCR slip from a term reads as
+  // the term, but strictly it is nothing, and random short tokens stay nothing
+  const viaRule = ['HH', 'MM', 'Mh'];
+  check('confusion: HH, MM, Mh are not bedrooms to the strict dictionary', viaRule.every((t) => classifyRoomLabel(t) === null), viaRule.map((t) => `${t}: ${classifyRoomLabel(t)}`).join(', '));
+  check('confusion: HH, MM, Mh read as MH (bedroom) through the rule', viaRule.every((t) => fuzzyRoomTerm(t)?.cls === 'bedroom' && fuzzyRoomTerm(t)?.term === 'MH'), viaRule.map((t) => `${t}: ${JSON.stringify(fuzzyRoomTerm(t))}`).join(', '));
+  const random = ['XQ', 'ZZ', 'PP', 'AB', 'NN', 'QJ', 'YX', 'BEDR'];
+  check('confusion: random short tokens map to nothing', random.every((t) => classifyRoomLabel(t) === null && fuzzyRoomTerm(t) === null), random.map((t) => `${t}: ${JSON.stringify(fuzzyRoomTerm(t))}`).join(', '));
+  check('confusion: W.C. read as VVC and TOIL as TOlL resolve through the pairs', fuzzyRoomTerm('VVC')?.term === 'WC' && fuzzyRoomTerm('TOlL')?.term === 'TOIL', `${JSON.stringify(fuzzyRoomTerm('VVC'))} ${JSON.stringify(fuzzyRoomTerm('TOlL'))}`);
+  check('confusion: the pair table is data and holds M/H, I/L, O/0, C/G, W/VV', ['M', 'I', 'O', 'C', 'W'].every((a) => OCR_CONFUSIONS.some((p) => p.pair[0] === a)));
+  c = count([w('HH', 100, 300, 85)]);
+  check('count: a lone HH@85 does not create a bedroom', c.bedroom === 0, JSON.stringify(c));
+  c = count([w('HH', 100, 300, 85), w('5.7', 102, 290, 90)]);
+  check('count: HH@85 over an area figure counts as a bedroom', c.bedroom === 1, JSON.stringify(c));
+  check('count: ...and the label says how it read', countRoomsByClass([w('HH', 100, 300, 85), w('5.7', 102, 290, 90)]).labels[0]?.fuzzy === 'HH as MH via H>M');
+  c = countRoomsByClass([w('HH', 100, 300, 85)], { isInsideRoom: () => true }).counts;
+  check('count: HH@85 inside a room (host callback) counts as a bedroom', c.bedroom === 1, JSON.stringify(c));
+  c = count([w('BATM', 100, 300, 90)]);
+  check('count: a lone four-letter slip (BATM@90) does not create a toilet either', c.toilet === 0, JSON.stringify(c));
+  check('count: a corroborated slip carries the penalty in its confidence', countRoomsByClass([w('HH', 100, 300, 85), w('5.7', 102, 290, 90)]).labels[0]?.conf === 55);
+  c = count([w('XQ', 100, 300, 95), w('5.7', 102, 290, 90)]);
+  check('count: a random token over an area figure stays nothing', c.bedroom === 0 && c.toilet === 0, JSON.stringify(c));
+  c = count([w('we', 100, 300, 74)]);
+  check('count: "we" (a printed W.C.) at 74 counts, the alias floor being that of a longer word', c.toilet === 1, JSON.stringify(c));
 }
 
 // Node OCR on a rendered label sheet: the words come from pixels only (the

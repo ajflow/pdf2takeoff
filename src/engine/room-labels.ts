@@ -11,6 +11,7 @@
 // fire on "STORE").
 
 import type { OcrWord } from './ocr.ts';
+import type { Pt } from './types.ts';
 
 export type RoomClass = 'bedroom' | 'toilet' | 'kitchen' | 'living' | 'hall' | 'closet' | 'other';
 
@@ -49,7 +50,7 @@ export const ROOM_LABEL_TABLE: readonly [lang: string, cls: RoomClass, labels: s
   ['fi', 'living', 'oh, olohuone, oloh, tupa, ruokailu, ruokailutila, olohuone keittio, oh k, oh kt, takkahuone'],
   ['fi', 'hall', 'et, eteinen, aula, tk, tuulikaappi, kaytava, halli, eteishalli, porras, porrashuone'],
   ['fi', 'closet', 'vh, vaatehuone, var, varasto, vaatehuone 1, komero, kom, siivouskomero'],
-  ['fi', 'other', 's, sauna, khh, kodinhoitohuone, kodinhoitoh, tekn, tekninen tila, tekninen, kuisti, terassi, parveke, autotalli, autokatos, tyohuone, kirjasto, pukuhuone, ph sauna, lasitettu parveke, ulkovarasto, katos, lampokeskus, pannuhuone, kellari, vintti, portaat, harrastetila, askartelu'],
+  ['fi', 'other', 'huone, huon, s, sauna, khh, kodinhoitohuone, kodinhoitoh, tekn, tekninen tila, tekninen, kuisti, terassi, parveke, autotalli, autokatos, tyohuone, kirjasto, pukuhuone, ph sauna, lasitettu parveke, ulkovarasto, katos, lampokeskus, pannuhuone, kellari, vintti, portaat, harrastetila, askartelu'],
   // German
   ['de', 'bedroom', 'schlafzimmer, schlafen, schlafraum, sz, kind, kinderzimmer, kinder, zimmer, elternschlafzimmer, eltern, gastezimmer, gast, jugendzimmer'],
   ['de', 'toilet', 'wc, bad, badezimmer, baden, dusche, dusch wc, gaste wc, gaste bad, bad wc, toilette, wasch, waschraum, nasszelle'],
@@ -113,6 +114,81 @@ export const OCR_ALIASES: readonly { read: RegExp; term: string; note: string }[
 ];
 const alias = (token: string): string => OCR_ALIASES.find((a) => a.read.test(token))?.term ?? token;
 
+/**
+ * Character confusions the LSTM recogniser makes on small, blurred print,
+ * as pairs that read for each other (both directions are tried). A short
+ * token (two to four letters) one such substitution away from a dictionary
+ * term is taken as that term, but only with a confidence penalty and
+ * corroboration (fuzzyRoomTerm, countRoomsByClass): the table is for the
+ * 8 to 12 px labels of scanned plans, not a licence to invent rooms.
+ */
+export const OCR_CONFUSIONS: readonly { pair: readonly [string, string]; note: string }[] = [
+  { pair: ['M', 'H'], note: 'the middle strokes of a 10 px M blur away ("MH" reads "HH", "MM")' },
+  { pair: ['I', 'L'], note: 'the foot of an L is lost, or a serif I grows one' },
+  { pair: ['O', '0'], note: 'letter O and zero' },
+  { pair: ['C', 'G'], note: 'the bar of a G' },
+  { pair: ['W', 'VV'], note: 'a W read as two Vs' },
+  { pair: ['N', 'M'], note: 'a blurred N gains a stroke ("HUON" reads "HUOM")' },
+  { pair: ['', '.'], note: 'period loss or gain ("W.C" and "WC"); normalizeLabel drops dots, so this entry documents the rule and the matcher skips it' },
+];
+
+/** Confidence taken off a label that only reads through OCR_CONFUSIONS or a mixed-case read, by letter count (two letters, or three to four). */
+export const CONFUSION_PENALTY = { short: 30, long: 20 } as const;
+/** Below this confidence a confusion-rule read is noise even when corroborated. */
+const FUZZY_MIN_CONF = 50;
+
+export interface FuzzyRoomMatch {
+  cls: RoomClass;
+  /** the dictionary term the token was taken for, normalised */
+  term: string;
+  /** the token as read */
+  read: string;
+  /** which rule bridged the gap: "H>M" (read H for printed M), or "case" for a mixed-case read of a term */
+  via: string;
+  /** confidence points to deduct (CONFUSION_PENALTY) */
+  penalty: number;
+}
+
+/**
+ * "Mh", "wC": a two-letter token read in mixed case; abbreviations are
+ * printed in capitals, so the recogniser was unsure of one glyph. Longer
+ * tokens are left to the strict match ("TolL" for a printed TOIL is an
+ * I/L slip, which fuzzyRoomTerm handles after upper-casing).
+ */
+const MIXED_CASE_SHORT = /^(?:[A-ZÀ-Þ][a-zà-ÿ]|[a-zà-ÿ][A-ZÀ-Þ])$/;
+
+/**
+ * A short token (two to four letters or digits, one word) that is not in
+ * the dictionary as read but is one OCR_CONFUSIONS substitution away from
+ * a term, or is a term read in mixed case ("Mh"). Returns the term with its
+ * penalty, or null: when no rule bridges the gap, when the token is longer
+ * than four characters, or when candidate terms disagree on the class.
+ * Strict matches (classifyRoomLabel) are not reported here.
+ */
+export function fuzzyRoomTerm(token: string): FuzzyRoomMatch | null {
+  const raw = token.trim();
+  if (/\s/.test(raw)) return null;
+  const base = normalizeLabel(raw).replace(/ /g, '');
+  if (base.length < 2 || base.length > 4 || !/[A-Z]/.test(base)) return null;
+  const penalty = base.length <= 2 ? CONFUSION_PENALTY.short : CONFUSION_PENALTY.long;
+  const strict = TERMS.get(normalizeLabel(base));
+  if (strict) return MIXED_CASE_SHORT.test(raw) ? { cls: strict, term: normalizeLabel(base), read: raw, via: 'case', penalty } : null;
+  const found: FuzzyRoomMatch[] = [];
+  for (const { pair } of OCR_CONFUSIONS) {
+    if (!pair[0] || !pair[1]) continue;
+    for (const [from, to] of [pair, [pair[1], pair[0]]] as const) {
+      for (let i = 0; i <= base.length - from.length; i++) {
+        if (!base.startsWith(from, i)) continue;
+        const term = normalizeLabel(base.slice(0, i) + to + base.slice(i + from.length));
+        const cls = TERMS.get(term);
+        if (cls && !found.some((f) => f.term === term)) found.push({ cls, term, read: raw, via: `${from}>${to}`, penalty });
+      }
+    }
+  }
+  if (!found.length) return null;
+  return found.every((f) => f.cls === found[0].cls) ? found[0] : null;
+}
+
 /** Replacements NFD decomposition does not cover. */
 const LIGATURES: Record<string, string> = { Ø: 'O', Æ: 'AE', ß: 'SS', Œ: 'OE', Ð: 'D', Þ: 'TH', Ł: 'L' };
 
@@ -166,7 +242,12 @@ export interface RoomLabelMatch {
  * ("BEDROOM 2" fires once).
  */
 export function matchRoomLabel(text: string): RoomLabelMatch[] {
-  const tokens = normalizeLabel(text)
+  // a short token read in mixed case ("Mh") is an unsure read: fuzzyRoomTerm's business, not a strict match
+  const sure = text
+    .split(/\s+/)
+    .map((t) => (MIXED_CASE_SHORT.test(t) ? '' : t))
+    .join(' ');
+  const tokens = normalizeLabel(sure)
     .split(' ')
     .filter(Boolean)
     .map(alias);
@@ -212,6 +293,8 @@ export interface RoomLabelHit {
   xPt: number;
   yPt: number;
   conf: number;
+  /** set when the label only reads through OCR_CONFUSIONS: the term taken and the rule ("HH as MH via H>M") */
+  fuzzy?: string;
 }
 
 export interface RoomCount {
@@ -228,6 +311,14 @@ export interface CountRoomsOptions {
   minConfLong?: number;
   /** stricter floor for two-letter words, which OCR noise produces freely (default 80; single letters need 90) */
   minConfShort?: number;
+  /**
+   * Whether a point (PDF pt) lies inside an enclosed room, when the host
+   * can tell (a flood fill, a space polygon). A token that only reads as a
+   * room through OCR_CONFUSIONS is accepted without its penalty when it sits
+   * inside a room; otherwise an area figure stacked against it ("MH" over
+   * "5.7") serves as the same corroboration.
+   */
+  isInsideRoom?: (pt: Pt) => boolean;
 }
 
 interface Line {
@@ -287,6 +378,9 @@ export function groupWordsIntoLines(words: OcrWord[]): OcrWord[][] {
   return lines.map((ln) => ln.words);
 }
 
+/** An area figure as printed under a room label: "5.7", "12,5 m2", "10.2m?" (the recogniser's m squared), or its unit alone. */
+const AREA_FIGURE = /^(\d{1,3}([.,]\d{1,2})?\s*(m[2²?*]?)?|m[2²?*])$/i;
+
 const stacked = (upper: Line, lower: Line): boolean => {
   const overlap = Math.min(upper.x1, lower.x1) - Math.max(upper.x0, lower.x0);
   if (overlap <= 0) return false;
@@ -308,18 +402,24 @@ export function countRoomsByClass(words: OcrWord[], opts: CountRoomsOptions = {}
   const minConf = opts.minConf ?? 60;
   const minConfLong = opts.minConfLong ?? 45;
   const minConfShort = opts.minConfShort ?? 80;
+  const floorFor = (letters: number) => (letters === 1 ? Math.max(minConfShort, 90) : letters === 2 ? minConfShort : letters <= 4 ? minConf : minConfLong);
   const usable = words.filter((w) => {
     const t = w.text.trim();
     if (!/[A-Za-zÀ-ÿ]/.test(t)) return false;
     const letters = t.replace(/[^A-Za-zÀ-ÿ]/g, '').length;
-    const floor = letters === 1 ? Math.max(minConfShort, 90) : letters === 2 ? minConfShort : letters <= 4 ? minConf : minConfLong;
-    return w.conf >= floor;
+    // a known misread of a printed label ("we" for W.C.) is judged like a longer word
+    const token = normalizeLabel(t);
+    if (w.conf >= (alias(token) !== token ? minConf : floorFor(letters))) return true;
+    // a confusion-rule candidate may come in under the floor; the corroboration below decides
+    return letters >= 2 && letters <= 4 && w.conf >= FUZZY_MIN_CONF && fuzzyRoomTerm(t) !== null;
   });
   const lines = groupWordsIntoLines(usable).map(lineOf);
+  // area figures printed under labels, for corroborating a confusion-rule read
+  const figures = groupWordsIntoLines(words.filter((w) => w.conf >= 50 && AREA_FIGURE.test(w.text.trim()))).map(lineOf);
   const classified = lines.map((ln) => classifyRoomLabel(ln.text));
   const consumed = new Set<number>();
   const labels: RoomLabelHit[] = [];
-  const emit = (ls: Line[], cls: RoomClass) => {
+  const emit = (ls: Line[], cls: RoomClass, fuzzy?: string) => {
     const all = ls.flatMap((l) => l.words);
     labels.push({
       text: ls.map((l) => l.text).join(' '),
@@ -327,6 +427,7 @@ export function countRoomsByClass(words: OcrWord[], opts: CountRoomsOptions = {}
       xPt: all.reduce((s, w) => s + w.xPt, 0) / all.length,
       yPt: all.reduce((s, w) => s + w.yPt, 0) / all.length,
       conf: Math.round(all.reduce((s, w) => s + w.conf, 0) / all.length),
+      ...(fuzzy ? { fuzzy } : {}),
     });
   };
   // complete labels first
@@ -335,6 +436,20 @@ export function countRoomsByClass(words: OcrWord[], opts: CountRoomsOptions = {}
     if (!cls) return;
     consumed.add(i);
     emit([ln], cls);
+  });
+  // confusion-rule reads: a lone short token one known OCR slip away from a
+  // term never counts on its own; it counts when corroborated (inside a room
+  // per the host, or an area figure stacked against it), and then carries
+  // the penalty in its confidence
+  lines.forEach((ln, i) => {
+    if (consumed.has(i) || ln.words.length !== 1) return;
+    const fz = fuzzyRoomTerm(ln.text);
+    if (!fz) return;
+    const conf = ln.words[0].conf;
+    const corroborated = opts.isInsideRoom?.({ x: ln.words[0].xPt, y: ln.words[0].yPt }) === true || figures.some((f) => stacked(ln, f) || stacked(f, ln));
+    if (!corroborated || conf < FUZZY_MIN_CONF) return;
+    consumed.add(i);
+    emit([{ ...ln, words: [{ ...ln.words[0], conf: Math.max(0, conf - fz.penalty) }] }], fz.cls, `${fz.read} as ${fz.term} via ${fz.via}`);
   });
   // fragments: join with an unclassified or classified neighbour stacked against them
   lines.forEach((ln, i) => {

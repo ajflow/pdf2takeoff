@@ -9,6 +9,7 @@ import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
 import { openPdf } from './pdfjs-node.ts';
 import { RASTER_SCALE, type RasterPage, type ScanDeps } from '../engine/ports.ts';
 import { scanForSimilar } from '../engine/scan.ts';
+import { cvScan, type TextBox } from '../engine/scan-cv.ts';
 import { loadDetectorNode } from './detector-node.ts';
 import { ocrRaster, type OcrPageOptions } from './ocr-node.ts';
 import { vectorize } from '../engine/vector.ts';
@@ -16,7 +17,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
-import type { Markup, Pt } from '../engine/types.ts';
+import type { Markup, Pt, ScanResult } from '../engine/types.ts';
 import { vectorDiff, textDiff, type VectorDiff, type TextDiff } from '../engine/revdiff.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type OcrWord } from '../engine/ocr.ts';
 import { metersPerPtForRatio } from '../engine/units.ts';
@@ -44,6 +45,13 @@ export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
 export interface ScanOptions {
   /** Directory holding symbols.json + the model (see detector-node.ts); default: PDF2TAKEOFF_MODEL_DIR, then public/models/. */
   modelDir?: string;
+  /**
+   * When the CV scan finds fewer than 2 symbols and the page has no text
+   * layer, OCR the render and retry with the words erased from the ink
+   * (symbols fused with their tags). Off by default: OCR costs seconds.
+   * The text layer is always tried first when the page has one.
+   */
+  ocrTextMask?: boolean;
 }
 
 /** The engine's scan ports bound to an open document: pdf.js vectors and raster, the local ONNX model when one is present. */
@@ -57,9 +65,65 @@ export function scanDeps(doc: PDFDocumentProxy, opts: ScanOptions = {}): ScanDep
   };
 }
 
-/** Scan at a click point (PDF points): vector match on born-digital symbols, then the trained detector when a model is present, else tier-1 CV. */
-export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt, opts: ScanOptions = {}) {
-  return scanForSimilar(page, at, scanDeps(doc, opts));
+/** Padding around a word box before it is erased, as a fraction of the word height (glyph overshoot, anti-aliasing). */
+const TEXT_BOX_PAD = 0.15;
+/** OCR words below this confidence, or without two alphanumerics, are symbol fragments read as text and are not erased. */
+const OCR_MASK_MIN_CONF = 60;
+
+/**
+ * Word boxes (PDF points, centre plus length and height, with the baseline
+ * angle when known) as axis-aligned raster-px boxes for cvScan's textBoxes.
+ * Text-layer words (conf 100) all count; OCR words only when they read
+ * like text, so a valve the recogniser took for a letter is not erased.
+ */
+export function wordBoxesToRaster(words: (OcrWord & { angleDeg?: number })[], raster: RasterPage): TextBox[] {
+  const out: TextBox[] = [];
+  for (const wd of words) {
+    if (wd.conf < 100 && (wd.conf < OCR_MASK_MIN_CONF || (wd.text.match(/[0-9A-Za-z]/g) ?? []).length < 2)) continue;
+    const a = ((wd.angleDeg ?? 0) * Math.PI) / 180;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    const hw = wd.wPt / 2 + wd.hPt * TEXT_BOX_PAD;
+    const hh = wd.hPt / 2 + wd.hPt * TEXT_BOX_PAD;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const p = raster.toRaster(wd.xPt + ux * hw * sa - uy * hh * sb, wd.yPt + uy * hw * sa + ux * hh * sb);
+      x0 = Math.min(x0, p.x);
+      y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x);
+      y1 = Math.max(y1, p.y);
+    }
+    if (x1 > x0 && y1 > y0) out.push({ x0, y0, x1, y1 });
+  }
+  return out;
+}
+
+/**
+ * Scan at a click point (PDF points): vector match on born-digital symbols,
+ * then the trained detector when a model is present, else tier-1 CV. When
+ * the CV scan comes back with fewer than 2 hits, the page's words (text
+ * layer; OCR of the render only with `ocrTextMask`) are erased from the
+ * ink and the scan is retried, for symbols fused with their tags; the
+ * retry is kept when it finds more.
+ */
+export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt, opts: ScanOptions = {}): Promise<ScanResult> {
+  const deps = scanDeps(doc, opts);
+  // keep the render so the retry does not pay for it again
+  let rendered: RasterPage | undefined;
+  const render = deps.renderRaster;
+  deps.renderRaster = async (p, scale) => (rendered = await render(p, scale));
+  const first = await scanForSimilar(page, at, deps);
+  if ('error' in first || first.provider !== 'cv' || first.hits.length >= 2 || !rendered) return first;
+  let words: OcrWord[] = await pageWords(doc, page).catch(() => []);
+  if (!words.length && opts.ocrTextMask) words = await ocrRaster(rendered).catch(() => []);
+  if (!words.length) return first;
+  const textBoxes = wordBoxesToRaster(words, rendered);
+  const retry = cvScan(rendered, at, { textBoxes });
+  if ('error' in retry || retry.hits.length <= first.hits.length) return first;
+  return { ...retry, note: `${retry.note ?? ''} (retried with ${textBoxes.length} text boxes erased)`.trim() };
 }
 
 /** A sheet counts as changed above this fraction of changed pixels. */

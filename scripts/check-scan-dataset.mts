@@ -17,14 +17,23 @@
 //   node --experimental-strip-types scripts/check-scan-dataset.mts \
 //     --png sheet.png --labels labels/sheet.txt --classes classes.txt \
 //     [--k 3] [--only 8,21] [--remove-lines auto|true|false] [--dihedral on|off] \
-//     [--match-distance 0.15] [--json out.json]
+//     [--match-distance auto|0.15] [--expand on|off] [--look-alike on|off] \
+//     [--text-mask words.json|ocr] [--trace] [--json out.json]
+//
+// --text-mask erases known text from the ink mask before matching (the
+// textBoxes option): a JSON file of OcrWord[] (PDF points, the convention
+// above) or "ocr", which reads the sheet once with the headless OCR and
+// caches the words next to the --json output (or in the image's folder).
 //
 // Node only (decodes the image with @napi-rs/canvas); the engine code it
 // drives is the same the browser runs.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { cvScan, type CvScanOptions } from '../src/engine/scan-cv.ts';
+import { cvScan, type CvScanOptions, type TextBox } from '../src/engine/scan-cv.ts';
+import { ocrRaster, terminateOcr } from '../src/headless/ocr-node.ts';
+import { wordBoxesToRaster } from '../src/headless/ops.ts';
+import type { OcrWord } from '../src/engine/ocr.ts';
 
 interface Box {
   c: number;
@@ -43,7 +52,7 @@ const png = args.get('png');
 const labelsPath = args.get('labels');
 const classesPath = args.get('classes');
 if (!png || !labelsPath || !classesPath) {
-  console.error('usage: check-scan-dataset.mts --png sheet.png --labels sheet.txt --classes classes.txt [--k 3] [--only 8,21] [--remove-lines auto|true|false] [--dihedral on|off] [--match-distance 0.15] [--json out.json]');
+  console.error('usage: check-scan-dataset.mts --png sheet.png --labels sheet.txt --classes classes.txt [--k 3] [--only 8,21] [--remove-lines auto|true|false] [--dihedral on|off] [--match-distance auto|0.15] [--expand on|off] [--look-alike on|off] [--text-mask words.json|ocr] [--trace] [--json out.json]');
   process.exit(2);
 }
 const k = Number(args.get('k') ?? '3');
@@ -54,7 +63,10 @@ if (rl === 'true') opts.removeLines = true;
 else if (rl === 'false') opts.removeLines = false;
 else if (rl === 'auto') opts.removeLines = 'auto';
 if (args.get('dihedral') === 'off') opts.dihedral = false;
-if (args.get('match-distance')) opts.matchDistance = Number(args.get('match-distance'));
+if (args.get('match-distance')) opts.matchDistance = args.get('match-distance') === 'auto' ? 'auto' : Number(args.get('match-distance'));
+if (args.get('expand') === 'off') opts.expand = false;
+if (args.get('look-alike') === 'off') opts.lookAlike = false;
+const trace = args.has('trace');
 
 const img = await loadImage(readFileSync(png));
 const W = img.width;
@@ -72,6 +84,31 @@ const raster = {
   toRaster: (x: number, y: number) => ({ x: x * k, y: H - y * k }),
   toPdf: (x: number, y: number) => ({ x: x / k, y: (H - y) / k }),
 };
+
+// known text as raster-px boxes for the text mask
+let textBoxes: TextBox[] | undefined;
+const textMask = args.get('text-mask');
+if (textMask) {
+  let words: OcrWord[];
+  if (textMask === 'ocr') {
+    const cache = (args.get('json') ?? png).replace(/\.[a-z]+$/i, '') + '.words.json';
+    if (existsSync(cache)) {
+      words = JSON.parse(readFileSync(cache, 'utf8')) as OcrWord[];
+      console.log(`text mask: ${words.length} OCR words from ${cache}`);
+    } else {
+      const t0 = Date.now();
+      words = await ocrRaster(raster, { upsample: 1 });
+      await terminateOcr();
+      writeFileSync(cache, JSON.stringify(words) + '\n');
+      console.log(`text mask: OCR read ${words.length} words in ${((Date.now() - t0) / 1000).toFixed(1)} s, cached in ${cache}`);
+    }
+  } else {
+    words = JSON.parse(readFileSync(textMask, 'utf8')) as OcrWord[];
+    console.log(`text mask: ${words.length} words from ${textMask}`);
+  }
+  textBoxes = wordBoxesToRaster(words, raster);
+  opts.textBoxes = textBoxes;
+}
 
 const classes = readFileSync(classesPath, 'utf8').trim().split('\n').map((s) => s.trim());
 const gt: Box[] = readFileSync(labelsPath, 'utf8')
@@ -98,19 +135,22 @@ interface Row {
   templatePx?: number;
   note?: string;
   confusions?: Record<string, number>;
+  cv?: unknown;
   error?: string;
   ms: number;
 }
 const rows: Row[] = [];
-console.log(`${png}: ${W}x${H}, ${gt.length} boxes, ${byClass.size} classes, k=${k}, options ${JSON.stringify(opts)}`);
+console.log(`${png}: ${W}x${H}, ${gt.length} boxes, ${byClass.size} classes, k=${k}, options ${JSON.stringify({ ...opts, textBoxes: textBoxes ? textBoxes.length : undefined })}`);
 console.log('cls  name                        gt  hits   tp   prec  recall  err  template   ms  path');
 for (const [c, inst] of [...byClass.entries()].sort((a, b) => a[0] - b[0])) {
   if (only && !only.has(c)) continue;
   const q = inst[0];
   const name = classes[c] ?? String(c);
   const t0 = Date.now();
-  const res = cvScan(raster, { x: q.cx / k, y: (H - q.cy) / k }, opts);
+  const traces: Record<string, unknown>[] = [];
+  const res = cvScan(raster, { x: q.cx / k, y: (H - q.cy) / k }, trace ? { ...opts, trace: (event, data) => traces.push({ event, ...data }) } : opts);
   const ms = Date.now() - t0;
+  if (trace) for (const t of traces) console.log(`     ${name}: ${JSON.stringify(t)}`);
   if ('error' in res) {
     rows.push({ cls: c, name, gt: inst.length, error: res.error, ms });
     console.log(`${String(c).padStart(3)}  ${name.padEnd(26)} ${String(inst.length).padStart(3)}  error: ${res.error}  ${ms}ms`);
@@ -134,10 +174,13 @@ for (const [c, inst] of [...byClass.entries()].sort((a, b) => a[0] - b[0])) {
   const precision = tp / Math.max(1, hits.length);
   const recall = matched.size / inst.length;
   const path = res.lineRemoval ? `lines removed (${res.lineRemoval.trigger})` : 'plain';
-  rows.push({ cls: c, name, gt: inst.length, hits: hits.length, tp, precision, recall, countErr: hits.length - inst.length, templatePx: res.templatePx, note: res.note, confusions, ms });
+  rows.push({ cls: c, name, gt: inst.length, hits: hits.length, tp, precision, recall, countErr: hits.length - inst.length, templatePx: res.templatePx, note: res.note, confusions, cv: res.cv, ms });
   const conf = Object.keys(confusions).length ? '  false in ' + JSON.stringify(confusions) : '';
+  const cv = res.cv
+    ? `  thr ${res.cv.matchDistance.toFixed(3)} (${res.cv.thresholdSource}, ${res.cv.candidates} cand), ${res.cv.templates} tmpl/${res.cv.expansionRounds} rounds${res.cv.expansionStopped ? ' STOPPED' : ''}${res.cv.textBoxesMasked ? `, ${res.cv.textBoxesMasked} text boxes` : ''}`
+    : '';
   console.log(
-    `${String(c).padStart(3)}  ${name.padEnd(26)} ${String(inst.length).padStart(3)} ${String(hits.length).padStart(5)} ${String(tp).padStart(4)}   ${precision.toFixed(2)}    ${recall.toFixed(2)} ${String(hits.length - inst.length).padStart(4)} ${String(res.templatePx ?? '').padStart(8)}px ${String(ms).padStart(4)}  ${path}${conf}`,
+    `${String(c).padStart(3)}  ${name.padEnd(26)} ${String(inst.length).padStart(3)} ${String(hits.length).padStart(5)} ${String(tp).padStart(4)}   ${precision.toFixed(2)}    ${recall.toFixed(2)} ${String(hits.length - inst.length).padStart(4)} ${String(res.templatePx ?? '').padStart(8)}px ${String(ms).padStart(4)}  ${path}${conf}${cv}`,
   );
 }
 

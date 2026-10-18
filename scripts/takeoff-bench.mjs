@@ -94,7 +94,9 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     cases.push({ id: 'fill/interior-door', kind: 'fill', page: 1, at, expectM2: inner(3, 3) });
     cases.push({ id: 'fill/interior-door-labels-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'labels' });
     cases.push({ id: 'fill/interior-door-scale-only', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'scale' });
-    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none', known: 'P13 neck cuts' });
+    // no scale, no labels, no vector layer (a scan before calibration): the
+    // sheet's own door width (its clustered wall-end gaps) closes the door
+    cases.push({ id: 'fill/interior-door-no-hints', kind: 'fill', page: 1, at, expectM2: inner(3, 3), hints: 'none' });
   }
   // F: 4 x 3 m room in 0.2 m filled walls (drawn as filled rectangles), 0.9 m door to outside
   {
@@ -113,6 +115,60 @@ const font = await doc.embedFont(StandardFonts.Helvetica);
     w(4, 2, 3.84, 2.16); w(3.16, 2.84, 3, 3);
     const expect = (4 * 3 - 0.5) - 0.06; // 4x3 minus the 1x1 corner triangle, minus stroke allowance
     cases.push({ id: 'fill/diagonal-wall-door', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05 });
+    cases.push({ id: 'fill/diagonal-wall-door-no-hints', kind: 'fill', page: 1, at: pt(560, 200, 1.5, 1.5), expectM2: expect, tol: 0.05, hints: 'none', known: 'axis-aligned closing cannot bridge a diagonal door without the vector layer' });
+  }
+  // every page-1 room again with no hints: the sheet door width must not
+  // change a room that was already right (benches, alcoves, L-shapes stay)
+  for (const c of cases.filter((k) => k.kind === 'fill' && !k.hints && k.page === 1)) {
+    const id = `${c.id}-no-hints`;
+    if (!cases.some((k) => k.id === id)) cases.push({ ...c, id, hints: 'none' });
+  }
+}
+
+// Page 1c: a scan before calibration (no hints anywhere on this page). The
+// sheet states its door width through four 0.9 m doorways; five dimension
+// lines broken for text at door width must not be mistaken for doors; a
+// 2.4 m open-plan opening is not a doorway and stays open; a door into a
+// 1.2 m corridor still closes from both sides.
+{
+  const page = sheet(doc);
+  const T = 0.7;
+  const inner = (wM, hM) => (wM * M - T) * (hM * M - T) / (M * M);
+  const pg = doc.getPageCount();
+  // building 1: rooms P (0..4) and Q (4..8) in one 8 x 4 m outline, a 2.4 m
+  // opening in the partition, a 0.9 m door from P to outside
+  {
+    const w = wall(page, 40, 330, T);
+    w(0, 0, 1.5, 0); w(2.4, 0, 8, 0); w(8, 0, 8, 4); w(8, 4, 0, 4); w(0, 4, 0, 0);
+    w(4, 0, 4, 0.8); w(4, 3.2, 4, 4);
+    cases.push({ id: 'fill/open-plan-opening-no-hints', kind: 'fill', page: pg, at: pt(40, 330, 2, 2), expectM2: inner(8, 4), hints: 'none' });
+  }
+  // building 2: room U (3 x 3 m) with a 0.9 m door into a 1.2 m wide corridor V (6 m long)
+  {
+    const w = wall(page, 300, 330, T);
+    w(0, 0, 3, 0); w(0, 0, 0, 3); w(0, 3, 3, 3);
+    w(3, 0, 3, 1.05); w(3, 1.95, 3, 6);
+    w(3, 0, 4.2, 0); w(4.2, 0, 4.2, 6); w(4.2, 6, 3, 6);
+    cases.push({ id: 'fill/corridor-door-room-side-no-hints', kind: 'fill', page: pg, at: pt(300, 330, 1.5, 1.5), expectM2: inner(3, 3), hints: 'none' });
+    cases.push({ id: 'fill/corridor-door-corridor-side-no-hints', kind: 'fill', page: pg, at: pt(300, 330, 3.6, 4), expectM2: inner(1.2, 6), hints: 'none' });
+  }
+  // building 3: three 3 x 3 m rooms in a row, 0.9 m doors between them
+  {
+    const w = wall(page, 480, 330, T);
+    w(0, 0, 9, 0); w(9, 0, 9, 3); w(9, 3, 0, 3); w(0, 3, 0, 0);
+    w(3, 0, 3, 1.05); w(3, 1.95, 3, 3); w(6, 0, 6, 1.05); w(6, 1.95, 6, 3);
+    cases.push({ id: 'fill/middle-of-three-rooms-no-hints', kind: 'fill', page: pg, at: pt(480, 330, 4.5, 1.5), expectM2: inner(3, 3), hints: 'none' });
+  }
+  // decoys: dimension lines broken for their text, the break as wide as a
+  // door (0.9 m), text sitting just above the line as drafted
+  for (let i = 0; i < 5; i++) {
+    const y = 300 - i * 12;
+    const x0 = 40 + (i % 2) * 20;
+    const x1 = x0 + 8 * M;
+    const mid = (x0 + x1) / 2;
+    page.drawLine({ start: { x: x0, y }, end: { x: mid - 0.45 * M, y }, thickness: 0.6, color: BLACK });
+    page.drawLine({ start: { x: mid + 0.45 * M, y }, end: { x: x1, y }, thickness: 0.6, color: BLACK });
+    page.drawText(`${8000 - i * 250}`, { x: mid - 8, y: y + 1.2, size: 6, font });
   }
 }
 

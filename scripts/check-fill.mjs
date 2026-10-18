@@ -7,7 +7,9 @@
 // first can't see: an L-shaped room (the trace must follow concave corners,
 // not cut across them) and a door in a horizontal wall (row-wise closing).
 // A third covers the wall-end gate: a bench line near a wall must not be
-// closed onto it, and doors in thick filled walls still bridge.
+// closed onto it, and doors in thick filled walls still bridge. A fourth
+// covers splits: by room labels, and with no hints at all by the doorway
+// widths the sheet itself shows (kept only for room-sized cuts).
 
 import { dynamicFill } from '../src/engine/dynamicfill.ts';
 
@@ -188,4 +190,24 @@ const aG = area(r.points);
 console.log(`room G (labelled rooms joined by a door): area ${aG.toFixed(0)} (ideal ~41561)`);
 if (Math.abs(aG - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split: ${aG}`); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; unbounded errors');
+// 10. no hints at all (a scan before calibration): the sheet shows two
+// doorway widths (the 40px door and the 60px alcove opening; the gaps
+// between the two boxes face the sheet edge). Tried narrowest first, the
+// 40px width cuts a room-sized part off the G+H fill, so room G stands alone
+r = dynamicFill(raster4, at4(470, 200));
+if ('error' in r) { console.error('FAIL room G (no hints):', r.error); process.exit(1); }
+const aG2 = area(r.points);
+console.log(`room G (no hints, sheet door width): area ${aG2.toFixed(0)} (ideal ~41561), door rule ${r.doorSource} ${r.doorPx}px`);
+if (Math.abs(aG2 - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split without hints: ${aG2}`); process.exit(1); }
+if (r.doorSource !== 'sheet') { console.error(`FAIL room G: expected the sheet door width to be reported, got ${JSON.stringify({ doorPx: r.doorPx, doorSource: r.doorSource })}`); process.exit(1); }
+
+// 11. the same sheet, no hints, click in room F: neither doorway width may
+// shave the alcove off (closing its opening is not a room-sized cut)
+r = dynamicFill(raster4, at4(170, 200));
+if ('error' in r) { console.error('FAIL room F (no hints):', r.error); process.exit(1); }
+const aF2 = area(r.points);
+console.log(`room F (no hints, alcove kept): area ${aF2.toFixed(0)} (ideal ~91702 with the alcove)`);
+if (Math.abs(aF2 - 91702) / 91702 > 0.03) { console.error(`FAIL room F lost its alcove without hints: ${aF2}`); process.exit(1); }
+if (r.doorSource !== undefined) { console.error(`FAIL room F: no doorway rule should apply, got ${JSON.stringify({ doorPx: r.doorPx, doorSource: r.doorSource })}`); process.exit(1); }
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; unbounded errors');

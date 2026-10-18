@@ -322,7 +322,7 @@ export async function runMcpServer(): Promise<void> {
     'fill_area',
     {
       description:
-        'Measure a room by clicking inside it (Dynamic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value) and room labels from the text layer to stop at doorways. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
+        'Measure a room by clicking inside it (Dynamic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value), room labels from the text layer and the vector layer to stop at doorways; on an uncalibrated sheet with none of those, the door width the sheet itself shows (its clustered wall-end gaps) is used and reported. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -365,6 +365,16 @@ export async function runMcpServer(): Promise<void> {
           // only gaps that actually bound this room; absent for a sealed room
           ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
           ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
+          // the doorway rule in force: gaps between wall ends up to this width close by default
+          ...(result.doorPx
+            ? {
+                doorwayRule: {
+                  closesUpToPt: round(result.doorPx / RASTER_SCALE, 1),
+                  ...(cal ? { closesUpToM: round((result.doorPx / RASTER_SCALE) * cal.metersPerPt, 2) } : {}),
+                  source: result.doorSource === 'scale' ? 'calibrated scale: doorways up to 1.0 m' : "door width read off this sheet's own wall-end gaps",
+                },
+              }
+            : {}),
           roomLabelsOnSheet: labels.length,
           vectorDoorBridges: bridges.length,
         },

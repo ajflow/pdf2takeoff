@@ -213,7 +213,7 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
 | `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
-| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale and room labels), markup id, `provenance` with the gap closed |
+| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |
 | `compare_revisions` | `path_a, path_b` | changed sheets, changed regions, summary |
 | `list_markups` / `delete_markup` | `doc` / `doc, id` | markups table / confirmation |

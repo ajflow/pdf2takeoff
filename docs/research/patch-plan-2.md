@@ -10,7 +10,7 @@
 > |---|---|
 > | P7 to P11 | shipped |
 > | P12 | shipped: `npm run bench`, in CI |
-> | P13 | shipped: scale and room-label triggers; corroborated neck cuts still open (bench case `fill/interior-door-no-hints`) |
+> | P13 | shipped: scale and room-label triggers; the no-hints case (`fill/interior-door-no-hints`) closes via the sheet's own doorway widths (two-jamb wall-end gaps) tried under a room-sized split test, in place of distance-transform neck cuts |
 > | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open |
 > | P15 | shipped, plus a `fill_area` MCP tool |
 > | P16 | shipped: go ([vector-spike.md](vector-spike.md)); real CAD exports still to check |
@@ -18,6 +18,7 @@
 > | P3b, P5b, P2b, P20 | open: need a dependency decision (PaddleOCR.js), model artifacts (DINOv2), a dataset licence check and training run (ResPlan), or an agent harness with model access (public benchmarks) |
 >
 > Bench after phase 3: fill 11/12, count 2/2, scale 9/9.
+> Bench after the sheet door width (2026-10-18): fill 21/22, count 2/2, scale 9/9; the open case is a diagonal door on a sheet with no vector layer (axis-aligned closing cannot bridge it).
 
 ## Principles
 
@@ -211,6 +212,18 @@ DUDE, 2026); door swing arcs mark openings; born-digital room labels.
    door width only when wall ends sit on both sides and a second cue
    agrees (door arc, labels on both sides), so L-rooms are not cut at the
    elbow.
+   *Shipped instead (2026-10-18):* the sheet's own doorway widths. The
+   threshold pass already finds every gap between facing wall ends; those
+   with a jamb on both sides, open floor on both sides and a far wall on at
+   least one are doorways (one-ended corner gaps still close but never
+   vote: the elbow of an L-room is one). Their widths cluster at the door
+   width. Each width is tried as a closing rung, narrowest first, up to
+   1.5× the narrowest plus the best-supported cluster, and kept only when
+   it bounds a fill that leaked or cuts a room-sized part off the fill (the
+   guard the label split already uses), never for an alcove. A width that
+   swallows the click or still leaks is skipped, so nothing the sheet shows
+   can break a fill that was already bounded, and open-plan openings stay
+   open. No distance transform needed.
 
 **Check.** P12 interior-door fixtures return the clicked room within 3%.
 No regression on L-rooms or sealed rooms.

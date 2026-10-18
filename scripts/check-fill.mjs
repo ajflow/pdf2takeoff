@@ -398,4 +398,47 @@ if (Math.abs(aT - 74451) / 74451 > 0.01) { console.error(`FAIL room T: ${aT}`); 
 r = dynamicFill(raster8, at8(150, 170));
 if (!('error' in r)) { console.error('FAIL room S bounded without a scale through a 160px gap'); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; wide front doors sealed by where they lead; unbounded errors');
+// --- ninth sheet: a curved wall is not a door swing ---------------------------
+// Room U: 8px filled walls on three sides, and across the bottom gap a thin
+// 1px semicircular partition (radius 100 about (220, 313)) bulging INTO the
+// room — a curved wall/apse a thin-line drawing would show. A small curvy
+// furniture ring sits 4 px from the arc's centre, so the old hinge gate
+// ("any ink near the centre") read the curve as a 1 m door swing: the arc
+// was erased and chorded and the bulge silently re-entered the room. A real
+// swing pivots on line ink of its own (jamb or leaf), never on a curvy blob
+// alone.
+const W9 = 800;
+const H9 = 600;
+const px9 = new Uint8ClampedArray(W9 * H9 * 4).fill(255);
+const ink9 = (x, y) => {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x < 0 || y < 0 || x >= W9 || y >= H9) return;
+  const i = (y * W9 + x) * 4;
+  px9[i] = px9[i + 1] = px9[i + 2] = 0;
+};
+const box9 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ink9(x, y); };
+box9(20, 20, 419, 27); box9(20, 20, 27, 320); box9(412, 20, 419, 320);
+box9(20, 313, 119, 320); box9(320, 313, 419, 320);
+for (let k = 0; k <= 900; k++) { // the curve: semicircle of radius 100 bulging up from y=313
+  const a = Math.PI + Math.PI * (k / 900);
+  ink9(220 + 100 * Math.cos(a), 313 + 100 * Math.sin(a));
+}
+for (let k = 0; k < 64; k++) { // furniture: a 6px ring 4px off the arc centre
+  const a = (2 * Math.PI * k) / 64;
+  ink9(224 + 3 * Math.cos(a), 309 + 3 * Math.sin(a));
+}
+const raster9 = { width: W9, height: H9, data: px9, toPdf: (x, y) => ({ x, y: H9 - y }), toRaster: (x, y) => ({ x, y: H9 - y }) };
+const at9 = (x, y) => ({ x, y: H9 - y });
+
+// 17. U with its curved partition: 384 x 285 = 109440 less the half-disc
+// pi*100^2/2 = 15708 -> 93732 (the arc erased and chorded off as a swing
+// would read ~109440, the bulge back in the room)
+r = dynamicFill(raster9, at9(220, 150), undefined, { metersPerPt: 0.01 });
+if ('error' in r) { console.error('FAIL room U (curved wall):', r.error); process.exit(1); }
+const aU = area(r.points);
+console.log(`room U (curved wall, curvy furniture by its centre): area ${aU.toFixed(0)} (ideal ~93732 with the curve; ~109440 if the arc were chorded off), swings ${r.swings}`);
+if (Math.abs(aU - 93732) / 93732 > 0.01) { console.error(`FAIL room U lost the curve to a phantom swing: ${aU}`); process.exit(1); }
+if (r.swings) { console.error(`FAIL room U reported ${r.swings} swing(s) on a curved wall`); process.exit(1); }
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; curved walls kept; wide front doors sealed by where they lead; unbounded errors');

@@ -510,14 +510,19 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
     const ay = my + cy;
     const { spanDeg } = arcExtent(comp, w, ax, ay);
     if (spanDeg < SWING_MIN_SPAN_DEG || spanDeg > SWING_MAX_SPAN_DEG) continue;
-    // the hinge: ink within a few px of the centre (the jamb corner, or the leaf's root)
+    // the hinge: ink within a few px of the centre — the jamb corner (heavy)
+    // or the leaf's root / a thin-line wall end (thin, straight). Curvy ink
+    // alone (a furniture blob by a bay-window arc) does not hinge a door:
+    // a real arc always pivots on line ink of its own, whatever the plan's
+    // pen weight
     const hx = Math.round(ax);
     const hy = Math.round(ay);
     const tol = Math.max(3, Math.round(0.08 * R));
     let hinged = false;
     for (let y = Math.max(0, hy - tol); y <= Math.min(h - 1, hy + tol) && !hinged; y++) {
       for (let x = Math.max(0, hx - tol); x <= Math.min(w - 1, hx + tol); x++) {
-        if (ink[y * w + x]) {
+        const j = y * w + x;
+        if (ink[j] && thin[j] !== THIN_CURVY) {
           hinged = true;
           break;
         }

@@ -549,6 +549,9 @@ interface WallEstimate {
   countHistogram?: Float64Array;
 }
 
+/** Stand-in for a freed trial's masks (see estimateWalls). */
+const NO_MASK = new Uint8Array(0);
+
 /**
  * Share of the original ink that the wall mask keeps AND that lies on an
  * axis run of at least longPx: solid wall bands score high, hatch lines and
@@ -604,6 +607,11 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
   const longPx = Math.round(o.longRunFraction * Math.max(w, h));
   const histLongPx = Math.round(o.histLongFraction * Math.max(w, h));
   const tried: WallEstimate[] = [];
+  // a fixed closeRadius forces the last trial to win whatever its score;
+  // otherwise the running best (first strict maximum) is the only closed
+  // trial whose masks can still be returned
+  const forcedLast = o.closeRadius !== undefined;
+  let liveBest: WallEstimate | null = null;
   // thickness analysis is in page pixels whatever the working scale
   let minWall = Math.max(o.minWallPx, Math.round((o.minWallFraction * Math.max(w, h)) / scale));
   let pen = 1;
@@ -630,7 +638,23 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
     k = Math.max(3, k);
     const wall = open(closed, w, h, (k - 1) / 2);
     dropSmallBlobs(wall, w, h, Math.round(o.minWallBlobT * t));
-    tried.push({ closed, wall, t, r, k, histogram, score: wallScore(ink, wall, w, h, t, tHeavy, longPx, inkCount) });
+    const e: WallEstimate = { closed, wall, t, r, k, histogram, score: wallScore(ink, wall, w, h, t, tHeavy, longPx, inkCount) };
+    tried.push(e);
+    // free the masks of trials that can no longer win, as soon as that is
+    // known: at full-sheet size each trial holds two w*h masks, and with the
+    // default four closing radii the sweep would otherwise keep ten of them
+    // alive at once. Plain (r=0) is always eligible, so its masks always
+    // stay; otherwise only the running best (or, with a forced single
+    // radius, the newest trial) keeps its masks.
+    if (forcedLast) {
+      for (const p of tried) if (p !== e) { p.closed = NO_MASK; p.wall = NO_MASK; }
+    } else if (!liveBest || e.score > liveBest.score) {
+      if (liveBest && liveBest.r !== 0) { liveBest.closed = NO_MASK; liveBest.wall = NO_MASK; }
+      liveBest = e;
+    } else if (e.r !== 0) {
+      e.closed = NO_MASK;
+      e.wall = NO_MASK;
+    }
   }
   // closing fuses text lines into bars that look like walls, so it has to
   // earn its place: only when it beats the unclosed score by closeGain (a

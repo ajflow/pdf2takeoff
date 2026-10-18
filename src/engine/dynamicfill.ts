@@ -100,6 +100,8 @@ const SWING_MAX_PX = 400;
 /** A swing arc covers between a chopped quarter turn and a double-door half turn (degrees). */
 const SWING_MIN_SPAN_DEG = 45;
 const SWING_MAX_SPAN_DEG = 200;
+/** Cap on the sheet-derived fine rungs between two ladder rungs (see fineRungs). */
+const MAX_FINE_RUNGS = 64;
 /** Ink at least this thick (PDF pt) counts as a heavy (wall-weight) line. */
 const HEAVY_PT = 0.9;
 /** Ink pieces spanning less than this (PDF pt) are marks, not structure (~1.3 m at 1:100). */
@@ -746,8 +748,16 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       const t = thr[i];
       if (t > lo && t <= hi) seen[t] = 1;
     }
-    const out: number[] = [];
+    let out: number[] = [];
     for (let t = 0; t < NEVER; t++) if (seen[t]) out.push(t);
+    // a dense sheet can hold a distinct closing width in every rung between
+    // the door and leak rungs; each is a full flood, so cap the ladder at an
+    // even sample (ends kept) before it grows unbounded
+    if (out.length > MAX_FINE_RUNGS) {
+      const picked = new Set<number>();
+      for (let k = 0; k < MAX_FINE_RUNGS; k++) picked.add(out[Math.round((k * (out.length - 1)) / (MAX_FINE_RUNGS - 1))]);
+      out = [...picked].sort((a, b) => a - b);
+    }
     return out;
   };
   const ladderTo = (thr: Uint8Array, hi: number) => [...new Set([...baseLadder, ...(hints.metersPerPt ? fineRungs(thr, doorR, hi) : [])])].sort((a, b) => a - b);

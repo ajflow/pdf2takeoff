@@ -235,9 +235,13 @@ async function openSheet(setDir, entry, opts) {
 
 /**
  * A graphic scale bar: numbered ticks on one baseline ("0 5 10") with a unit
- * word below. The two ticks farthest apart give the paper length of a known
- * distance; a misread "0" (OCR often sees "O" or "[J") costs nothing when
- * two other numbers survive.
+ * word below. Three or more ticks that agree on one value-per-point (a
+ * least-squares line through them, small residuals) give the scale from the
+ * fitted slope — a stray number from a dimension string nearby cannot fake
+ * the run, and the fit averages out tick-placement noise. A misread "0"
+ * (OCR often sees "O" or "[J") simply drops out of the run. The old
+ * farthest-pair reading remains as the fallback when only two ticks
+ * survive.
  */
 function readScaleBar(ctx) {
   const words = ctx.words;
@@ -246,19 +250,57 @@ function readScaleBar(ctx) {
   for (const unit of units) {
     const ticks = words
       .filter((w) => /^[0O]$|^\d{1,3}$/.test(w.text) && Math.abs(w.xPt - unit.xPt) < 220 && w.yPt > unit.yPt + 4 && w.yPt < unit.yPt + 40)
-      .map((w) => ({ w, v: /^[0O]$/.test(w.text) ? 0 : parseInt(w.text, 10) }));
+      .map((w) => ({ w, v: /^[0O]$/.test(w.text) ? 0 : parseInt(w.text, 10) }))
+      .sort((a, b) => a.w.xPt - b.w.xPt);
+    // the longest run of >= 3 ticks whose values rise linearly with x
+    const mPerUnit = /FEET/i.test(unit.text) ? FT : 1;
+    for (let lo = 0; lo < ticks.length; lo++) {
+      for (let hi = lo + 2; hi < ticks.length; hi++) {
+        const run = ticks.slice(lo, hi + 1);
+        const sameRow = run.every((t, k) => k === 0 || Math.abs(t.w.yPt - run[0].w.yPt) <= 0.7 * Math.max(t.w.hPt, run[0].w.hPt));
+        if (!sameRow) continue;
+        const xs = run.map((t) => t.w.xPt);
+        const vs = run.map((t) => t.v);
+        const fit = leastSquares(xs, vs);
+        if (!fit) continue;
+        const resid = Math.max(...run.map((t, k) => Math.abs(vs[k] - (fit.a + fit.b * xs[k]))));
+        if (fit.b <= 0 || resid > 0.25 + 0.02 * Math.max(...vs)) continue;
+        const dist = xs[xs.length - 1] - xs[0];
+        const ratio = (fit.b * mPerUnit) / METERS_PER_PT;
+        if (ratio < 5 || ratio > 5000) continue;
+        if (!best || run.length > best.run || (run.length === best.run && dist > best.dist)) {
+          best = { ratio, dist, run: run.length, source: `graphic scale bar ${run.length} ticks ${vs.join(' ')} ${unit.text.toLowerCase()}, ${fit.b.toFixed(4)} per pt` };
+        }
+      }
+    }
+    // fallback: the two farthest plausible ticks (the pre-fit reading)
     for (const a of ticks) {
       for (const b of ticks) {
         if (b.v <= a.v || b.w.xPt <= a.w.xPt + 10 || Math.abs(a.w.yPt - b.w.yPt) > 0.7 * Math.max(a.w.hPt, b.w.hPt)) continue;
-        const mPerUnit = /FEET/i.test(unit.text) ? FT : 1;
         const dist = b.w.xPt - a.w.xPt;
         const ratio = ((b.v - a.v) * mPerUnit) / (dist * METERS_PER_PT);
         if (ratio < 5 || ratio > 5000) continue;
-        if (!best || dist > best.dist) best = { ratio, dist, source: `graphic scale bar ${a.v} to ${b.v} ${unit.text.toLowerCase()} over ${dist.toFixed(1)} pt` };
+        if (!best || (best.run <= 2 && dist > best.dist)) best = { ratio, dist, run: 2, source: `graphic scale bar ${a.v} to ${b.v} ${unit.text.toLowerCase()} over ${dist.toFixed(1)} pt` };
       }
     }
   }
   return best ? { ratio: best.ratio, source: best.source } : null;
+}
+
+/** Least-squares y = a + b x over equal-length arrays; null when x has no spread. */
+function leastSquares(xs, ys) {
+  const n = xs.length;
+  const mx = xs.reduce((s, v) => s + v, 0) / n;
+  const my = ys.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - mx) * (ys[i] - my);
+    den += (xs[i] - mx) ** 2;
+  }
+  if (den <= 1e-9) return null;
+  const b = num / den;
+  return { a: my - b * mx, b };
 }
 
 /** Length (pt) of the dimension line a printed value labels, from the vector layer or the ink. */

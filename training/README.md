@@ -11,6 +11,9 @@ spots of the tier-1 connected-component scan).
 scripts/generate-synthetic-dataset.mjs   synthetic sheets + perfect labels (zero deps)
 scripts/floorplancad-convert.py          FloorPlanCAD SVG (or DXF) -> images + labels + counts
 scripts/floorplancad-count-bench.mjs     one-shot count accuracy on FloorPlanCAD-style SVGs
+scripts/bench/pid_fetch.py               Dataset-P&ID sheets + labels from the public mirror
+scripts/bench/pid_train_tiles.py         Dataset-P&ID sheets -> tiled training layout
+scripts/bench/pid-count-bench.mjs        one-shot count accuracy over many P&ID sheets
 training/kaggle-train-yolox.ipynb        train + eval + ONNX export (Kaggle GPU)
 public/models/                           drop-in: symbols.onnx + symbols.json
 ```
@@ -106,6 +109,122 @@ the CLI and MCP use, and reports exact-match rate, MAPE, bias, instance
 precision / recall and the answering tier per class. On the synthetic SVGs
 the vector tier counts five classes exactly and under-counts the size-varied
 stairs (recall 43%), the expected one-exemplar limitation.
+
+## Dataset-P&ID
+
+Dataset-P&ID (Digitize-PID, Paliwal et al. 2021, arXiv 2109.03794) is 500
+synthetic P&ID sheets, 7040 x 4480 px, 32 symbol classes, about 115 symbols
+per sheet, every one of them fused with the pipe network: the tier-1 scan's
+stress case and the detector's first public training target. Background,
+licence status (unstated: research use until the authors answer) and the
+one-sheet and 50-sheet results are in
+[docs/research/benchmarks/raster-symbol-datasets.md](../docs/research/benchmarks/raster-symbol-datasets.md).
+The public copy reachable without an account is the Git-LFS mirror
+`github.com/ch-hristov/p-id-symbols` (60 overlapping 1280 px tiles per
+sheet; `images.zip` is 1.5 GB, `labels.zip` 6.7 MB).
+
+### Fetch
+
+```bash
+python3 -I scripts/bench/pid_fetch.py --out /data/pid/bench50 --sheets 134 --count 50 --seed 1
+python3 -I scripts/bench/pid_fetch.py --out /data/pid/train150 --count 150 --seed 2 \
+    --exclude /data/pid/bench50/manifest.json
+```
+
+Pillow is the only dependency. The script reads the zip's central
+directory once (cached in `<out>/_src/images-index.json`), pulls each
+sheet's 60 tiles with HTTP Range requests (about 3 s per sheet with 8
+workers, no 1.5 GB download), checks the tile axis order on the first sheet,
+stitches the sheet to `images/<sheet>.png`, and writes `labels/<sheet>.txt`
+in sheet coordinates after dropping boxes cut by an interior tile edge and
+de-duplicating the 50% overlap (IoU > 0.5 within class; sheet 134 goes from
+385 tile boxes to 117 symbols). `--sheets` pins ids, `--seed` draws the rest,
+`--exclude` keeps a second run disjoint from the first, `--skip-existing`
+resumes, `--time-budget` stops cleanly. `manifest.json` lists every sheet
+with its paths, per-class counts and timings; `classes.txt` and
+`class-map.json` carry the class table.
+
+Class names: the paper numbers its symbols "Symbol 1" to "Symbol 32" (1 to
+25 complex symbols, 26 to 32 basic shapes: instrument bubbles and boxes) and
+never names them; the mirror keeps that numbering (id n = Symbol n, id 0 =
+"Not_used") and adds the uploader's descriptive names, of which there are
+only 30 distinct for the 32 symbols (3 and 5 "Globe_valve_NO", 26 and 27
+"Instrument_Field", 28 and 31 "Instrument_Panel", 30 and 32 "box"). The
+converter names class n - 1 `S<nn>_<name>` with the duplicate's second
+member suffixed `_b` and the typo in 13 fixed, so YOLO ids are 0 to 31 with
+no empty class and the paper's number is always in the name. Keep the
+output outside the repository; nothing from it is committed.
+
+### Convert to the training layout
+
+```bash
+python3 -I scripts/bench/pid_train_tiles.py --src /data/pid/bench50 --src /data/pid/train150 \
+    --out /data/pid/yolo --tile 640 --stride 480 --input-size 640
+```
+
+Splits by sheet 80/10/10 (seeded; the mirror's own `train.txt` / `val.txt`
+split by tile and leak sheets), tiles every sheet at 640 px with a 160 px
+overlap (wider than the largest symbol, 157 px, so every symbol lies whole
+in at least one tile), keeps a box in a tile when at least 60% of it is
+inside, skips tiles with no ink and keeps 5% of the inked label-free tiles
+as negatives. The 200 sheets fetched above give 160/20/20 sheets, 15,385
+tiles and 41,352 boxes (839 to 3,163 per class in train; flanges are the
+big class) in 495 MB, in about four minutes. Output: `images/{train,val,test}`,
+`labels/{train,val,test}`, `classes.txt`, `dataset.yaml`, `split.json`
+(which sheet went where, per class counts) and `symbols.template.json`.
+
+The tile size is the inference scale: `specs/detector-tiling.md` cuts the
+sheet into windows of `inputSize x 3 / pxPerPt` raster px, and a PNG opened
+by the CLI is one page of W/3 x H/3 points, so 640 px tiles letterboxed to a
+640 px model input mean `pxPerPt = 3.0`, native resolution, symbols 22 to
+156 px at the model input. With the notebook's default `INPUT_SIZE = 416`
+the same tiles give `pxPerPt = 1.95` and a smallest symbol of about 14 px;
+pass `--input-size 416` so the template says so, or raise `INPUT_SIZE` to
+640 (YOLOX-nano trains fine at 640; a T4 takes batch 16). The template's
+`tile` block (`pxPerPt`, `overlapPx` 160, `maxSymbolPt` 53) must go into the
+`symbols.json` the notebook's export cell writes, next to `head`, or the
+browser and CLI will resample symbols to a size the model never saw.
+
+### Train
+
+In `training/kaggle-train-yolox.ipynb` set `DATASET_DIR` to the uploaded
+`/data/pid/yolo`, `CLASSES` to the 32 names in `classes.txt` (in order),
+`INPUT_SIZE` to the value the tiles were cut for, run all cells, and merge
+`symbols.template.json`'s `tile` block into the exported `symbols.json`.
+Expect the class pairs that differ by one stroke (gate NC vs globe NC,
+Symbols 3 and 5) to dominate the confusion matrix; the `test` split holds
+whole sheets the model never saw, which is what the count bench below
+scores.
+
+### Evaluate (one-shot counting over whole sheets)
+
+```bash
+node scripts/bench/pid-count-bench.mjs --manifest /data/pid/bench50/manifest.json --jobs 2 \
+    --json results.json --md results.md                      # tier-1 CV, the baseline
+node scripts/bench/pid-count-bench.mjs --manifest /data/pid/bench50/manifest.json \
+    --model /path/to/model-dir --json detector.json          # the trained detector
+```
+
+The protocol is `scripts/check-scan-dataset.mts` (click the first instance
+of every class, match hits to boxes by centre-in-box) run over every sheet
+in the manifest. Without `--model` the harness is spawned per sheet, so the
+tier-1 numbers come from unchanged code; with `--model` every click goes
+through `pdf2takeoff scan <sheet>.png --at x,y --model <dir>`, which opens
+the PNG directly and answers with the ONNX detector, so both paths share the
+matching and the report. It prints and writes per-class recall, precision,
+exact-count rate and MAPE pooled over sheets, the mean of the per-sheet
+means, per-sheet timings and the worst (sheet, class) pairs with a
+heuristic failure type (click rejected, rotated sibling missed, fused with
+text, interior differs, look-alike confusion, spurious hits). `--sheets`,
+`--limit`, `--remove-lines`, `--dihedral` and `--match-distance` pass
+through to the harness. For a detector trained on the layout above, score
+the sheets in `split.json`'s `test` list only (`--sheets`), the others were
+in training. Budget: the tier-1 path is about 1 s per click (30 s per
+sheet on an idle machine); the `--model` path pays a CLI start and a 31 Mpx
+decode per click, about 12 s each on a loaded box, so run it on the 20 test
+sheets, not all 50 (the plumbing is proven with the stub model in
+`scripts/fixtures/detector-stub`, which reports every click as spurious
+hits, as it should).
 
 ## Training (Kaggle, free GPUs)
 

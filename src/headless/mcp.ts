@@ -305,8 +305,8 @@ export async function runMcpServer(): Promise<void> {
       // sheet's own doorways (gaps between facing wall ends) should measure
       // like doors. A printed scale, agreeing or not, is the stronger witness
       // and is reported above instead.
-      const pg = await d.doc.getPage(page);
-      const pagePx = (pg.view[2] - pg.view[0]) * (pg.view[3] - pg.view[1]) * RASTER_SCALE * RASTER_SCALE;
+      const vp = (await d.doc.getPage(page)).getViewport({ scale: RASTER_SCALE });
+      const pagePx = vp.width * vp.height; // what renderRasterNode would allocate, UserUnit included
       const noPrintedScale = check.status === 'none' || check.status === 'nts' || check.status === 'ambiguous';
       const doors = noPrintedScale && pagePx <= DOOR_CHECK_MAX_PX ? doorWidthCheck(metersPerPt, sheetDoorWidthPx(await renderRasterNode(d.doc, page, RASTER_SCALE)), RASTER_SCALE) : null;
       const warnings: string[] = [];

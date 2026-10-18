@@ -2,7 +2,7 @@
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
 import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector } from './viewer';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPdfDoc } from './viewer';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
@@ -636,9 +636,14 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
   }
   if (c.status === 'agrees') return; // the printed scale is the stronger witness
   // no printed scale to lean on (scans): do the doors come out door-sized?
-  // (sheets larger than A1 are not checked: the pass would take seconds)
+  // (sheets larger than A1 are not checked: the pass would take seconds, so
+  // the size is read from the page before anything is rendered)
+  const doc = getPdfDoc();
+  if (!doc) return;
+  const vp = (await doc.getPage(page)).getViewport({ scale: 3 });
+  if (vp.width * vp.height > DOOR_CHECK_MAX_PX) return;
   const raster = await renderRaster(page, 3).catch(() => null);
-  if (!raster || raster.width * raster.height > DOOR_CHECK_MAX_PX) return;
+  if (!raster) return;
   const doors = doorWidthCheck(metersPerPt, sheetDoorWidthPx(raster), 3);
   if (doors?.status !== 'implausible') return;
   const why = doors.likely ? `, likely ${doors.likely}` : '';

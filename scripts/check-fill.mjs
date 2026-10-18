@@ -210,29 +210,39 @@ console.log(`room F (no hints, alcove kept): area ${aF2.toFixed(0)} (ideal ~9170
 if (Math.abs(aF2 - 91702) / 91702 > 0.03) { console.error(`FAIL room F lost its alcove without hints: ${aF2}`); process.exit(1); }
 if (r.doorSource !== undefined) { console.error(`FAIL room F: no doorway rule should apply, got ${JSON.stringify({ doorPx: r.doorPx, doorSource: r.doorSource })}`); process.exit(1); }
 
-// 12. exploded CAD text and hatching leave thousands of 2 to 4 pt two-ended
-// slots between collinear strokes; they must never read as the sheet's door
-// width (sheetDoorWidthPx says 0, so no calibration warning is raised)
-{
-  const W5 = 400;
-  const H5 = 300;
+// 12 and 13. Exploded CAD text, hatching and schedule grids leave two-ended
+// slots between collinear strokes. Two rooms side by side, the wall between
+// them a row of long strokes broken by slots of a given width (pre-split
+// dashes, as CAD exporters emit); this raster is 1 px per pt.
+const slotSheet = (slotPx) => {
+  const W5 = 800; // the pair of rooms must stay under the page's unbounded cap (40%)
+  const H5 = 600;
   const px5 = new Uint8ClampedArray(W5 * H5 * 4).fill(255);
   const box5 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (y * W5 + x) * 4; px5[i] = px5[i + 1] = px5[i + 2] = 0; } };
-  // two rooms side by side; the wall between them is a dashed-looking row of
-  // long strokes with 5 px slots (pre-split dashes, as CAD exporters emit)
   box5(20, 20, 380, 20); box5(20, 280, 380, 280); box5(20, 20, 20, 280); box5(380, 20, 380, 280);
-  for (let y = 21; y < 280; y += 55) box5(200, y, 200, Math.min(y + 49, 279)); // 5 px slots at this raster's 1 px/pt
-  const raster5 = { width: W5, height: H5, data: px5, toPdf: (x, y) => ({ x, y: H5 - y }), toRaster: (x, y) => ({ x, y: H5 - y }) };
-  const dp = sheetDoorWidthPx(raster5);
-  console.log(`tiny slots: sheet door width ${dp}px (expect 0)`);
-  if (dp !== 0) { console.error(`FAIL tiny slots read as a door width: ${dp}px`); process.exit(1); }
-  // 13. 10 px slots (a schedule grid on a real Revit sheet): the fill may try
-  // them as a width, but the scale check must not warn on them (floor 14 pt)
-  for (let y = 21; y < 280; y += 55) { for (let k = 0; k < 10; k++) { const i = ((y + 49 + 1 + k) * W5 + 200) * 4; if (y + 50 + k < 280) px5[i] = px5[i + 1] = px5[i + 2] = 255; } }
-  for (let y = 21; y < 280; y += 60) box5(200, y, 200, Math.min(y + 49, 279));
-  const dp10 = sheetDoorWidthPx(raster5);
+  for (let y = 21; y < 280; y += 50 + slotPx) box5(200, y, 200, Math.min(y + 49, 279));
+  return { width: W5, height: H5, data: px5, toPdf: (x, y) => ({ x, y: H5 - y }), toRaster: (x, y) => ({ x, y: H5 - y }) };
+};
+// 12. 4 px slots are below the fill's own floor (MIN_DOOR_PT): a no-hints fill
+// must not adopt them as a sheet door width (it would split the pair at a
+// 4 px "door"); it returns the merged pair, with no door rule claimed
+{
+  const r5 = dynamicFill(slotSheet(4), { x: 100, y: 600 - 150 });
+  if ('error' in r5) { console.error('FAIL 4 px slots: fill errored:', r5.error); process.exit(1); }
+  const a5 = area(r5.points);
+  console.log(`4 px slots: no-hints fill ${a5.toFixed(0)} (merged pair ~${359 * 259}), door rule ${r5.doorSource ?? 'none'}`);
+  if (r5.doorSource !== undefined || Math.abs(a5 - 359 * 259) / (359 * 259) > 0.03) { console.error(`FAIL 4 px slots adopted as a door width: ${JSON.stringify({ doorSource: r5.doorSource, doorPx: r5.doorPx, a5 })}`); process.exit(1); }
+}
+// 13. 10 px slots (a schedule grid on a real Revit sheet) pass the fill's
+// floor, but the scale CHECK must not warn on them (MIN_DOOR_CHECK_PT, 14 pt)
+{
+  const dp10 = sheetDoorWidthPx(slotSheet(10));
   console.log(`10 px slots: sheet door width for the scale check ${dp10}px (expect 0)`);
   if (dp10 !== 0) { console.error(`FAIL schedule-grid slots would raise a scale warning: ${dp10}px`); process.exit(1); }
+  // and a 40 px doorway on the same sheet is reported
+  const dp40 = sheetDoorWidthPx(slotSheet(40));
+  console.log(`40 px doorways: sheet door width for the scale check ${dp40}px (expect 40)`);
+  if (dp40 < 38 || dp40 > 42) { console.error(`FAIL door-sized slots not reported: ${dp40}px`); process.exit(1); }
 }
 
 console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; unbounded errors');

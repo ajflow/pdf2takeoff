@@ -4,7 +4,7 @@
 // @ts-ignore -- pdfjs-dist's legacy build ships without type declarations
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { createCanvas, DOMMatrix } from '@napi-rs/canvas';
+import { createCanvas, DOMMatrix, ImageData, Path2D } from '@napi-rs/canvas';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -37,9 +37,16 @@ class OurCanvasFactory {
     pair.context = null;
   }
 }
-// pdf.js also publishes DOMMatrix from its nested copy on import; getTransform
-// results and setTransform arguments must come from the same binary as ours
-(globalThis as unknown as Record<string, unknown>).DOMMatrix = DOMMatrix;
+// pdf.js's legacy build publishes Path2D, ImageData and DOMMatrix from that
+// nested copy on import (and before that, its own JS Path2D polyfill, which
+// skia's ctx.fill(path) cannot take). Assign ours UNCONDITIONALLY, after the
+// import above has run: whichever order modules load in, napi's classes from
+// our copy must win, or pdf.js renders through foreign objects and segfaults.
+// Every render path imports this module first, so this is the one place.
+const g = globalThis as unknown as Record<string, unknown>;
+g.Path2D = Path2D;
+g.ImageData = ImageData;
+g.DOMMatrix = DOMMatrix;
 
 // Standard-14 font data for PDFs that reference Helvetica & co. without
 // embedding them (the bundled samples do). pdf.js's Node font loader needs a

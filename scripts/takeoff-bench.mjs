@@ -54,7 +54,7 @@ let sheetNo = 0;
 function sheet(doc, width = 842, height = 595) {
   const page = doc.addPage([width, height]);
   sheetNo++;
-  if (logoPng) page.drawImage(logoPng, { x: width - 12 - 56, y: 12 + 26, width: 48, height: 24 });
+  if (logoPng) page.drawImage(logoPng, { x: width - 12 - 46, y: 12 + 25, width: 36, height: 18 }); // inside the title block's upper band
   page.drawRectangle({ x: 12, y: 12, width: width - 24, height: height - 24, borderColor: BLACK, borderWidth: 0.8 });
   const tb = { x: width - 12 - 190, y: 12, w: 190, h: 44 };
   page.drawRectangle({ x: tb.x, y: tb.y, width: tb.w, height: tb.h, borderColor: BLACK, borderWidth: 0.8 });

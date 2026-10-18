@@ -11,7 +11,7 @@
 > | P7 to P11 | shipped |
 > | P12 | shipped: `npm run bench`, in CI |
 > | P13 | shipped: scale and room-label triggers; the no-hints case (`fill/interior-door-no-hints`) closes via the sheet's own doorway widths (two-jamb wall-end gaps) tried under a room-sized split test, in place of distance-transform neck cuts |
-> | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open |
+> | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open; 2026-10-18: the sheet's own door width is a second opinion on any calibration (`doorWidthCheck`, surfaced by `set_scale` and the app) |
 > | P15 | shipped, plus a `fill_area` MCP tool |
 > | P16 | shipped: go ([vector-spike.md](vector-spike.md)); real CAD exports still to check |
 > | P17, P18, P19 | shipped |

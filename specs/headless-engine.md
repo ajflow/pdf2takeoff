@@ -211,7 +211,7 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `open_document` | `path` | doc id, page count, page sizes, existing annotation count |
 | `render_page` | `doc, page, dpi?` | PNG content block + width/height/page-space note — **the agent's eyes** |
 | `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
-| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none |
+| `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none, plus `doorWidth`: the door size this scale implies for the sheet's own doorways, plausible / implausible with the likely slip, null when the sheet shows fewer than two interior doorways |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
 | `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |

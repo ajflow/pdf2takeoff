@@ -260,6 +260,36 @@ in the vector layer within a tolerance and returns the exact coordinates;
 `measure` and `set_scale` accept `snap: true`. Out of this plan's scope;
 schedule after P25 reports where measurement errors come from.
 
+### P27 (follow-up, data): the correction flywheel
+
+**Problem.** The shipped detector knows five synthetic classes. The README
+promises that real drawings and estimator corrections will improve it, but
+nothing collects a correction. Every time a user renames, deletes or
+confirms a scan hit in the app, a labelled example is created and lost.
+
+**Change.**
+- `src/app/corrections.ts`: when a count markup created by Scan is deleted,
+  renamed, or flagged/confirmed, store a record in IndexedDB keyed by the
+  document hash: `{ docHash, page, x, y, originalLabel, action: 'delete' |
+  'rename' | 'confirm', newLabel?, provider, crop }`, where `crop` is a
+  64 × 64 px PNG of the hit at render scale 3 (about 2 KB). Nothing leaves
+  the browser.
+- Settings panel: a "Training corrections" row with the count stored and
+  two buttons: **Export** (a zip of crops plus a `labels.csv` in the
+  synthetic generator's class layout, so `training/` can mix it in) and
+  **Clear**. Export is the only way data leaves the machine, and the user
+  does it.
+- `training/README.md`: how to merge an export into a fine-tune, and the
+  licence note that exported crops carry the drawing owner's terms.
+
+**Check.** Browser harness: scan, delete one hit, rename another, export;
+the zip holds two crops and a two-row CSV; Clear empties the store; a
+reload keeps the records.
+
+**Effort.** 1 day. **Depends on:** nothing. Needs a product decision on
+the settings copy and on whether confirmations (not only corrections) are
+stored, since confirmations are the bulk of useful positives.
+
 ## 5. Order and effort
 
 | Order | Patch | Fixes | Effort | Depends on |
@@ -270,6 +300,7 @@ schedule after P25 reports where measurement errors come from.
 | 4 | P24 tool contract | B | hours | P21 to P23 |
 | 5 | P25 benchmark runs | G | 2 to 3 days | P21 to P24, agent harness |
 | later | P26 vector snapping | D | 1 to 2 days | P25 findings |
+| later | P27 correction flywheel | detector data | 1 day | product decision on settings copy |
 
 P21 and P23 are independent and can ship as separate PRs. P24 should not
 land before P21, because removing "look at render_page" with nothing to
@@ -321,6 +352,54 @@ closing from both sides, the middle of three rooms, and five dimension-line
 text breaks at door width as decoys. On the bundled sample the uncalibrated
 fill makes no doorway claim, because its only doorway is a one-jamb corner
 opening; that is reported honestly rather than guessed.
+
+### Follow-up round (same day, same branch)
+
+Working through the recommendations that came out of section 6:
+
+- **L-corridor cut at the elbow (fixed).** The one-ended "doorway hard
+  against a corner" rule treated the inner corner of an L-shaped room as a
+  wall end, so under a calibrated scale any L-shaped space narrower than
+  1.0 m was cut in two (bench: a 0.9 m L-corridor read 2.58 m² against
+  6.03 m²). A wall end now has to be *free*: as thick at its tip as a few
+  pixels back along the wall. A corner's tip runs into the perpendicular
+  wall and reads far thicker. New bench case `fill/l-corridor-0.9m`, with
+  and without hints; both failed before the fix.
+- **Doorway votes need enclosure (fixed).** Once every bench sheet carried
+  a border and title block, the equal gaps between separately drawn rooms
+  formed a stronger "door" cluster than the real doors (a row of identical
+  units on a site plan would do the same). A doorway now has to join two
+  enclosed spaces: for each width cluster, every gap up to that width is
+  closed and both sides are flooded on a 4 px grid; a side that reaches
+  the unbounded outside disqualifies the gap. Exterior doors and gaps
+  between buildings therefore never vote. The first draft capped the
+  flood and read the unlabelled remainder of an over-cap region as a
+  small bounded one; the grid makes the full flood cheap enough to skip
+  the cap. The reading is now computed lazily, so the calibrated fill path
+  pays nothing for it.
+- **Door width as a scale second opinion (shipped).** `doorWidthCheck`
+  turns the sheet's agreed door width into the door size a calibration
+  implies; outside 0.6 to 1.3 m it is implausible, and the slip that would
+  bring it back to door size (reduced print, unit slip) is named.
+  `set_scale` reports it under `sheetCheck.doorWidth` (null when the sheet
+  shows fewer than two interior doorways) and warns; the app hints after a
+  measured calibration when no printed scale disagreed first. Bench
+  `doorcheck/*`: one doorway is no evidence; 1:100 plausible; 1:50
+  implausible as a reduced print.
+- **Fixtures carry a frame and title block (done).** No regressions, which
+  is the point of having them.
+- **Fill provenance in the app (done).** The hint after a fill now says
+  what bounded it: the gap closed in metres or points, a vector doorway
+  bridge, or the door width read from the sheet.
+- **Blog synced (done).** The engineering post's "Dynamic Fill leaks
+  through doors" section now tells the layered fix and the bench number;
+  the detector line says v1 shipped.
+- **Real CAD exports (in progress).** A search for redistributable
+  AutoCAD, Revit and ArchiCAD PDF exports is running; results go into
+  [vector-spike.md](vector-spike.md)'s open items.
+- **P25 benchmark run and P27 flywheel (not started).** The first needs a
+  model harness this environment lacks; the second needs the product
+  decision noted above.
 
 ## 7. Non-goals
 

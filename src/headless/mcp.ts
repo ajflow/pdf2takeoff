@@ -26,9 +26,9 @@ import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { METERS_PER_PT, toMeters } from '../engine/units.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
-import { dynamicFill } from '../engine/dynamicfill.ts';
+import { dynamicFill, sheetDoorWidthPx } from '../engine/dynamicfill.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
-import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet } from '../engine/scale.ts';
+import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -301,6 +301,12 @@ export async function runMcpServer(): Promise<void> {
       const setRatio = metersPerPt / METERS_PER_PT;
       // measured scales carry hand-placement error, typed ratios do not
       const check = checkAgainstSheet(setRatio, votes, nts, from_points ? 0.05 : 0.02);
+      // second opinion that needs no printed scale: the sheet's own doorways
+      // (gaps between facing wall ends) should measure like doors
+      const doors = doorWidthCheck(metersPerPt, sheetDoorWidthPx(await renderRasterNode(d.doc, page, RASTER_SCALE)), RASTER_SCALE);
+      const warnings: string[] = [];
+      if (check.status === 'disagrees') warnings.push(`the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}`);
+      if (doors?.status === 'implausible') warnings.push(`this scale makes the sheet's doorways ${round(doors.impliedDoorM, 2)} m wide${doors.likely ? `: likely ${doors.likely}` : ''}`);
       return text({
         set: pages,
         metersPerPt: round(metersPerPt, 8),
@@ -310,9 +316,9 @@ export async function runMcpServer(): Promise<void> {
           status: check.status,
           ...(check.sheetRatio !== undefined ? { sheetRatio: round(check.sheetRatio, 3) } : {}),
           sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
-          ...(check.status === 'disagrees'
-            ? { warning: `the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}. Check before measuring` }
-            : {}),
+          // null when the sheet shows no agreed door width (no two-jamb doorways)
+          doorWidth: doors ? { status: doors.status, impliedDoorM: round(doors.impliedDoorM, 3), ...(doors.likely ? { likely: doors.likely } : {}) } : null,
+          ...(warnings.length ? { warning: `${warnings.join('; ')}. Check before measuring` } : {}),
         },
       });
     },

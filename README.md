@@ -110,6 +110,21 @@ Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 }
 ```
 
+## ScaledDrawingBench
+
+No public benchmark tests measuring a length or an area from a scaled drawing,
+so the repo ships one. [bench/scaled-drawing-bench](bench/scaled-drawing-bench/README.md)
+is a deterministic, CC BY 4.0 set of 200 synthetic floor-plan sheets (half
+born-digital, half degraded 150 dpi scans; five scale notations; A3, A1 and
+ARCH D; some rotated; some with a revision B) and about 2,000 estimator-style
+questions with exact answers: scale, wall lengths, room areas and perimeters,
+symbol counts, printed dimensions and revision changes. `npm run bench:scaled -- generate`
+builds it from a seed, `score` grades a predictions file (within 2 and 5
+percent, MAPE, exact counts, change-set F1, hallucination rate) and
+`reference` runs pdf2takeoff's own deterministic solver, whose table is in the
+benchmark README: near perfect on the vector half, with the raster half
+showing where the engine's scan and OCR paths still fall short.
+
 ## Architecture
 
 - **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and, upcoming, headless in Node (CLI + MCP — see [specs/headless-engine.md](specs/headless-engine.md)).

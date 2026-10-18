@@ -17,13 +17,18 @@
 //   7. symbols fused with a touching text tag count once the tag boxes are
 //      supplied as textBoxes (and count 1 without them)
 //   8. 8 siblings of which 3 are lightly degraded (1 px erosion over a
-//      growing part of the symbol) count 8 with template expansion on and
-//      7 with it off, under the per-sheet threshold and under a fixed one
+//      growing part of the symbol): under the per-sheet threshold they all
+//      count with or without expansion (the degraded ones are true siblings
+//      inside the band); under a fixed 0.15 they count 8 with expansion
+//      and 7 without
+//   9. autoThreshold itself: a noise-floor gap inside the sibling band
+//      (render spread between siblings, all within MATCH_DIST) must not
+//      cut the cluster; clear edges still do
 // Everything is drawn with a 2 px stroke (thicker where a case says so) so
 // the measured stroke width, the run threshold and the stub rule are
 // exercised at a realistic ratio.
 
-import { cvScan } from '../src/engine/scan-cv.ts';
+import { cvScan, autoThreshold } from '../src/engine/scan-cv.ts';
 import { estimateStrokeWidth, removeLines } from '../src/engine/line-removal.ts';
 
 let failures = 0;
@@ -293,8 +298,12 @@ const count = (raster, x, y, opts) => {
   if ('error' in on || on.hits.length !== pos.length) fail(`expansion (auto threshold): expected ${pos.length}, got ${JSON.stringify('error' in on ? on : on.hits.length)}`);
   else if (!on.cv || on.cv.expansionRounds < 1 || on.cv.templates < 2) fail(`expansion (auto threshold): expected at least one round, got ${JSON.stringify(on.cv)}`);
   else console.log(`expansion (auto threshold): ${pos.length} counted after ${on.cv.expansionRounds} round(s), ${on.cv.templates} templates, threshold ${on.cv.matchDistance}`);
-  if (off !== pos.length - 1) fail(`expansion off (auto threshold): expected ${pos.length - 1}, got ${JSON.stringify(off)}`);
-  else console.log(`expansion off (auto threshold): ${off} counted`);
+  // the degraded siblings are all true siblings inside the MATCH_DIST band:
+  // since the sibling-band hardening, the auto threshold keeps them on its own
+  // (noise-floor gaps no longer cut the cluster), so expansion adds nothing
+  // here — the fixed-threshold variant below is what pins the mechanism
+  if (off !== pos.length) fail(`expansion off (auto threshold): expected ${pos.length} (degraded siblings stay inside the hardened threshold), got ${JSON.stringify(off)}`);
+  else console.log(`expansion off (auto threshold): ${off} counted (all siblings within the hardened threshold)`);
   // fixed threshold: the same chain, two rounds deep
   const fixed = make(4, [0.125, 0.375, 0.625]);
   const onF = count(fixed.raster, 100 - 18, 100, { matchDistance: 0.15 });
@@ -302,6 +311,28 @@ const count = (raster, x, y, opts) => {
   if (onF !== pos.length) fail(`expansion (fixed 0.15): expected ${pos.length}, got ${JSON.stringify(onF)}`);
   if (offF !== pos.length - 1) fail(`expansion off (fixed 0.15): expected ${pos.length - 1}, got ${JSON.stringify(offF)}`);
   if (onF === pos.length && offF === pos.length - 1) console.log(`expansion (fixed 0.15): ${onF} counted with expansion, ${offF} without`);
+}
+
+// --- 9. autoThreshold directly: a noise-floor gap must not cut the sibling band
+{
+  const near = (t, want, why) => {
+    const got = autoThreshold(t);
+    if (got === null || Math.abs(got - want) > 0.001) fail(`autoThreshold ${why}: ${JSON.stringify(t)} -> ${got}, expected ${want}`);
+  };
+  // render spread inside the sibling cluster: the 0.03 gaps between 0.10..0.16
+  // are noise, not class edges; the cut lands past the last member the constant
+  // MATCH_DIST (0.15) would keep, at the gap to the first clear non-member
+  near([0.1, 0.1, 0.13, 0.13, 0.16, 0.16, 0.4, 0.5], 0.145, 'intra-cluster noise gaps');
+  // a wide gap right at the band edge still tightens below the constant
+  near([0.06, 0.08, 0.11, 0.3, 0.5], 0.14, 'clear edge at 0.11');
+  // identical renders then look-alikes: the big gap below the floor still wins
+  // (returned clamped up to AUTO_MIN = 0.1)
+  near([0.01, 0.02, 0.12, 0.3], 0.1, 'pixel-identical cluster');
+  // continuous distribution running past AUTO_MAX: no gap anywhere, the
+  // caller keeps the constant (a vector ending before AUTO_MAX would hit the
+  // gap-to-nothing sentinel after the last member and legitimately cut there)
+  if (autoThreshold([0.05, 0.07, 0.09, 0.11, 0.13, 0.15, 0.17, 0.19, 0.21, 0.23]) !== null) fail('autoThreshold continuous distribution should be null');
+  console.log('autoThreshold: noise-floor gaps do not cut the sibling band, clear edges do');
 }
 
 if (failures) {

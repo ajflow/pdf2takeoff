@@ -87,6 +87,13 @@ const AUTO_MAX = 0.2;
 const AUTO_FLOOR = 0.06;
 /** The smallest gap in the sorted distances that counts as the edge of the sibling cluster. */
 const AUTO_MIN_GAP = 0.03;
+/**
+ * A gap this wide is required to cut a member that is itself within
+ * MATCH_DIST (the calibrated sibling ceiling): a gap at the AUTO_MIN_GAP
+ * noise floor is render spread inside a sibling cluster, not a class edge,
+ * and cutting on it silently drops siblings the constant threshold keeps.
+ */
+const AUTO_STRICT_GAP = 0.05;
 /** A gap this wide counts even below AUTO_FLOOR (pixel-identical siblings, then nothing until the look-alikes). */
 const AUTO_BIG_GAP = 0.08;
 /** The threshold sits at most this far past the cluster's last member, however wide the gap. */
@@ -681,12 +688,15 @@ function score(cands: Candidate[], variants: Variant[], index: number, lookAlike
  * AUTO_FLOOR (or of at least AUTO_BIG_GAP after a nearer one: identical
  * renders sit at 0) marks the edge of their cluster, and the threshold
  * goes just past that member (half way into the gap, at most AUTO_REACH),
- * clamped into [AUTO_MIN, AUTO_MAX]. The widest gap is not used: on a
- * sheet whose look-alike classes run into each other the widest gap is
- * noise further out, and a threshold there lets the look-alikes in. Null
- * when no member under AUTO_MAX is followed by such a gap (continuous
- * distribution, or nothing near the click), so the caller keeps its
- * constant.
+ * clamped into [AUTO_MIN, AUTO_MAX]. When the member the gap would cut is
+ * itself within MATCH_DIST it is a probable sibling, and only the wider
+ * AUTO_STRICT_GAP may cut it — a AUTO_MIN_GAP-sized gap there is render
+ * spread inside the cluster, and cutting on it drops siblings the constant
+ * threshold keeps. The widest gap is not used: on a sheet whose look-alike
+ * classes run into each other the widest gap is noise further out, and a
+ * threshold there lets the look-alikes in. Null when no member under
+ * AUTO_MAX is followed by such a gap (continuous distribution, or nothing
+ * near the click), so the caller keeps its constant.
  */
 export function autoThreshold(distances: number[]): number | null {
   const xs = distances.slice().sort((a, b) => a - b);
@@ -695,7 +705,8 @@ export function autoThreshold(distances: number[]): number | null {
     if (lo > AUTO_MAX) break;
     const hi = i + 1 < xs.length ? xs[i + 1] : 1;
     const gap = hi - lo;
-    if (gap < (lo < AUTO_FLOOR ? AUTO_BIG_GAP : AUTO_MIN_GAP)) continue;
+    const needed = lo < AUTO_FLOOR ? AUTO_BIG_GAP : hi <= MATCH_DIST ? AUTO_STRICT_GAP : AUTO_MIN_GAP;
+    if (gap < needed) continue;
     return Math.min(AUTO_MAX, Math.max(AUTO_MIN, lo + Math.min(gap / 2, AUTO_REACH)));
   }
   return null;

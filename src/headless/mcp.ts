@@ -13,10 +13,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
-import { openPdf } from './pdfjs-node.ts';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta, pageWordsWithOcr } from './ops.ts';
@@ -511,7 +510,7 @@ export async function runMcpServer(): Promise<void> {
     'compare_revisions',
     {
       description:
-        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
+        'Compare two revisions: pass two PDF files (or PNG/JPG scans) for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by file stem, so a scan pairs with the PDF of the same sheet; added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
       inputSchema: {
         a: z.string().describe('path to the older revision (file or folder)'),
         b: z.string().describe('path to the newer revision (file or folder)'),
@@ -525,8 +524,8 @@ export async function runMcpServer(): Promise<void> {
         const result = await compareFolders(a, b);
         return text(result);
       }
-      const docA = await openPdf(new Uint8Array(readFileSync(a)));
-      const docB = await openPdf(new Uint8Array(readFileSync(b)));
+      const { doc: docA } = await openAny(a);
+      const { doc: docB } = await openAny(b);
       const result = await compareDocs(docA, docB);
       const delta = quantities ? await quantityDelta(docA, docB) : undefined;
       return text({ a: basename(a), b: basename(b), ...result, ...(delta ? { quantities: delta } : {}) });

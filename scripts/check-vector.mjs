@@ -80,7 +80,8 @@ async function vec(bytes) {
 
 // vector scan: an asymmetric switch-like symbol (circle + tail to the right)
 // at 0°, 90°, 180° and mirrored; a same-size lookalike (circle + cross) and
-// a 1.5x copy must not match; one instance touches a wall
+// a 1.5x copy of that lookalike must not match (the size band admits other
+// sizes of the same shape, never another shape); one instance touches a wall
 {
   const doc = await PDFDocument.create();
   const page = doc.addPage([600, 400]);
@@ -99,12 +100,46 @@ async function vec(bytes) {
   page.drawCircle({ x: 100, y: 100, size: 4, borderColor: black, borderWidth: 0.6 });
   page.drawLine({ start: { x: 104, y: 100 }, end: { x: 109, y: 100 }, thickness: 0.6, color: black });
   page.drawLine({ start: { x: 100, y: 96 }, end: { x: 100, y: 104 }, thickness: 0.6, color: black });
-  sw(300, 100, 1, 0, 1.5); // bigger copy
+  // the lookalike again at 1.5x: inside the size band, still a different shape
+  page.drawCircle({ x: 300, y: 100, size: 6, borderColor: black, borderWidth: 0.6 });
+  page.drawLine({ start: { x: 306, y: 100 }, end: { x: 313.5, y: 100 }, thickness: 0.6, color: black });
+  page.drawLine({ start: { x: 300, y: 94 }, end: { x: 300, y: 106 }, thickness: 0.6, color: black });
   const { v } = await vec(await doc.save());
   const r = vectorScan(v, { x: 100, y: 300 });
   check('vector scan: finds the symbol at the click', r && r.provider === 'vector');
-  check('vector scan: 5 instances (rotated, mirrored, touching a wall); lookalike and bigger copy excluded', r?.hits.length === 5, r && JSON.stringify(r.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  check('vector scan: 5 instances (rotated, mirrored, touching a wall); same-size and 1.5x lookalikes excluded', r?.hits.length === 5, r && JSON.stringify(r.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
   check('vector scan: nothing under an empty click', vectorScan(v, { x: 500, y: 50 }) === null);
+}
+
+// vector scan size band: the same switch symbol at 1x (three), 1.5x (one)
+// and 2x (one). The default band (0.6 to 1.6) counts the 1.5x copy and
+// leaves the 2x out; a tight band is the old same-size behaviour; a wide
+// band takes all five. Shapes are compared after normalising each group by
+// its bounding-box diagonal, so a scaled copy is the same shape.
+{
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([600, 400]);
+  const black = rgb(0, 0, 0);
+  const sw = (x, y, k = 1) => {
+    page.drawCircle({ x, y, size: 4 * k, borderColor: black, borderWidth: 0.6 });
+    page.drawLine({ start: { x: x + 4 * k, y }, end: { x: x + 9 * k, y }, thickness: 0.6, color: black });
+  };
+  sw(100, 300);
+  sw(200, 300);
+  sw(300, 300);
+  sw(100, 150, 1.5);
+  sw(300, 150, 2);
+  const { v } = await vec(await doc.save());
+  const dflt = vectorScan(v, { x: 100, y: 300 });
+  check('size band: default band counts the 1.5x copy of the same shape, not the 2x (4)', dflt?.hits.length === 4, dflt && JSON.stringify(dflt.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  const tight = vectorScan(v, { x: 100, y: 300 }, { sizeBand: [0.95, 1.05] });
+  check('size band: a tight band is the same-size match (3)', tight?.hits.length === 3, tight && JSON.stringify(tight.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  const wide = vectorScan(v, { x: 100, y: 300 }, { sizeBand: [0.45, 2.2] });
+  check('size band: a wide band takes the 2x copy too (5)', wide?.hits.length === 5, wide && JSON.stringify(wide.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  // clicking the 1.5x copy: the 1x copies sit at ratio 0.67 and the 2x at 1.33, all inside the default band
+  const fromBig = vectorScan(v, { x: 100, y: 150 });
+  check('size band: from the 1.5x exemplar the 1x (ratio 0.67) and 2x (1.33) copies count (5)', fromBig?.hits.length === 5, fromBig && JSON.stringify(fromBig.hits.map((h) => [Math.round(h.x), Math.round(h.y)])));
+  check('size band: the note says how many sizes matched', /2 sizes/.test(dflt?.note ?? ''), dflt?.note);
 }
 
 // vector scan: instances straddling the 30 pt grouping grid (a circle whose

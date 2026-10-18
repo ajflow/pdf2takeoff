@@ -51,7 +51,7 @@ npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 npm run bench      # takeoff accuracy bench on synthetic sheets (rooms, counts, scales)
 ```
 
-`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)).
+`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)). `npm run bench:ledger` runs the fast benches and appends their headline numbers, with the commit, to [bench/results/ledger.jsonl](bench/results/README.md) (`--compare` prints the delta against the previous run).
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 
@@ -65,7 +65,7 @@ npm run cli -- info drawing.pdf                      # pages, sizes, annotation 
 npm run cli -- compare r2.pdf r3.pdf --png diff.png  # per-sheet change fractions + regions
 npm run cli -- compare r2/ r3/ --png-dir ov/         # folders: batch the whole set, pair by filename
 npm run cli -- scan drawing.pdf --page 1 --at 88,271 # click-point auto-count, JSON hits
-npm run cli -- scan plan.png --page 1 --at 318,447   # PNG/JPG input: one page of W/3 x H/3 points
+npm run cli -- scan plan.png --page 1 --at 318,447   # PNG/JPG input (every command): one page of W/3 x H/3 points
 npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantities CSV
 npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantities

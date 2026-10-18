@@ -7,9 +7,13 @@
 //
 // Click → the small paths around the click form the template → every group
 // of small paths with the same shape (any of 8 right-angle rotations and
-// mirrors, same size) is a hit. Returns null when there is no vector
-// symbol at the click (scans, raster-only sheets), so the host falls back
-// to the raster tiers.
+// mirrors) is a hit. Shapes are compared after normalising each group by
+// its bounding-box diagonal, so a scaled copy of the symbol counts as long
+// as its size sits inside `sizeBand` (default 0.6 to 1.6 of the template:
+// the stair, table and door blocks a CAD drawing inserts at several scales),
+// while a same-size or scaled look-alike with one stroke more or less does
+// not. Returns null when there is no vector symbol at the click (scans,
+// raster-only sheets), so the host falls back to the raster tiers.
 
 import type { Pt, ScanHit, ScanResult } from './types.ts';
 import type { VecPage } from './vector.ts';
@@ -24,8 +28,21 @@ const JOIN_PT = 0.6;
  * together, while a wire or leader touching it is drawn elsewhere.
  */
 const ORDER_GAP = 4;
-/** Size tolerance between template and candidate (pt, per side). */
+/** Size tolerance between template and candidate (pt, per side) once the candidate is scaled to the template's diagonal. */
 const SIZE_TOL_PT = 0.6;
+/** Candidate diagonal over template diagonal: accepted sizes of the same shape. */
+export const DEFAULT_SIZE_BAND: [number, number] = [0.6, 1.6];
+
+export interface VectorScanOptions {
+  /** Paths longer than this (PDF pt) are structure, not symbol parts. */
+  maxSymbolPt?: number;
+  /**
+   * [min, max] ratio of a candidate's bounding-box diagonal to the
+   * template's that still counts; [1, 1] is a same-size match. Shape
+   * identity is required at every size.
+   */
+  sizeBand?: [number, number];
+}
 
 interface Group {
   x0: number;
@@ -100,11 +117,16 @@ function groupPaths(vec: VecPage, maxSymbolPt: number): Group[] {
   return [...groups.values()].filter((g) => Math.max(g.x1 - g.x0, g.y1 - g.y0) <= maxSymbolPt);
 }
 
-/** Points sampled along a group's segments, relative to its bbox centre. */
-function samples(vec: VecPage, g: Group): Float64Array {
+/**
+ * Points sampled along a group's segments, relative to its bbox centre and
+ * multiplied by `scale` (the template diagonal over this group's diagonal,
+ * so every candidate is compared at the template's size; the sample step
+ * scales with it, keeping the point density the template was sampled at).
+ */
+function samples(vec: VecPage, g: Group, scale = 1): Float64Array {
   const cx = (g.x0 + g.x1) / 2;
   const cy = (g.y0 + g.y1) / 2;
-  const step = Math.max(0.25, Math.hypot(g.x1 - g.x0, g.y1 - g.y0) / 40);
+  const step = Math.max(0.25, (Math.hypot(g.x1 - g.x0, g.y1 - g.y0) * scale) / 40) / scale;
   const out: number[] = [];
   for (const pi of g.paths) {
     const [a, b] = vec.paths[pi].segs;
@@ -114,7 +136,7 @@ function samples(vec: VecPage, g: Group): Float64Array {
       const n = Math.max(1, Math.ceil(len / step));
       for (let k = 0; k <= n; k++) {
         const t = k / n;
-        out.push(seg.x1 + (seg.x2 - seg.x1) * t - cx, seg.y1 + (seg.y2 - seg.y1) * t - cy);
+        out.push((seg.x1 + (seg.x2 - seg.x1) * t - cx) * scale, (seg.y1 + (seg.y2 - seg.y1) * t - cy) * scale);
       }
     }
   }
@@ -157,8 +179,9 @@ function chamfer(a: Float64Array, b: Float64Array, t: [number, number, number, n
   return sum / (a.length / 2);
 }
 
-export function vectorScan(vec: VecPage, clicked: Pt, opts: { maxSymbolPt?: number } = {}): ScanResult | null {
+export function vectorScan(vec: VecPage, clicked: Pt, opts: VectorScanOptions = {}): ScanResult | null {
   const maxSymbolPt = opts.maxSymbolPt ?? DEFAULT_MAX_SYMBOL_PT;
+  const [bandLo, bandHi] = opts.sizeBand ?? DEFAULT_SIZE_BAND;
   const groups = groupPaths(vec, maxSymbolPt);
   if (groups.length === 0) return null;
 
@@ -178,25 +201,39 @@ export function vectorScan(vec: VecPage, clicked: Pt, opts: { maxSymbolPt?: numb
 
   const tw = tpl.x1 - tpl.x0;
   const th = tpl.y1 - tpl.y0;
+  const tDiag = Math.hypot(tw, th);
   const tplPts = samples(vec, tpl);
-  const tol = Math.max(0.35, 0.05 * Math.hypot(tw, th));
+  const tol = Math.max(0.35, 0.05 * tDiag);
   const hits: ScanHit[] = [];
+  let sizes = 1;
   for (const g of groups) {
     const w = g.x1 - g.x0;
     const h = g.y1 - g.y0;
-    const same = Math.abs(w - tw) <= SIZE_TOL_PT && Math.abs(h - th) <= SIZE_TOL_PT;
-    const turned = Math.abs(w - th) <= SIZE_TOL_PT && Math.abs(h - tw) <= SIZE_TOL_PT;
+    const diag = Math.hypot(w, h);
+    if (diag <= 0 || tDiag <= 0) continue;
+    const ratio = diag / tDiag;
+    if (ratio < bandLo - 1e-9 || ratio > bandHi + 1e-9) continue;
+    // scaled to the template's diagonal, the box must match on both sides (or turned)
+    const scale = tDiag / diag;
+    const sw = w * scale;
+    const sh = h * scale;
+    const same = Math.abs(sw - tw) <= SIZE_TOL_PT && Math.abs(sh - th) <= SIZE_TOL_PT;
+    const turned = Math.abs(sw - th) <= SIZE_TOL_PT && Math.abs(sh - tw) <= SIZE_TOL_PT;
     if (!same && !turned) continue;
-    const pts = g === tpl ? tplPts : samples(vec, g);
+    const pts = g === tpl ? tplPts : samples(vec, g, scale);
     let match = g === tpl;
     for (const t of DIHEDRAL) {
       if (match) break;
       // symmetric: template onto candidate, and candidate back onto template
       if (chamfer(tplPts, pts, t, 3 * tol) <= tol && chamfer(pts, tplPts, [t[0], t[2], t[1], t[3]], 3 * tol) <= tol) match = true;
     }
-    if (match) hits.push({ x: (g.x0 + g.x1) / 2, y: (g.y0 + g.y1) / 2, score: 1 });
+    if (match) {
+      hits.push({ x: (g.x0 + g.x1) / 2, y: (g.y0 + g.y1) / 2, score: 1 });
+      if (Math.abs(ratio - 1) > SIZE_TOL_PT / tDiag) sizes++;
+    }
   }
   if (hits.length === 0) return null;
   hits.sort((a, b) => (Math.abs(b.y - a.y) > 8 ? b.y - a.y : a.x - b.x));
-  return { hits, provider: 'vector', note: `vector match · ${hits.length} identical symbol${hits.length === 1 ? '' : 's'}` };
+  const what = sizes > 1 ? `matching symbol${hits.length === 1 ? '' : 's'} (${sizes} sizes)` : `identical symbol${hits.length === 1 ? '' : 's'}`;
+  return { hits, provider: 'vector', note: `vector match · ${hits.length} ${what}` };
 }

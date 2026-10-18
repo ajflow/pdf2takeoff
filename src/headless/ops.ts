@@ -20,7 +20,7 @@ import type { Markup, Pt } from '../engine/types.ts';
 import { vectorDiff, textDiff, type VectorDiff, type TextDiff } from '../engine/revdiff.ts';
 import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type OcrWord } from '../engine/ocr.ts';
 import { metersPerPtForRatio } from '../engine/units.ts';
-import { dynamicFill } from '../engine/dynamicfill.ts';
+import { dynamicFill, type FillHints } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 
 /** Read pdf2takeoff-authored annotations from every page of an open doc. */
@@ -113,6 +113,49 @@ export async function pageWordsWithOcr(
   const r = raster ?? (await renderRasterNode(doc!, page, RASTER_SCALE));
   const words = await ocrRaster(r, { region: opts.region, rotations: opts.rotations });
   return { words, source: 'ocr' };
+}
+
+/** A word's box in raster px (its baseline may be rotated), padded by a pixel, for FillHints.textBoxes. */
+function wordBox(raster: RasterPage, wd: OcrWord & { angleDeg?: number }): NonNullable<FillHints['textBoxes']>[number] {
+  const a = ((wd.angleDeg ?? 0) * Math.PI) / 180;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const hw = wd.wPt / 2;
+  const hh = wd.hPt / 2;
+  const pts = [
+    [-hw, -hh],
+    [hw, -hh],
+    [hw, hh],
+    [-hw, hh],
+  ].map(([s, t]) => raster.toRaster(wd.xPt + ux * s - uy * t, wd.yPt + uy * s + ux * t));
+  return {
+    x0: Math.floor(Math.min(...pts.map((p) => p.x))) - 1,
+    y0: Math.floor(Math.min(...pts.map((p) => p.y))) - 1,
+    x1: Math.ceil(Math.max(...pts.map((p) => p.x))) + 1,
+    y1: Math.ceil(Math.max(...pts.map((p) => p.y))) + 1,
+  };
+}
+
+/**
+ * Everything Dynamic Fill takes from a sheet besides the click point: room
+ * label centres and word boxes from the text layer (the glyphs inside the
+ * boxes are masked out of the fill boundary, so a label or dimension
+ * string touching a wall makes no false neck), vector doorway bridges, the
+ * scale when known, and with `ocr` the OCR words' boxes too (scans and
+ * raster imports have no text layer). One call per sheet; the hints are
+ * reusable across clicks on it.
+ */
+export async function fillHintsFor(doc: PDFDocumentProxy, page: number, raster: RasterPage, opts: { metersPerPt?: number; ocr?: boolean } = {}): Promise<FillHints> {
+  const [tc, vec] = await Promise.all([doc.getPage(page).then((pg) => pg.getTextContent()), vectorDocPage(doc, page).catch(() => null)]);
+  const items = tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+  const words: (OcrWord & { angleDeg?: number })[] = items.flatMap((it) => wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height));
+  if (opts.ocr) words.push(...(await ocrRaster(raster).catch(() => [] as OcrWord[])));
+  return {
+    labels: roomLabelPoints(items),
+    textBoxes: words.map((wd) => wordBox(raster, wd)),
+    ...(vec ? { bridges: doorBridgesFor(vec, opts.metersPerPt) } : {}),
+    ...(opts.metersPerPt ? { metersPerPt: opts.metersPerPt } : {}),
+  };
 }
 
 /** Keep diff listings readable: the first n entries (totals are reported beside them). */
@@ -295,25 +338,13 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
     counts.push({ page, label, a: g.length, b, delta: b - g.length });
   }
   // everything a re-fill needs from a B sheet, prepared once per sheet
-  const sheets = new Map<number, Promise<Parameters<typeof dynamicFill>[3] & { raster: Awaited<ReturnType<typeof renderRasterNode>> }>>();
+  const sheets = new Map<number, Promise<FillHints & { raster: Awaited<ReturnType<typeof renderRasterNode>> }>>();
   const sheet = (page: number) => {
     let s = sheets.get(page);
     if (!s) {
       s = (async () => {
-        const [raster, items, vec, mppB, mppA] = await Promise.all([
-          renderRasterNode(docB, page, RASTER_SCALE),
-          docB.getPage(page).then((pg) => pg.getTextContent()),
-          vectorDocPage(docB, page),
-          sheetMetersPerPt(docB, page),
-          sheetMetersPerPt(docA, page),
-        ]);
-        const metersPerPt = mppB ?? mppA;
-        return {
-          raster,
-          labels: roomLabelPoints(items.items as { str?: string; transform?: number[]; width?: number; height?: number }[]),
-          bridges: doorBridgesFor(vec, metersPerPt),
-          ...(metersPerPt ? { metersPerPt } : {}),
-        };
+        const [raster, mppB, mppA] = await Promise.all([renderRasterNode(docB, page, RASTER_SCALE), sheetMetersPerPt(docB, page), sheetMetersPerPt(docA, page)]);
+        return { raster, ...(await fillHintsFor(docB, page, raster, { metersPerPt: mppB ?? mppA })) };
       })();
       sheets.set(page, s);
     }

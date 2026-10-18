@@ -39,10 +39,16 @@ them: open kitchens, stairs in halls), openM (that length), doors (openings
 touching the room), swing_m2 (door swing sectors inside the room: variant C
 draws them as ink, so a fill there stops at the arc).
 
+Rotation (`--rotate 15,30 --rotate-share 0.1`): every tenth plan is turned
+about its envelope centre, cycling through the angles, so its walls and
+door gaps run off-axis (the diagonal-wall subset); `rotationDeg` in the task
+file says which, and the bench scores rotated plans on their own rows.
+
 Usage:
   python3 -I scripts/bench/resplan_to_pdf.py --resplan /path/to/resplan \\
       --out /path/to/outdir [--limit 200] [--seed 1] [--ratio 100] \\
-      [--variants ABC] [--raster] [--labels] [--page a3|fit]
+      [--variants ABC] [--raster] [--labels] [--page a3|fit] \\
+      [--rotate 15,30 [--rotate-share 0.1]]
 """
 
 import argparse
@@ -61,6 +67,7 @@ try:
     import shapely.io
     from shapely.geometry import LineString, MultiPolygon, Point, Polygon
     from shapely.geometry.base import BaseGeometry
+    from shapely.affinity import rotate
     from shapely.ops import unary_union
     from shapely.validation import make_valid
     import cairosvg
@@ -168,11 +175,17 @@ def rect_axes(poly):
 
 
 class Plan:
-    def __init__(self, raw, ratio, page_mode, labels):
+    def __init__(self, raw, ratio, page_mode, labels, rotation=0.0):
         self.id = int(raw["id"])
         self.ratio = ratio
         self.labels = labels
+        self.rotation = float(rotation)
         geo = {k: valid(v) for k, v in raw.items() if isinstance(v, BaseGeometry)}
+        if self.rotation and geo.get("inner") is not None and not geo["inner"].is_empty:
+            # the diagonal-wall subset: the whole plan turned about the envelope
+            # centre, so every wall, door and room polygon is off-axis
+            origin = geo["inner"].centroid
+            geo = {k: (rotate(v, self.rotation, origin=origin) if v is not None and not v.is_empty else v) for k, v in geo.items()}
         self.inner = geo["inner"]
         area_m2 = float(raw["area"])
         if self.inner is None or self.inner.is_empty or area_m2 <= 0:
@@ -397,6 +410,7 @@ class Plan:
             "door_widths_m": sorted(round(2 * rect_axes(p)[2] / self.k, 3) for _, p in self.doors),
             "variants": list(variants),
             "labels": bool(self.labels),
+            "rotationDeg": self.rotation,
             "rooms": rooms,
         }
 
@@ -428,7 +442,11 @@ def main():
     ap.add_argument("--raster", action="store_true", help="also write variant D (B rasterised at 150 dpi)")
     ap.add_argument("--labels", action="store_true", help="draw room names as text so the labels hint path runs")
     ap.add_argument("--page", choices=("a3", "fit"), default="a3", help="A3 landscape when the plan fits, else fit with a 40 pt margin")
+    ap.add_argument("--rotate", help="comma-separated angles in degrees; rotated plans cycle through them (the diagonal-wall subset)")
+    ap.add_argument("--rotate-share", type=float, default=1.0, help="share of the plans to rotate when --rotate is given (default 1.0: every plan; 0.1: every tenth)")
     args = ap.parse_args()
+    angles = [float(a) for a in args.rotate.split(",")] if args.rotate else []
+    rotate_every = max(1, round(1 / args.rotate_share)) if angles and args.rotate_share > 0 else 0
 
     data = load_plans(args.resplan)
     by_id = {int(pl["id"]): pl for pl in data if "id" in pl}
@@ -446,14 +464,19 @@ def main():
         variants.append("D")
     written = []
     skipped = 0
-    for pid in ids:
+    rotated = 0
+    for n, pid in enumerate(ids):
         raw = by_id.get(pid)
         if raw is None:
             print(f"skip {pid}: not in dataset", file=sys.stderr)
             skipped += 1
             continue
+        rotation = 0.0
+        if rotate_every and n % rotate_every == 0:
+            rotation = angles[rotated % len(angles)]
+            rotated += 1
         try:
-            plan = Plan(raw, args.ratio, args.page, args.labels)
+            plan = Plan(raw, args.ratio, args.page, args.labels, rotation)
         except (ValueError, KeyError) as exc:
             print(f"skip {pid}: {exc}", file=sys.stderr)
             skipped += 1
@@ -471,8 +494,8 @@ def main():
             json.dump(plan.tasks(variants), f, indent=1)
         written.append(pid)
     with open(os.path.join(args.out, "index.json"), "w") as f:
-        json.dump({"source": "ResPlan", "ratio": args.ratio, "seed": args.seed, "variants": variants, "ids": written}, f, indent=1)
-    print(f"wrote {len(written)} plans x {len(variants)} variants to {args.out} (skipped {skipped})")
+        json.dump({"source": "ResPlan", "ratio": args.ratio, "seed": args.seed, "variants": variants, "rotate": angles, "rotateShare": args.rotate_share if angles else 0, "ids": written}, f, indent=1)
+    print(f"wrote {len(written)} plans x {len(variants)} variants to {args.out} (skipped {skipped}, rotated {rotated})")
 
 
 if __name__ == "__main__":

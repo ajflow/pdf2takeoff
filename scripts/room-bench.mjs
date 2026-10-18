@@ -155,6 +155,7 @@ async function runPlan(id) {
         type: room.type,
         expectLeak: !!room.expectLeak,
         open: !!room.open,
+        rotationDeg: tasks.rotationDeg ?? 0,
         doors: room.doors ?? null,
         gt_m2: room.gt_m2,
         gt_face_m2: room.gt_face_m2,
@@ -253,6 +254,14 @@ function report(all) {
       if (rs.length) rows.push({ label: t, ...summarise(rs) });
     }
     rows.push({ label: 'all enclosed rooms', ...summarise(enclosed) });
+    // the diagonal-wall subset (generator --rotate): rotated plans on their own rows
+    const angles = [...new Set(enclosed.map((r) => r.rotationDeg ?? 0))].sort((a, b) => a - b);
+    if (angles.some((a) => a !== 0)) {
+      for (const a of angles) {
+        const rs = enclosed.filter((r) => (r.rotationDeg ?? 0) === a);
+        if (rs.length) rows.push({ label: a === 0 ? 'enclosed, unrotated' : `enclosed, rotated ${a} deg`, ...summarise(rs) });
+      }
+    }
     const open = recs.filter((r) => !r.expectLeak && r.open);
     if (open.length) rows.push({ label: 'open-plan (expect merge)', ...summarise(open) });
     for (const t of TYPES) {

@@ -1,0 +1,1023 @@
+{"id":"SDB-101-q01","answer":95.93,"note":"graphic scale bar 0 to 5 metres over 147.8 pt"}
+{"id":"SDB-101-q02","answer":10.998,"note":"north: 325.0 pt via ink runs"}
+{"id":"SDB-101-q03","answer":8.539,"note":"east: 252.3 pt via ink runs"}
+{"id":"SDB-101-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-101-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-101-q06","answer":11.567,"note":"Dynamic Fill, 13 vertices"}
+{"id":"SDB-101-q07","answer":13.791,"note":"Dynamic Fill, 21 vertices"}
+{"id":"SDB-101-q08","answer":11,"note":"cv scan from the legend"}
+{"id":"SDB-101-q09","answer":4,"note":"cv scan from the legend"}
+{"id":"SDB-101-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-101-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-102-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-102-q02","answer":19.732,"note":"north: 279.7 pt via ink runs"}
+{"id":"SDB-102-q03","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-102-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-102-q05","answer":90.126,"note":"Dynamic Fill, 16 vertices"}
+{"id":"SDB-102-q06","answer":69.115,"note":"Dynamic Fill, 11 vertices"}
+{"id":"SDB-102-q07","answer":38.554,"note":"Dynamic Fill, 16 vertices"}
+{"id":"SDB-102-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-102-q09","answer":5,"note":"cv scan from the legend"}
+{"id":"SDB-102-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-102-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-103-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-103-q02","answer":18.509,"note":"north: 262.3 pt via ink runs"}
+{"id":"SDB-103-q03","answer":17.239,"note":"east: 244.3 pt via ink runs"}
+{"id":"SDB-103-q04","answer":43.127,"note":"Dynamic Fill, 18 vertices"}
+{"id":"SDB-103-q05","answer":43.272,"note":"Dynamic Fill, 10 vertices"}
+{"id":"SDB-103-q06","answer":26.673,"note":"Dynamic Fill, 18 vertices"}
+{"id":"SDB-103-q07","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-103-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-103-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-103-q10","answer":7200,"note":"read \"7200\""}
+{"id":"SDB-104-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-104-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-104-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-104-q09","answer":2360,"note":"read \"2360\""}
+{"id":"SDB-105-q01","answer":99.99,"note":"graphic scale bar 0 to 5 metres over 141.8 pt"}
+{"id":"SDB-105-q02","answer":12.404,"note":"east: 351.7 pt via ink runs"}
+{"id":"SDB-105-q03","answer":14.039,"note":"partition: 398.0 pt via ink runs"}
+{"id":"SDB-105-q04","answer":14.232,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-105-q05","answer":22.526,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-105-q06","answer":15.168,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-105-q07","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-105-q08","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-105-q09","answer":3600,"note":"read \"3600\""}
+{"id":"SDB-105-q10","answer":["diffuser removed","dimension changed","door added","downlight removed"],"note":"pixel diff 0.2972013884369838% changed, 52 regions"}
+{"id":"SDB-106-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-106-q08","answer":5,"note":"cv scan from the legend"}
+{"id":"SDB-106-q09","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-106-q10","answer":0,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-106-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-107-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-107-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-107-q09","answer":6,"note":"cv scan from the legend"}
+{"id":"SDB-107-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-107-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-107-q12","answer":["dimension changed"],"note":"pixel diff 3.7288959619686852% changed, 45 regions"}
+{"id":"SDB-108-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-108-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-108-q09","answer":5,"note":"cv scan from the legend"}
+{"id":"SDB-108-q10","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-108-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-109-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-109-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-109-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-109-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-109-q11","answer":[],"note":"pixel diff 96.5864968772481% changed, 117 regions"}
+{"id":"SDB-110-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-110-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-110-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-110-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-111-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-111-q02","answer":3.516,"note":"partition: 99.7 pt via ink runs"}
+{"id":"SDB-111-q03","answer":11.301,"note":"east: 320.3 pt via ink runs"}
+{"id":"SDB-111-q04","answer":28.499,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-111-q05","answer":29.005,"note":"Dynamic Fill, 19 vertices"}
+{"id":"SDB-111-q06","answer":21.469,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-111-q07","answer":12,"note":"cv scan from the legend"}
+{"id":"SDB-111-q08","answer":16,"note":"cv scan from the legend"}
+{"id":"SDB-111-q09","answer":4,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-111-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-112-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-112-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-112-q09","answer":14,"note":"cv scan from the legend"}
+{"id":"SDB-112-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-112-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-113-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-113-q07","answer":7,"note":"cv scan from the legend"}
+{"id":"SDB-113-q08","answer":12,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-113-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-114-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-114-q02","answer":22.131,"note":"north: 313.7 pt via ink runs"}
+{"id":"SDB-114-q03","answer":14.793,"note":"east: 209.7 pt via ink runs"}
+{"id":"SDB-114-q04","answer":103.478,"note":"Dynamic Fill, 30 vertices"}
+{"id":"SDB-114-q05","answer":71.888,"note":"Dynamic Fill, 32 vertices"}
+{"id":"SDB-114-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-114-q07","answer":41.399,"note":"Dynamic Fill, 30 vertices"}
+{"id":"SDB-114-q08","answer":17,"note":"cv scan from the legend"}
+{"id":"SDB-114-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-114-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-114-q11","answer":["door added","switch removed","wall moved"],"note":"pixel diff 2.8952079637829122% changed, 85 regions"}
+{"id":"SDB-115-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-115-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-115-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-115-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-115-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-116-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-116-q02","answer":4.08,"note":"partition: 115.7 pt via ink runs"}
+{"id":"SDB-116-q03","answer":11.265,"note":"east: 319.3 pt via ink runs"}
+{"id":"SDB-116-q04","answer":16.041,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-116-q05","answer":15.691,"note":"Dynamic Fill, 9 vertices"}
+{"id":"SDB-116-q06","answer":20.217,"note":"Dynamic Fill, 9 vertices"}
+{"id":"SDB-116-q07","answer":8,"note":"cv scan from the legend"}
+{"id":"SDB-116-q08","answer":21,"note":"cv scan from the legend"}
+{"id":"SDB-116-q09","answer":5,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-116-q10","answer":3000,"note":"read \"3000\""}
+{"id":"SDB-117-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-117-q02","answer":13.229,"note":"north: 375.0 pt via ink runs"}
+{"id":"SDB-117-q03","answer":6.421,"note":"east: 182.0 pt via ink runs"}
+{"id":"SDB-117-q04","answer":11.927,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-117-q05","answer":8.979,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-117-q06","answer":10.677,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-117-q07","answer":12.888,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-117-q08","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-117-q09","answer":11,"note":"cv scan from the legend"}
+{"id":"SDB-117-q10","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-117-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-117-q12","answer":["door added","wall moved"],"note":"pixel diff 0.27516297201305995% changed, 43 regions"}
+{"id":"SDB-118-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-118-q08","answer":4,"note":"cv scan from the legend"}
+{"id":"SDB-118-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-118-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-119-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-119-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-119-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-119-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-120-q01","answer":51.19,"note":"graphic scale bar 0 to 2 metres over 110.8 pt"}
+{"id":"SDB-120-q02","answer":2.281,"note":"partition: 126.3 pt via ink runs"}
+{"id":"SDB-120-q03","answer":12.743,"note":"east: 705.7 pt via ink runs"}
+{"id":"SDB-120-q04","answer":16.996,"note":"Dynamic Fill, 15 vertices"}
+{"id":"SDB-120-q05","answer":30.536,"note":"Dynamic Fill, 17 vertices"}
+{"id":"SDB-120-q06","answer":19.876,"note":"Dynamic Fill, 36 vertices"}
+{"id":"SDB-120-q07","answer":12,"note":"cv scan from the legend"}
+{"id":"SDB-120-q08","answer":13,"note":"cv scan from the legend"}
+{"id":"SDB-120-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-120-q10","answer":5400,"note":"read \"5400\""}
+{"id":"SDB-121-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-121-q02","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-121-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-121-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-121-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-121-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-121-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-121-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-121-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-121-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-122-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-122-q08","answer":15,"note":"cv scan from the legend"}
+{"id":"SDB-122-q09","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-122-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-122-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-122-q12","answer":[],"note":"pixel diff 0.23532539241897898% changed, 55 regions"}
+{"id":"SDB-123-q01","answer":96,"note":"OCR 1/8\" =1'-0\""}
+{"id":"SDB-123-q02","answer":29.37,"note":"north: 264.3 pt via ink runs"}
+{"id":"SDB-123-q03","answer":21.074,"note":"east: 189.7 pt via ink runs"}
+{"id":"SDB-123-q04","answer":105.218,"note":"Dynamic Fill, 8 vertices"}
+{"id":"SDB-123-q05","answer":130.092,"note":"Dynamic Fill, 9 vertices"}
+{"id":"SDB-123-q06","answer":43.481,"note":"Dynamic Fill, 8 vertices"}
+{"id":"SDB-123-q07","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-123-q08","answer":19,"note":"cv scan from the legend"}
+{"id":"SDB-123-q09","answer":5,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-123-q10","answer":0.3937,"note":"read \"120\""}
+{"id":"SDB-124-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-124-q07","answer":19,"note":"cv scan from the legend"}
+{"id":"SDB-124-q08","answer":10,"note":"cv scan from the legend"}
+{"id":"SDB-124-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-124-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-125-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-125-q02","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-125-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-125-q04","answer":17.228,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-125-q05","answer":22.706,"note":"Dynamic Fill, 25 vertices"}
+{"id":"SDB-125-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-125-q07","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-125-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-125-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-125-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-126-q01","answer":49.84,"note":"graphic scale bar 0 to 2 metres over 113.8 pt"}
+{"id":"SDB-126-q02","answer":6.429,"note":"east: 365.7 pt via ink runs"}
+{"id":"SDB-126-q03","answer":7.437,"note":"partition: 423.0 pt via ink runs"}
+{"id":"SDB-126-q04","answer":12.12,"note":"Dynamic Fill, 24 vertices"}
+{"id":"SDB-126-q05","answer":12.525,"note":"Dynamic Fill, 20 vertices"}
+{"id":"SDB-126-q06","answer":14.44,"note":"Dynamic Fill, 20 vertices"}
+{"id":"SDB-126-q07","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-126-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-126-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-126-q10","answer":4200,"note":"read \"4200\""}
+{"id":"SDB-127-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-127-q02","answer":24.459,"note":"east: 346.7 pt via ink runs"}
+{"id":"SDB-127-q03","answer":21.026,"note":"north: 298.0 pt via ink runs"}
+{"id":"SDB-127-q04","answer":34.056,"note":"Dynamic Fill, 7 vertices"}
+{"id":"SDB-127-q05","answer":144.061,"note":"Dynamic Fill, 23 vertices"}
+{"id":"SDB-127-q06","answer":60.427,"note":"Dynamic Fill, 23 vertices"}
+{"id":"SDB-127-q07","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-127-q08","answer":16,"note":"cv scan from the legend"}
+{"id":"SDB-127-q09","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-127-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-127-q11","answer":["dimension changed","door added","switch removed","wall moved"],"note":"pixel diff 2.021878124582557% changed, 26 regions"}
+{"id":"SDB-128-q01","answer":120,"note":"OCR 1\" = 10'"}
+{"id":"SDB-128-q02","answer":39.676,"note":"north: 285.7 pt via ink runs"}
+{"id":"SDB-128-q03","answer":25,"note":"east: 180.0 pt via ink runs"}
+{"id":"SDB-128-q04","answer":118.498,"note":"Dynamic Fill, 9 vertices"}
+{"id":"SDB-128-q05","answer":153.684,"note":"Dynamic Fill, 25 vertices"}
+{"id":"SDB-128-q06","answer":51.373,"note":"Dynamic Fill, 11 vertices"}
+{"id":"SDB-128-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-128-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-128-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-128-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-129-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-129-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-129-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-129-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-129-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-130-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-130-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-130-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-130-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-130-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-131-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-131-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-131-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-131-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-132-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-132-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-132-q08","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-132-q09","answer":8,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-132-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-132-q11","answer":["gpo removed","switch removed"],"note":"pixel diff 3.870699032219841% changed, 44 regions"}
+{"id":"SDB-133-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-133-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-133-q09","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-133-q10","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-133-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-134-q01","answer":49.95,"note":"graphic scale bar 0 to 2 metres over 113.5 pt"}
+{"id":"SDB-134-q02","answer":6.326,"note":"partition: 359.0 pt via ink runs"}
+{"id":"SDB-134-q03","answer":8.822,"note":"east: 500.7 pt via ink runs"}
+{"id":"SDB-134-q04","answer":25.072,"note":"Dynamic Fill, 13 vertices"}
+{"id":"SDB-134-q05","answer":24.539,"note":"Dynamic Fill, 19 vertices"}
+{"id":"SDB-134-q06","answer":14.407,"note":"Dynamic Fill, 42 vertices"}
+{"id":"SDB-134-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-134-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-134-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-135-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-135-q07","answer":13,"note":"cv scan from the legend"}
+{"id":"SDB-135-q08","answer":3,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-135-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-136-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-136-q08","answer":14,"note":"cv scan from the legend"}
+{"id":"SDB-136-q09","answer":20,"note":"cv scan from the legend"}
+{"id":"SDB-136-q10","answer":7,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-136-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-137-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-137-q08","answer":5,"note":"cv scan from the legend"}
+{"id":"SDB-137-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-137-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-138-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-138-q08","answer":13,"note":"cv scan from the legend"}
+{"id":"SDB-138-q09","answer":7,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-138-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-139-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-139-q07","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-139-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-139-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-140-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-140-q02","answer":15.593,"note":"north: 442.0 pt via ink runs"}
+{"id":"SDB-140-q03","answer":6.421,"note":"east: 182.0 pt via ink runs"}
+{"id":"SDB-140-q04","answer":28.759,"note":"Dynamic Fill, 8 vertices"}
+{"id":"SDB-140-q05","answer":14.351,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-140-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-140-q07","answer":15.569,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-140-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-140-q09","answer":13,"note":"cv scan from the legend"}
+{"id":"SDB-140-q10","answer":3,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-140-q11","answer":4800,"note":"read \"4800\""}
+{"id":"SDB-141-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-141-q08","answer":6,"note":"cv scan from the legend"}
+{"id":"SDB-141-q09","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-141-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-141-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-142-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-142-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-142-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-142-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-142-q11","answer":["door added"],"note":"pixel diff 1.691085656110746% changed, 45 regions"}
+{"id":"SDB-143-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-143-q08","answer":12,"note":"cv scan from the legend"}
+{"id":"SDB-143-q09","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-143-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-144-q01","answer":50,"note":"OCR 1:50"}
+{"id":"SDB-144-q02","answer":10.607,"note":"partition: 601.3 pt via ink runs"}
+{"id":"SDB-144-q03","answer":12.606,"note":"north: 714.7 pt via ink runs"}
+{"id":"SDB-144-q04","answer":32.314,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-144-q05","answer":13.127,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-144-q06","answer":34.507,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-144-q07","answer":14.393,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-144-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-144-q09","answer":7,"note":"cv scan from the legend"}
+{"id":"SDB-144-q10","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-144-q11","answer":4800,"note":"read \"4800\""}
+{"id":"SDB-145-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-145-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-145-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-145-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-146-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-146-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-146-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-146-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-146-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-147-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-147-q08","answer":4,"note":"cv scan from the legend"}
+{"id":"SDB-147-q09","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-147-q10","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-147-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-148-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-148-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-148-q09","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-148-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-148-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-149-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-149-q02","answer":19.732,"note":"north: 279.7 pt via ink runs"}
+{"id":"SDB-149-q03","answer":24.412,"note":"east: 346.0 pt via ink runs"}
+{"id":"SDB-149-q04","answer":67.363,"note":"Dynamic Fill, 10 vertices"}
+{"id":"SDB-149-q05","answer":131.654,"note":"Dynamic Fill, 10 vertices"}
+{"id":"SDB-149-q06","answer":54.865,"note":"Dynamic Fill, 7 vertices"}
+{"id":"SDB-149-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-149-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-149-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-150-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-150-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-150-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-150-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-151-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-151-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-151-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-151-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-151-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-152-q01","answer":50,"note":"OCR 1:50"}
+{"id":"SDB-152-q02","answer":12.606,"note":"north: 714.7 pt via ink runs"}
+{"id":"SDB-152-q03","answer":8.814,"note":"east: 499.7 pt via ink runs"}
+{"id":"SDB-152-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-152-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-152-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-152-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-152-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-152-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-152-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-153-q01","answer":199.98,"note":"graphic scale bar 0 to 10 metres over 141.8 pt"}
+{"id":"SDB-153-q02","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-153-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-153-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-153-q05","answer":86.282,"note":"Dynamic Fill, 10 vertices"}
+{"id":"SDB-153-q06","answer":70.489,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-153-q07","answer":35.864,"note":"Dynamic Fill, 14 vertices"}
+{"id":"SDB-153-q08","answer":6,"note":"cv scan from the legend"}
+{"id":"SDB-153-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-153-q10","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-153-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-154-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-154-q08","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-154-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-154-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-154-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-155-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-155-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-155-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-155-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-155-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-156-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-156-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-156-q09","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-156-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-156-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-157-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-157-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-157-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-157-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-158-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-158-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-158-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-158-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-158-q10","answer":0.4593,"note":"read \"140\""}
+{"id":"SDB-159-q01","answer":0.86,"note":"OCR 14\" =1'0\""}
+{"id":"SDB-159-q02","answer":"unanswerable","note":"north wall not found"}
+{"id":"SDB-159-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-159-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-159-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-159-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-159-q07","answer":6,"note":"cv scan from the legend"}
+{"id":"SDB-159-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-159-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-160-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-160-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-160-q09","answer":0,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-160-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-161-q01","answer":0.86,"note":"OCR 14\" =1'0"}
+{"id":"SDB-161-q02","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-161-q03","answer":0.376,"note":"east: 378.7 pt via ink runs"}
+{"id":"SDB-161-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-161-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-161-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-161-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-161-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-161-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-162-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-162-q08","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-162-q09","answer":0,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-162-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-163-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-163-q08","answer":19,"note":"cv scan from the legend"}
+{"id":"SDB-163-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-163-q10","answer":6,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-163-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-164-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-164-q07","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-164-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-164-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-164-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-165-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-165-q07","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-165-q08","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-165-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-165-q10","answer":["wall moved"],"note":"pixel diff 0.14027198319265824% changed, 27 regions"}
+{"id":"SDB-166-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-166-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-166-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-166-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-167-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-167-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-167-q09","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-167-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-167-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-168-q01","answer":0.86,"note":"OCR 14\" =1'0"}
+{"id":"SDB-168-q02","answer":0.524,"note":"north: 528.7 pt via ink runs"}
+{"id":"SDB-168-q03","answer":0.59,"note":"east: 594.7 pt via ink runs"}
+{"id":"SDB-168-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-168-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-168-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-168-q07","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-168-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-168-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-168-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-169-q01","answer":0.86,"note":"OCR 14\" = 1'0"}
+{"id":"SDB-169-q02","answer":0.923,"note":"north: 930.7 pt via ink runs"}
+{"id":"SDB-169-q03","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-169-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-169-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-169-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-169-q07","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-169-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-169-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-169-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-169-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-170-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-170-q07","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-170-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-170-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-170-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-171-q01","answer":994.61,"note":"graphic scale bar 0 to 25 metres over 71.3 pt"}
+{"id":"SDB-171-q02","answer":22.924,"note":"partition: 65.3 pt via ink runs"}
+{"id":"SDB-171-q03","answer":123.392,"note":"east: 351.7 pt via ink runs"}
+{"id":"SDB-171-q04","answer":2565.904,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-171-q05","answer":1632.051,"note":"Dynamic Fill, 13 vertices"}
+{"id":"SDB-171-q06","answer":2565.904,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-171-q07","answer":204.274,"note":"Dynamic Fill, 17 vertices"}
+{"id":"SDB-171-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-171-q09","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-171-q10","answer":0,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-171-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-172-q01","answer":199.62,"note":"graphic scale bar 0 to 10 metres over 142.0 pt"}
+{"id":"SDB-172-q02","answer":19.577,"note":"east: 278.0 pt via ink runs"}
+{"id":"SDB-172-q03","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-172-q04","answer":41.121,"note":"Dynamic Fill, 10 vertices"}
+{"id":"SDB-172-q05","answer":60.038,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-172-q06","answer":85.714,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-172-q07","answer":28.668,"note":"Dynamic Fill, 11 vertices"}
+{"id":"SDB-172-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-172-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-172-q10","answer":7200,"note":"read \"7200\""}
+{"id":"SDB-173-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-173-q08","answer":3,"note":"cv scan from the legend"}
+{"id":"SDB-173-q09","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-173-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-174-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-174-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-174-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-174-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-175-q01","answer":48,"note":"OCR 1/4\" = 1'0"}
+{"id":"SDB-175-q02","answer":29.037,"note":"east: 522.7 pt via ink runs"}
+{"id":"SDB-175-q03","answer":"unanswerable","note":"partition wall not found"}
+{"id":"SDB-175-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-175-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-175-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-175-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-175-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-175-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-176-q01","answer":994.61,"note":"graphic scale bar 0 to 25 metres over 71.3 pt"}
+{"id":"SDB-176-q02","answer":"unanswerable","note":"north wall not found"}
+{"id":"SDB-176-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-176-q04","answer":1197.996,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-176-q05","answer":1741.842,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-176-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-176-q07","answer":141.179,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-176-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-176-q09","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-176-q10","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-176-q11","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-177-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-177-q07","answer":5,"note":"cv scan from the legend"}
+{"id":"SDB-177-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-177-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-178-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-178-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-178-q09","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-178-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-178-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-179-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-179-q02","answer":6.15,"note":"partition: 174.3 pt via ink runs"}
+{"id":"SDB-179-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-179-q04","answer":22.079,"note":"Dynamic Fill, 43 vertices"}
+{"id":"SDB-179-q05","answer":22.049,"note":"Dynamic Fill, 29 vertices"}
+{"id":"SDB-179-q06","answer":26.569,"note":"Dynamic Fill, 33 vertices"}
+{"id":"SDB-179-q07","answer":8,"note":"cv scan from the legend"}
+{"id":"SDB-179-q08","answer":2,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-179-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-180-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-180-q07","answer":8,"note":"cv scan from the legend"}
+{"id":"SDB-180-q08","answer":3,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-180-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-180-q10","answer":[],"note":"pixel diff 1.1216551878524614% changed, 400 regions"}
+{"id":"SDB-181-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-181-q07","answer":17,"note":"cv scan from the legend"}
+{"id":"SDB-181-q08","answer":18,"note":"cv scan from the legend"}
+{"id":"SDB-181-q09","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-181-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-182-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-182-q08","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-182-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-182-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-182-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-183-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-183-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-183-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-183-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-183-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-183-q12","answer":[],"note":"pixel diff 3.0201468867230785% changed, 25 regions"}
+{"id":"SDB-184-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-184-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-184-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-184-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-185-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-185-q02","answer":"unanswerable","note":"north wall not found"}
+{"id":"SDB-185-q03","answer":14.041,"note":"partition: 398.0 pt via ink runs"}
+{"id":"SDB-185-q04","answer":23.096,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-185-q05","answer":46.067,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-185-q06","answer":29.07,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-185-q07","answer":21.402,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-185-q08","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-185-q09","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-185-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-186-q01","answer":100,"note":"OCR 1:100"}
+{"id":"SDB-186-q02","answer":11.63,"note":"partition: 329.7 pt via ink runs"}
+{"id":"SDB-186-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-186-q04","answer":11.431,"note":"Dynamic Fill, 8 vertices"}
+{"id":"SDB-186-q05","answer":9.298,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-186-q06","answer":28.717,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-186-q07","answer":12.771,"note":"Dynamic Fill, 6 vertices"}
+{"id":"SDB-186-q08","answer":1,"note":"cv scan from the legend"}
+{"id":"SDB-186-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-186-q10","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-186-q11","answer":3600,"note":"read \"3600\""}
+{"id":"SDB-187-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-187-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-187-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-187-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-188-q01","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q02","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q03","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q04","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q05","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q06","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q07","answer":"unanswerable","note":"sheet says NTS"}
+{"id":"SDB-188-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-188-q09","answer":0,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-188-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-189-q01","answer":50,"note":"OCR 1:50"}
+{"id":"SDB-189-q02","answer":11.307,"note":"north: 641.0 pt via ink runs"}
+{"id":"SDB-189-q03","answer":8.808,"note":"east: 499.3 pt via ink runs"}
+{"id":"SDB-189-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-189-q05","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-189-q06","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-189-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-189-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-189-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-189-q10","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-190-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-190-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-190-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-190-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-191-q01","answer":50,"note":"OCR 1:50"}
+{"id":"SDB-191-q02","answer":8.925,"note":"north: 506.0 pt via ink runs"}
+{"id":"SDB-191-q03","answer":7.632,"note":"east: 432.7 pt via ink runs"}
+{"id":"SDB-191-q04","answer":21.55,"note":"Dynamic Fill, 16 vertices"}
+{"id":"SDB-191-q05","answer":19.407,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-191-q06","answer":18.019,"note":"Dynamic Fill, 12 vertices"}
+{"id":"SDB-191-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-191-q08","answer":7,"note":"cv scan from the legend"}
+{"id":"SDB-191-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-191-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-192-q01","answer":200,"note":"OCR 1:200"}
+{"id":"SDB-192-q02","answer":24.224,"note":"partition: 343.3 pt via ink runs"}
+{"id":"SDB-192-q03","answer":24.412,"note":"east: 346.0 pt via ink runs"}
+{"id":"SDB-192-q04","answer":259.65,"note":"Dynamic Fill, 5 vertices"}
+{"id":"SDB-192-q05","answer":85.363,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-192-q06","answer":86.038,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-192-q07","answer":38.335,"note":"Dynamic Fill, 4 vertices"}
+{"id":"SDB-192-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-192-q09","answer":6,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-192-q10","answer":7200,"note":"read \"7200\""}
+{"id":"SDB-193-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-193-q08","answer":21,"note":"cv scan from the legend"}
+{"id":"SDB-193-q09","answer":9,"note":"cv scan from the legend"}
+{"id":"SDB-193-q10","answer":11,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-193-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-194-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-194-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-194-q09","answer":11,"note":"cv scan from the legend"}
+{"id":"SDB-194-q10","answer":3,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-194-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-195-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-195-q08","answer":4,"note":"cv scan from the legend"}
+{"id":"SDB-195-q09","answer":4,"note":"cv scan from the legend"}
+{"id":"SDB-195-q10","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-195-q11","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-196-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-196-q07","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-196-q08","answer":1,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-196-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-197-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-197-q07","answer":2,"note":"cv scan from the legend"}
+{"id":"SDB-197-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-197-q09","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-197-q10","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-198-q01","answer":199.98,"note":"graphic scale bar 0 to 10 metres over 141.8 pt"}
+{"id":"SDB-198-q02","answer":"unanswerable","note":"north wall not found"}
+{"id":"SDB-198-q03","answer":"unanswerable","note":"east wall not found"}
+{"id":"SDB-198-q04","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-198-q05","answer":100.573,"note":"Dynamic Fill, 18 vertices"}
+{"id":"SDB-198-q06","answer":40.664,"note":"Dynamic Fill, 13 vertices"}
+{"id":"SDB-198-q07","answer":11,"note":"cv scan from the legend"}
+{"id":"SDB-198-q08","answer":"unanswerable","note":"legend symbol not found or scan failed"}
+{"id":"SDB-198-q09","answer":"unanswerable","note":"room not found"}
+{"id":"SDB-199-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-199-q07","answer":8,"note":"cv scan from the legend"}
+{"id":"SDB-199-q08","answer":3,"note":"cv scan, hits inside the filled room"}
+{"id":"SDB-199-q09","answer":"unanswerable","note":"no printed dimension on that side"}
+{"id":"SDB-200-q01","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q02","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q03","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q04","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q05","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q06","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q07","answer":"unanswerable","note":"no scale found"}
+{"id":"SDB-200-q08","answer":6,"note":"cv scan from the legend"}
+{"id":"SDB-200-q09","answer":8,"note":"cv scan from the legend"}
+{"id":"SDB-200-q10","answer":"unanswerable","note":"room not filled"}
+{"id":"SDB-200-q11","answer":"unanswerable","note":"no printed dimension on that side"}

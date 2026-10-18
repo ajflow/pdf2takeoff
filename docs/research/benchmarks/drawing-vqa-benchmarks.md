@@ -499,3 +499,20 @@ Open: VLM-only and VLM plus tools baselines (the harness and budget in "How
 pdf2takeoff would run on them"), a held-out set of real sheets scored by hand,
 and re-running the reference once WP1 lands so the raster numbers come from the
 engine's own render path.
+
+## Status 2026-10-18, round 2: raster reference on the merged engine
+
+The raster half was rerun on the integration branch after the image-render fix (WP1), the line-removal and dihedral matcher (WP5) and the per-sheet threshold, template expansion and look-alike gate (R1). Every one of the 100 raster sheets went through the engine render path; the JPEG fallback was not used. Full tables in bench/scaled-drawing-bench/results/pdf2takeoff-reference-raster-merged.md.
+
+| Type | Accuracy before (old engine, JPEG fallback) | Accuracy after (merged engine) |
+|---|---|---|
+| scale | 34.4% | 30.1% |
+| length | 17.2% | 17.7% |
+| area | 26.4% | 21.7% |
+| perimeter | 26.9% | 24.7% |
+| count (exact) | 0% | 30.1% |
+| dimension_read | 9.7% | 10.8% |
+| compare (set F1) | 37.7% | 36.5% |
+| all | 16.5% | 23.0% |
+
+Hallucinations stayed at 0 of 55. Reading: the count gain is the new matcher; counts went from none exact to 30 percent exact on anti-aliased, degraded renders. Everything else is gated by raster scale reading, which succeeds on 36 of 93 answerable sheets, and the solver abstains downstream without a scale (333 of 968 questions answered). By notation, ratio notes read at 56.7 percent accuracy while imperial, engineer and dimension-only notations sit under 10 percent, so the next lever is OCR of imperial and engineer scale grammars plus scale bars on degraded rasters, then vertical text. The small drops on scale and area are within the noise of OCR on the same sheets and come from the engine render path producing slightly different pixels than the decoded JPEG; they are not regressions in the engine itself.

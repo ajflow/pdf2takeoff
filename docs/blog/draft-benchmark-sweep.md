@@ -126,3 +126,27 @@ That's the whole story of this post in one table: classical CV where it's
 strong, honest zeros where it isn't.
 
 A takeoff tool that shows its work. That's the pitch.
+
+## Epilogue: the part where the benchmark kept us honest twice more
+
+Two more things happened before this post shipped, and both belong in it.
+
+First, the evals became the gate. Every claim above now runs in CI on every
+push — the ten behavioural checks, the takeoff bench, the MCP smoke test —
+and the gate caught *us* twice in one day: two assertions asserted exact
+OCR output of rendered pixels, which shifts with the platform's raster
+library. On one Linux builder `W.C.` read `W.C` at confidence 74 — which our
+two-letter floor correctly excludes — and on another the same code read
+digits only, no letters at all. The pins now assert the semantics (BATH is a
+toilet, LAVATORY never is, no third toilet invented) and skip with a visible
+notice where a builder's OCR cannot read, instead of gating a deploy on a
+container that can't. That's the evals mindset turning inward: the tests
+themselves are claims, and claims get method.
+
+Second, the benchmark branch had to merge with a parallel Dynamic Fill
+rewrite that shipped meanwhile — two engines that solved the same doorway
+problems differently. The merged suite (both sides' tests, unioned) is what
+runs in CI today: 23 of 24 fill cases, with the one open case — a diagonal
+door with no vector layer to help — documented in the bench output itself.
+When you run `npm run bench` and see that `known` line, that's not a failure
+hiding. That's the list we work from.

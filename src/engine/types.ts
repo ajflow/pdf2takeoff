@@ -33,5 +33,30 @@ export interface ScanHit {
 }
 
 export type ScanResult =
-  | { hits: ScanHit[]; provider: 'cv' | 'detector' | 'vector'; templatePx?: number; note?: string; truncated?: boolean }
+  | {
+      hits: ScanHit[];
+      provider: 'cv' | 'detector' | 'vector';
+      templatePx?: number;
+      note?: string;
+      truncated?: boolean;
+      /** Tier 1 only: set when the line-removal pre-pass produced this result. */
+      lineRemoval?: { trigger: string; strokeWidth: number; minRun: number; removedPx: number };
+      /** Tier 1 only: the matching stage's settings and what each step did. */
+      cv?: {
+        /** Signature distance threshold the hits were taken at. */
+        matchDistance: number;
+        /** 'auto' when read off the sheet's distance distribution, 'option' when passed in, 'default' otherwise. */
+        thresholdSource: 'auto' | 'option' | 'default';
+        /** Candidate components that passed the size and fill bands (the distribution the threshold was read from). */
+        candidates: number;
+        /** Template-expansion rounds that added templates (0 = base template only). */
+        expansionRounds: number;
+        /** Templates matched against after expansion (1 = the clicked symbol). */
+        templates: number;
+        /** Set when expansion was cut short, and why. */
+        expansionStopped?: string;
+        /** Text boxes erased from the ink mask before matching. */
+        textBoxesMasked?: number;
+      };
+    }
   | { error: string };

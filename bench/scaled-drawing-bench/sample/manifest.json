@@ -1,0 +1,173 @@
+{
+  "benchmark": "ScaledDrawingBench",
+  "version": "0.1",
+  "seed": 12,
+  "count": 5,
+  "generator": "scripts/scaled-drawing-bench.mjs generate",
+  "licence": {
+    "code": "Apache-2.0 (the generator, scorer and reference solver, like the rest of pdf2takeoff)",
+    "data": "CC BY 4.0 (the generated sheets, questions and answer key)",
+    "attribution": "ScaledDrawingBench, pdf2takeoff contributors, https://github.com/ajflow/pdf2takeoff"
+  },
+  "conventions": {
+    "area": "between the inside faces of the walls (net floor area)",
+    "externalWallLength": "along the outside face",
+    "partitionLength": "centreline, between the centrelines of the bounding external walls, door openings included",
+    "doors": "plain openings in the wall, no leaf or swing drawn",
+    "symbols": "paper-size symbols (9 pt); the legend instance is not counted",
+    "rasterHalf": "rendered at 150 dpi, one degradation recipe per sheet, embedded as a JPEG image PDF (no text layer)"
+  },
+  "halves": {
+    "vector": 3,
+    "raster": 2
+  },
+  "recipes": {
+    "noise": 1,
+    "blur": 1
+  },
+  "questions": {
+    "total": 51,
+    "unanswerable": 0,
+    "byType": {
+      "scale": 5,
+      "length": 10,
+      "area": 12,
+      "perimeter": 5,
+      "count": 13,
+      "dimension_read": 5,
+      "compare": 1
+    }
+  },
+  "sheets": [
+    {
+      "id": "SDB-001",
+      "file": "sheets/SDB-001.pdf",
+      "page": 1,
+      "kind": "vector",
+      "size": "A1",
+      "widthPt": 2384,
+      "heightPt": 1684,
+      "rotated": true,
+      "notation": "ratio",
+      "units": "m",
+      "ratio": 100,
+      "nts": false,
+      "rooms": 5,
+      "symbols": 11,
+      "legend": [
+        "smoke detector",
+        "downlight",
+        "diffuser"
+      ],
+      "revB": null,
+      "recipe": null,
+      "questions": 10
+    },
+    {
+      "id": "SDB-002",
+      "file": "sheets/SDB-002.pdf",
+      "page": 1,
+      "kind": "vector",
+      "size": "ARCH D",
+      "widthPt": 2592,
+      "heightPt": 1728,
+      "rotated": true,
+      "notation": "imperial",
+      "units": "ft",
+      "ratio": 96,
+      "nts": false,
+      "rooms": 4,
+      "symbols": 34,
+      "legend": [
+        "gpo",
+        "switch",
+        "diffuser"
+      ],
+      "revB": "sheets/SDB-002-revB.pdf",
+      "recipe": null,
+      "questions": 10
+    },
+    {
+      "id": "SDB-003",
+      "file": "sheets/SDB-003.pdf",
+      "page": 1,
+      "kind": "vector",
+      "size": "A1",
+      "widthPt": 2384,
+      "heightPt": 1684,
+      "rotated": false,
+      "notation": "bar",
+      "units": "m",
+      "ratio": 200,
+      "nts": false,
+      "rooms": 6,
+      "symbols": 15,
+      "legend": [
+        "gpo",
+        "downlight",
+        "smoke detector"
+      ],
+      "revB": null,
+      "recipe": null,
+      "questions": 11
+    },
+    {
+      "id": "SDB-004",
+      "file": "sheets/SDB-004.pdf",
+      "page": 1,
+      "kind": "raster",
+      "size": "A3",
+      "widthPt": 1191,
+      "heightPt": 842,
+      "rotated": false,
+      "notation": "ratio",
+      "units": "m",
+      "ratio": 200,
+      "nts": false,
+      "rooms": 5,
+      "symbols": 16,
+      "legend": [
+        "smoke detector",
+        "downlight",
+        "diffuser"
+      ],
+      "revB": null,
+      "recipe": "noise",
+      "questions": 10,
+      "imagePx": [
+        2480,
+        1753
+      ],
+      "dpi": 150
+    },
+    {
+      "id": "SDB-005",
+      "file": "sheets/SDB-005.pdf",
+      "page": 1,
+      "kind": "raster",
+      "size": "A1",
+      "widthPt": 2384,
+      "heightPt": 1684,
+      "rotated": true,
+      "notation": "bar",
+      "units": "m",
+      "ratio": 100,
+      "nts": false,
+      "rooms": 6,
+      "symbols": 11,
+      "legend": [
+        "diffuser",
+        "smoke detector",
+        "switch"
+      ],
+      "revB": null,
+      "recipe": "blur",
+      "questions": 10,
+      "imagePx": [
+        3507,
+        4966
+      ],
+      "dpi": 150
+    }
+  ]
+}

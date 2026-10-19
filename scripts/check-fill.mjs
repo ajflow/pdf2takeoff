@@ -8,8 +8,18 @@
 // not cut across them) and a door in a horizontal wall (row-wise closing).
 // A third covers the wall-end gate: a bench line near a wall must not be
 // closed onto it, and doors in thick filled walls still bridge. A fourth
-// covers splits: by room labels, and with no hints at all by the doorway
-// widths the sheet itself shows (kept only for room-sized cuts).
+// covers label-driven splits, and a fifth bare doorways that never leak:
+// two rooms joined by a door-width gap split without labels or a scale, a
+// niche stays part of its room, and an opening wider than a door only
+// closes once a scale says it is still door-sized. A sixth covers door
+// swing arcs (the fill runs to the door line, not the arc), a seventh text
+// in a doorway (masked through FillHints.textBoxes, while a box over a wall
+// leaves the wall), and an eighth a front door wider than any interior
+// doorway: sealed because it faces the page exterior, while an interior
+// opening of the same width is judged on what lies behind it (a room is
+// cut off, an alcove is kept).
+// (merged from main 2026-10-19) // covers splits: by room labels, and with no hints at all by the doorway
+// // widths the sheet itself shows (kept only for room-sized cuts).
 
 import { dynamicFill, sheetDoorWidthPx } from '../src/engine/dynamicfill.ts';
 
@@ -190,6 +200,256 @@ const aG = area(r.points);
 console.log(`room G (labelled rooms joined by a door): area ${aG.toFixed(0)} (ideal ~41561)`);
 if (Math.abs(aG - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split: ${aG}`); process.exit(1); }
 
+// --- ink-edge area: the outline runs along the ink face, not through the
+// centres of the last free pixels (which inset every wall by half a pixel
+// and undercount a room by half its perimeter). On clean pixel rooms the
+// area must be exact to well under 1%.
+for (const [label, got, ideal] of [['room A', aA, 20511], ['room B', aB, 17331], ['L room', aL, 29601], ['room E', aE, 179025]]) {
+  if (Math.abs(got - ideal) / ideal > 0.005) { console.error(`FAIL ink-edge area ${label}: ${got} vs ${ideal} (${(100 * (got - ideal) / ideal).toFixed(2)}%)`); process.exit(1); }
+}
+console.log('ink-edge area: sealed, gapped, concave and thick-wall rooms exact to 0.5%');
+
+// --- fifth sheet: bare door gaps that never leak (P13) ------------------------
+const W5 = 900;
+const H5 = 500;
+const px5 = new Uint8ClampedArray(W5 * H5 * 4).fill(255);
+const box5 = (x0, y0, x1, y1) => {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = (y * W5 + x) * 4;
+    px5[i] = px5[i + 1] = px5[i + 2] = 0;
+  }
+};
+// rooms J and K: 20..420 x 20..320 inside a sealed outline, split by a wall at
+// x 220 with a 70px bare doorway between wall ends (y 150..219), no leaf, no
+// labels, no scale: the fill never leaks, so only the room-sized cut rule
+// can separate them
+box5(20, 20, 420, 20); box5(20, 320, 420, 320); box5(20, 20, 20, 320); box5(420, 20, 420, 320);
+box5(220, 20, 220, 149); box5(220, 220, 220, 320);
+// room L: 500..880 x 20..320 with a 1.2 m2-ish niche (60 x 80 px) off its
+// right wall, open through a 60px gap between wall ends: a niche is floor
+box5(500, 20, 820, 20); box5(500, 320, 820, 320); box5(500, 20, 500, 320);
+box5(820, 20, 820, 130); box5(820, 190, 820, 320);
+box5(820, 130, 880, 130); box5(820, 190, 880, 190); box5(880, 130, 880, 190);
+// rooms M and N: 20..420 x 350..490, split by a wall at x 220 whose two
+// stubs leave a 110px opening between wall ends (y 365..474): wider than any
+// unscaled rung, so without a scale the two stay one region; a scale that
+// makes the opening 1.2 m cuts it as a wide doorway, one that makes it
+// 1.5 m leaves it open
+box5(20, 350, 420, 350); box5(20, 490, 420, 490); box5(20, 350, 20, 490); box5(420, 350, 420, 490);
+box5(220, 350, 220, 364); box5(220, 475, 220, 490);
+const raster5 = { width: W5, height: H5, data: px5, toPdf: (x, y) => ({ x, y: H5 - y }), toRaster: (x, y) => ({ x, y: H5 - y }) };
+const at5 = (x, y) => ({ x, y: H5 - y });
+
+// 10. room J alone: 199 x 299 = 59501 (the merged pair would be 399 x 299 = 119301)
+r = dynamicFill(raster5, at5(120, 170));
+if ('error' in r) { console.error('FAIL room J (bare doorway, no hints):', r.error); process.exit(1); }
+const aJ = area(r.points);
+console.log(`room J (bare 70px doorway, no leak, no hints): area ${aJ.toFixed(0)} (ideal ~59501), gapPx ${r.gapPx}`);
+if (Math.abs(aJ - 59501) / 59501 > 0.01) { console.error(`FAIL room J not cut from K at the doorway: ${aJ}`); process.exit(1); }
+if (!(r.gapPx >= 70 && r.gapPx <= 72)) { console.error(`FAIL room J gap report: ${r.gapPx}`); process.exit(1); }
+
+// 11. room L keeps its niche: 319 x 299 + 59 x 59 = 95381 + 3481 = 98862
+r = dynamicFill(raster5, at5(660, 170));
+if ('error' in r) { console.error('FAIL room L (niche):', r.error); process.exit(1); }
+const aLn = area(r.points);
+console.log(`room L (niche through a 60px gap): area ${aLn.toFixed(0)} (ideal ~98862 with the niche)`);
+if (Math.abs(aLn - 98862) / 98862 > 0.01) { console.error(`FAIL room L lost its niche: ${aLn}`); process.exit(1); }
+
+// 12. a 110px opening is wider than the unscaled ladder closes: rooms M and N
+// stay one region (399 x 139 = 55461); at a scale where 110 px is 1.2 m the
+// wide-doorway rung cuts them (199 x 139 = 27661); at 1.5 m it does not
+r = dynamicFill(raster5, at5(120, 420));
+if ('error' in r) { console.error('FAIL room M (wide opening, no scale):', r.error); process.exit(1); }
+const aM = area(r.points);
+console.log(`room M (110px opening, no scale): area ${aM.toFixed(0)} (ideal ~55461, stays merged)`);
+if (Math.abs(aM - 55461) / 55461 > 0.01) { console.error(`FAIL room M unexpectedly cut or leaked: ${aM}`); process.exit(1); }
+r = dynamicFill(raster5, at5(120, 420), undefined, { metersPerPt: 1.2 / 110 });
+if ('error' in r) { console.error('FAIL room M (wide opening, 1.2 m):', r.error); process.exit(1); }
+const aMs = area(r.points);
+console.log(`room M (110px opening = 1.2 m): area ${aMs.toFixed(0)} (ideal ~27661, cut at the wide doorway)`);
+if (Math.abs(aMs - 27661) / 27661 > 0.01) { console.error(`FAIL room M not cut at the wide doorway: ${aMs}`); process.exit(1); }
+r = dynamicFill(raster5, at5(120, 420), undefined, { metersPerPt: 1.5 / 110 });
+if ('error' in r) { console.error('FAIL room M (wide opening, 1.5 m):', r.error); process.exit(1); }
+const aMw = area(r.points);
+console.log(`room M (110px opening = 1.5 m): area ${aMw.toFixed(0)} (ideal ~55461, an opening, not a door)`);
+if (Math.abs(aMw - 55461) / 55461 > 0.01) { console.error(`FAIL room M cut at a 1.5 m opening: ${aMw}`); process.exit(1); }
+
+// --- sixth sheet: a door swing arc is not a wall ------------------------------
+// Room P: 8px filled walls, outer 20..420 x 20..320 (inner 28..412 x 28..312),
+// a 90px door in the bottom wall (x 150..239) drawn as an open-door symbol:
+// a 1px leaf from the hinge jamb (150, 312) straight up into the room and a
+// 1px quarter arc from the leaf tip round to the far jamb (239, 312). At
+// 0.01 m/pt the door is 0.9 m. The fill must run to the door line, not stop
+// at the arc: inner area 385 x 285 = 109725 less the ~90 leaf pixels.
+const W6 = 800;
+const H6 = 600;
+const px6 = new Uint8ClampedArray(W6 * H6 * 4).fill(255);
+const ink6 = (x, y) => {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x < 0 || y < 0 || x >= W6 || y >= H6) return;
+  const i = (y * W6 + x) * 4;
+  px6[i] = px6[i + 1] = px6[i + 2] = 0;
+};
+const box6 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ink6(x, y); };
+box6(20, 20, 420, 27); box6(20, 20, 27, 320); box6(413, 20, 420, 320);
+box6(20, 313, 149, 320); box6(240, 313, 420, 320);
+for (let y = 222; y <= 312; y++) ink6(150, y); // leaf, hinge at (150, 312), tip at (150, 222)
+for (let k = 0; k <= 600; k++) { // arc of radius 90 about the hinge, from the tip (up) round to the far jamb (right)
+  const a = -Math.PI / 2 + (Math.PI / 2) * (k / 600);
+  ink6(150 + 90 * Math.cos(a), 312 + 90 * Math.sin(a));
+}
+const raster6 = { width: W6, height: H6, data: px6, toPdf: (x, y) => ({ x, y: H6 - y }), toRaster: (x, y) => ({ x, y: H6 - y }) };
+const at6 = (x, y) => ({ x, y: H6 - y });
+
+// 13. the swing sector (pi/4 x 90^2 = 6362 px, 5.8% of the room) is floor
+r = dynamicFill(raster6, at6(300, 150), undefined, { metersPerPt: 0.01 });
+if ('error' in r) { console.error('FAIL room P (door swing arc):', r.error); process.exit(1); }
+const aP = area(r.points);
+console.log(`room P (open-door symbol, leaf and swing arc): area ${aP.toFixed(0)} (ideal ~109635 to the door line; ~103273 if the arc walls off the swing), swings ${r.swings}`);
+if (Math.abs(aP - 109635) / 109635 > 0.01) { console.error(`FAIL room P stopped at the swing arc: ${aP}`); process.exit(1); }
+if (!r.swings) { console.error('FAIL room P did not report the swing it erased'); process.exit(1); }
+// and the same without a scale: the arc is still door-sized in px
+r = dynamicFill(raster6, at6(300, 150));
+if ('error' in r || Math.abs(area(r.points) - 109635) / 109635 > 0.01) { console.error(`FAIL room P without a scale: ${'error' in r ? r.error : area(r.points)}`); process.exit(1); }
+
+// --- seventh sheet: text in a doorway is not a wall end --------------------
+// Rooms Q and R: 20..420 x 20..320 split by a 1px wall at x 220 with a 70px
+// doorway between wall ends (y 150..219), as rooms J and K, but a dimension
+// string sits in the doorway: five small glyph-like rings of 1px ink. The
+// ink breaks the free run between the wall ends into short runs ending on
+// glyph ink, which no rung may close, so the fill merges the rooms unless
+// the host's text boxes erase the glyphs first.
+const W7 = 800;
+const H7 = 500;
+const px7 = new Uint8ClampedArray(W7 * H7 * 4).fill(255);
+const ink7 = (x, y) => {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x < 0 || y < 0 || x >= W7 || y >= H7) return;
+  const i = (y * W7 + x) * 4;
+  px7[i] = px7[i + 1] = px7[i + 2] = 0;
+};
+const box7 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ink7(x, y); };
+box7(20, 20, 420, 20); box7(20, 320, 420, 320); box7(20, 20, 20, 320); box7(420, 20, 420, 320);
+box7(220, 20, 220, 149); box7(220, 220, 220, 320);
+for (let g = 0; g < 5; g++) { // "glyphs": rings of radius 4 down the doorway, on the wall line
+  const cy = 160 + g * 12;
+  for (let k = 0; k < 40; k++) ink7(220 + 4 * Math.cos((k * Math.PI) / 20), cy + 4 * Math.sin((k * Math.PI) / 20));
+}
+const raster7 = { width: W7, height: H7, data: px7, toPdf: (x, y) => ({ x, y: H7 - y }), toRaster: (x, y) => ({ x, y: H7 - y }) };
+const at7 = (x, y) => ({ x, y: H7 - y });
+
+// 14. without the text box the glyph ink stops every rung: Q and R merge
+// (399 x 299 = 119301 less the glyph ink); with it, Q alone (199 x 299 = 59501)
+r = dynamicFill(raster7, at7(120, 170));
+if ('error' in r) { console.error('FAIL room Q (glyphs in the doorway, no text box):', r.error); process.exit(1); }
+const aQ0 = area(r.points);
+r = dynamicFill(raster7, at7(120, 170), undefined, { textBoxes: [{ x0: 214, y0: 154, x1: 227, y1: 215 }] });
+if ('error' in r) { console.error('FAIL room Q (glyphs in the doorway, text box):', r.error); process.exit(1); }
+const aQ = area(r.points);
+console.log(`room Q (glyphs in the doorway): area ${aQ0.toFixed(0)} without the text box, ${aQ.toFixed(0)} with it (ideal ~59501 alone, ~119301 merged)`);
+if (Math.abs(aQ - 59501) / 59501 > 0.01) { console.error(`FAIL room Q not cut from R once the glyphs were masked: ${aQ}`); process.exit(1); }
+if (aQ0 < 100000) { console.error(`FAIL room Q check is not failing-first: the doorway closed without the text box (${aQ0})`); process.exit(1); }
+// a text box over a wall must not open it: the wall is straight ink and stays
+r = dynamicFill(raster7, at7(120, 170), undefined, { textBoxes: [{ x0: 214, y0: 154, x1: 227, y1: 215 }, { x0: 200, y0: 40, x1: 240, y1: 100 }] });
+if ('error' in r || Math.abs(area(r.points) - 59501) / 59501 > 0.01) { console.error(`FAIL text box over a wall opened it: ${'error' in r ? r.error : area(r.points)}`); process.exit(1); }
+
+// --- eighth sheet: a wide front door, judged by where it leads -------------
+// Rooms S and T: 20..520 x 20..320 inside a sealed outline, split by a wall
+// at x 270 with a 160px opening between wall ends (y 80..239). S has a 160px
+// front door in its left wall (y 80..239) to the page exterior and a 190 x
+// 60 px alcove off its bottom wall (x 45..234, y 320..380). At 0.01 m/pt the
+// openings are 1.6 and 1.9 m: wider than a door, so a fill from S runs off
+// the page and no rung up to 1.3 m may cut S from T. The leak rung (2 m)
+// closes all three gaps; then only the front door, which faces the
+// exterior, stays sealed and the interior openings are judged on their
+// own, each at its own width: T is a room and is cut off, the alcove
+// (1.1 m2) is floor and stays.
+const W8 = 1000;
+const H8 = 600;
+const px8 = new Uint8ClampedArray(W8 * H8 * 4).fill(255);
+const O8 = 120; // margin: runs from the page edge shorter than a rung close, so the outline keeps clear of the edge
+const box8 = (x0, y0, x1, y1) => {
+  x0 += O8; x1 += O8; y0 += O8; y1 += O8;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = (y * W8 + x) * 4;
+    px8[i] = px8[i + 1] = px8[i + 2] = 0;
+  }
+};
+box8(20, 20, 520, 20); box8(520, 20, 520, 320); box8(235, 320, 520, 320);
+box8(20, 20, 20, 79); box8(20, 240, 20, 320); box8(20, 320, 44, 320);
+box8(270, 20, 270, 79); box8(270, 240, 270, 320);
+box8(45, 320, 45, 380); box8(45, 380, 235, 380); box8(235, 320, 235, 380);
+const raster8 = { width: W8, height: H8, data: px8, toPdf: (x, y) => ({ x, y: H8 - y }), toRaster: (x, y) => ({ x, y: H8 - y }) };
+const at8 = (x, y) => ({ x: x + O8, y: H8 - y - O8 });
+
+// 15. S with its alcove: 249 x 299 + 189 x 59 = 74451 + 11151 = 85602 (S and T merged would be 160053)
+r = dynamicFill(raster8, at8(150, 170), undefined, { metersPerPt: 0.01 });
+if ('error' in r) { console.error('FAIL room S (1.6 m front door):', r.error); process.exit(1); }
+const aS = area(r.points);
+console.log(`room S (1.6 m front door, 1.6 m opening to T, 1.9 m alcove): area ${aS.toFixed(0)} (ideal ~85602 with the alcove, without T), gapPx ${r.gapPx}`);
+if (Math.abs(aS - 85602) / 85602 > 0.01) { console.error(`FAIL room S: ${aS} (T merged in, or the alcove cut off)`); process.exit(1); }
+// 16. T alone through the same opening: 249 x 299 = 74451
+r = dynamicFill(raster8, at8(400, 170), undefined, { metersPerPt: 0.01 });
+if ('error' in r) { console.error('FAIL room T (behind the 1.6 m opening):', r.error); process.exit(1); }
+const aT = area(r.points);
+console.log(`room T (1.6 m opening to S): area ${aT.toFixed(0)} (ideal ~74451)`);
+if (Math.abs(aT - 74451) / 74451 > 0.01) { console.error(`FAIL room T: ${aT}`); process.exit(1); }
+// without a scale the 160px gaps are wider than any unscaled rung — but this
+// sheet shows TWO of them at the same width, and the merged engine's sheet
+// door-width rule (PR #3) takes agreeing wall-end gaps as the sheet's own
+// doorway width: the fill bounds at that rule with the same area the scale
+// produces, and says it read the width off the sheet
+r = dynamicFill(raster8, at8(150, 170));
+if ('error' in r) { console.error(`FAIL room S without a scale (sheet door width should bound it): ${r.error}`); process.exit(1); }
+const aSnoscale = area(r.points);
+if (Math.abs(aSnoscale - aS) / aS > 0.01 || r.doorSource !== 'sheet') { console.error(`FAIL room S without a scale: area ${aSnoscale.toFixed(0)} (want ~${aS.toFixed(0)}), doorSource ${r.doorSource}`); process.exit(1); }
+
+// --- ninth sheet: a curved wall is not a door swing ---------------------------
+// Room U: 8px filled walls on three sides, and across the bottom gap a thin
+// 1px semicircular partition (radius 100 about (220, 313)) bulging INTO the
+// room — a curved wall/apse a thin-line drawing would show. A small curvy
+// furniture ring sits 4 px from the arc's centre, so the old hinge gate
+// ("any ink near the centre") read the curve as a 1 m door swing: the arc
+// was erased and chorded and the bulge silently re-entered the room. A real
+// swing pivots on line ink of its own (jamb or leaf), never on a curvy blob
+// alone.
+const W9 = 800;
+const H9 = 600;
+const px9 = new Uint8ClampedArray(W9 * H9 * 4).fill(255);
+const ink9 = (x, y) => {
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x < 0 || y < 0 || x >= W9 || y >= H9) return;
+  const i = (y * W9 + x) * 4;
+  px9[i] = px9[i + 1] = px9[i + 2] = 0;
+};
+const box9 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ink9(x, y); };
+box9(20, 20, 419, 27); box9(20, 20, 27, 320); box9(412, 20, 419, 320);
+box9(20, 313, 119, 320); box9(320, 313, 419, 320);
+for (let k = 0; k <= 900; k++) { // the curve: semicircle of radius 100 bulging up from y=313
+  const a = Math.PI + Math.PI * (k / 900);
+  ink9(220 + 100 * Math.cos(a), 313 + 100 * Math.sin(a));
+}
+for (let k = 0; k < 64; k++) { // furniture: a 6px ring 4px off the arc centre
+  const a = (2 * Math.PI * k) / 64;
+  ink9(224 + 3 * Math.cos(a), 309 + 3 * Math.sin(a));
+}
+const raster9 = { width: W9, height: H9, data: px9, toPdf: (x, y) => ({ x, y: H9 - y }), toRaster: (x, y) => ({ x, y: H9 - y }) };
+const at9 = (x, y) => ({ x, y: H9 - y });
+
+// 17. U with its curved partition: 384 x 285 = 109440 less the half-disc
+// pi*100^2/2 = 15708 -> 93732 (the arc erased and chorded off as a swing
+// would read ~109440, the bulge back in the room)
+r = dynamicFill(raster9, at9(220, 150), undefined, { metersPerPt: 0.01 });
+if ('error' in r) { console.error('FAIL room U (curved wall):', r.error); process.exit(1); }
+const aU = area(r.points);
+console.log(`room U (curved wall, curvy furniture by its centre): area ${aU.toFixed(0)} (ideal ~93732 with the curve; ~109440 if the arc were chorded off), swings ${r.swings}`);
+if (Math.abs(aU - 93732) / 93732 > 0.01) { console.error(`FAIL room U lost the curve to a phantom swing: ${aU}`); process.exit(1); }
+if (r.swings) { console.error(`FAIL room U reported ${r.swings} swing(s) on a curved wall`); process.exit(1); }
+
+// --- merged from main (PR #3): the no-hints doorway rule and slot decoys ---
 // 10. no hints at all (a scan before calibration): the sheet shows two
 // doorway widths (the 40px door and the 60px alcove opening; the gaps
 // between the two boxes face the sheet edge). Tried narrowest first, the
@@ -245,4 +505,4 @@ const slotSheet = (slotPx) => {
   if (dp40 < 38 || dp40 > 42) { console.error(`FAIL door-sized slots not reported: ${dp40}px`); process.exit(1); }
 }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; unbounded errors');
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; curved walls kept; wide front doors sealed by where they lead; unbounded errors');

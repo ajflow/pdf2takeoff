@@ -45,7 +45,46 @@ const INCH = String.raw`(?:"|''|in\b|inch(?:es)?)`;
 const FOOT = String.raw`(?:'|ft\b|feet|foot)`;
 const ARCH = new RegExp(String.raw`^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*${INCH}\s*=\s*1\s*${FOOT}\s*(?:-?\s*0\s*${INCH}?)?$`, 'i');
 const ENG = new RegExp(String.raw`^1\s*${INCH}\s*=\s*(\d+(?:\.\d+)?)\s*${FOOT}\s*(?:-?\s*0\s*${INCH}?)?$`, 'i');
+/** A keyword'd bare architectural fraction: the note's '= 1'-0"' half did not survive the scan. */
+const ARCH_LEFT_ONLY = new RegExp(String.raw`^(\d+\/\d+)\s*${INCH}$`, 'i');
+/** A fused engineer note: leading 1" and trailing foot mark lost ('"=10' for 1" = 10'). */
+const ENG_FUSED = new RegExp(String.raw`^[="']+\s*(\d{1,3})\s*'?"?$`);
 const NTS = /^(n\.?\s*t\.?\s*s\.?|not\s+to\s+scale)$/i;
+
+/**
+ * The ratios a printed imperial or engineer note can mean: 12 divided by the
+ * architectural inch fractions (1/16" to 6" per foot) and 12 times the
+ * engineer feet (10 to 100 per inch). A parse outside this set (2.5 percent
+ * tolerance) is OCR damage, not a scale: 12/14 from a `1/4"` whose slash the
+ * recogniser dropped must be repaired or rejected, never answered with.
+ */
+const IMPERIAL_RATIOS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 120, 240, 360, 480, 600, 720, 960, 1200];
+function nearImperialStandard(ratio: number): boolean {
+  return IMPERIAL_RATIOS.some((s) => Math.abs(ratio - s) / s <= 0.025);
+}
+
+/** Architectural fractions as the OCR prints them with the slash dropped ("14" for 1/4"). */
+const LOST_SLASH: Record<string, string> = {
+  '14': '1/4', '18': '1/8', '12': '1/2', '34': '3/4', '38': '3/8',
+  '116': '1/16', '316': '3/16', '132': '1/32', '332': '3/32',
+};
+
+/**
+ * Letter-for-digit slips inside the numbers of a scale note (`2O'` for 20',
+ * `IOO` for 100). Applied per token and kept only when the token becomes a
+ * pure number with scale punctuation — words are never rewritten.
+ */
+function repairDigits(s: string): string {
+  const slips: Record<string, string> = { O: '0', o: '0', I: '1', l: '1', i: '1', S: '5', B: '8', Z: '2', G: '6' };
+  return s
+    .split(' ')
+    .map((tok) => {
+      if (!/[0-9]/.test(tok) && !/[OIl]/.test(tok)) return tok;
+      const fixed = tok.replace(/[OoIlisSBZG]/g, (c) => slips[c] ?? c);
+      return /^[\d:./'"=-]+$/i.test(fixed) || /^[\d./'"=-]*(?:ft|in)\b/i.test(fixed) ? fixed : tok;
+    })
+    .join(' ');
+}
 
 function inches(raw: string): number {
   const mixed = raw.match(/^(\d+)\s+(\d+)\/(\d+)$/);
@@ -64,10 +103,12 @@ function inches(raw: string): number {
 export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: ScaleVote[]; nts: boolean } {
   const clean = words.map((w) => ({ ...w, text: w.text.trim() })).filter((w) => w.text);
   const votes: ScaleVote[] = [];
+  // candidate readings with their token spans; a reading contained in a
+  // longer kept reading is a fragment of it (the full 'SCALE: 1/4" = 1'-0"'
+  // beats its own 'SCALE: 1/4"' prefix), so the longest reading of a note
+  // wins over the fragments inside it
+  const found: { s: number; e: number; vote: Omit<ScaleVote, 'source'> & { label: string }; at: { x: number; y: number }; conf: number }[] = [];
   let nts = false;
-  // one vote per token span end: windows are tried earliest start first, so
-  // the longest reading of a note wins over the fragments inside it
-  const ended = new Set<number>();
   for (let i = 0; i < clean.length; i++) {
     const prevKeyword = i > 0 && /^scale\s*:?$/i.test(clean[i - 1].text);
     for (let n = 1; n <= 6 && i + n <= clean.length; n++) {
@@ -86,36 +127,83 @@ export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: 
       const at = { x: clean[i].xPt, y: clean[i].yPt };
       const conf = clean[i].conf;
       let vote: Omit<ScaleVote, 'source'> & { label: string } | null = null;
-      let m: RegExpMatchArray | null;
-      if ((m = s.match(RATIO))) {
-        const ratio = parseInt(m[1], 10);
-        if (keyword ? ratio >= 1 : ratio >= 10) vote = { ratio, weight: 1, kind: 'ratio', keyword, label: `1:${ratio}` };
-      } else if ((m = s.match(ARCH))) {
-        const v = inches(m[1]);
-        if (v > 0) vote = { ratio: Math.round((12 / v) * 1000) / 1000, weight: 1, kind: 'imperial', keyword, label: s };
-      } else if ((m = s.match(ENG))) {
-        const ft = parseFloat(m[1]);
-        if (ft > 0) vote = { ratio: 12 * ft, weight: 1, kind: 'imperial', keyword, label: s };
-      } else if (/^full\s*size$/i.test(s)) {
-        vote = { ratio: 1, weight: 1, kind: 'size', keyword, label: 'FULL SIZE' };
-      } else if (/^half\s*size$/i.test(s)) {
-        vote = { ratio: 2, weight: 1, kind: 'size', keyword, label: 'HALF SIZE' };
-      } else if (keyword && ((m = s.match(COLON_SUBSTITUTE)) || (m = s.match(SPACED)))) {
-        const ratio = parseInt(m[1], 10);
-        vote = { ratio, weight: 0.5, kind: 'guess', keyword, label: `${s} read as 1:${ratio}` };
-      } else if (keyword && (m = s.match(RUN_TOGETHER))) {
-        const ratio = parseInt(m[1], 10);
-        const whole = parseInt(s, 10);
-        if (PREFERRED.has(ratio) && !PREFERRED.has(whole)) {
-          vote = { ratio, weight: 0.4, kind: 'guess', keyword, label: `${s} read as 1:${ratio}` };
+      const parse = (str: string, repaired: boolean): Omit<ScaleVote, 'source'> & { label: string } | null => {
+        let m: RegExpMatchArray | null;
+        if ((m = str.match(RATIO))) {
+          const ratio = parseInt(m[1], 10);
+          if (keyword ? ratio >= 1 : ratio >= 10) return { ratio, weight: repaired ? 0.8 : 1, kind: 'ratio', keyword, label: repaired ? `${str} (digits repaired)` : `1:${ratio}` };
+        } else if ((m = str.match(ARCH))) {
+          const v = inches(m[1]);
+          if (v <= 0) return null;
+          let ratio = 12 / v;
+          // a parse outside the printed standard is OCR damage: `1/4"` with
+          // the slash dropped reads as 14 inches and 12/14 is no scale. Try
+          // the fraction with its slash back before giving up
+          let via = str;
+          if (!nearImperialStandard(ratio) && LOST_SLASH[m[1]]) {
+            const mended = LOST_SLASH[m[1]];
+            if (nearImperialStandard(12 / inches(mended))) {
+              ratio = 12 / inches(mended);
+              via = `${mended}" = 1'-0"`;
+            }
+          }
+          if (!nearImperialStandard(ratio)) return null;
+          return { ratio: Math.round(ratio * 1000) / 1000, weight: via === str ? 1 : 0.9, kind: 'imperial', keyword, label: via === str ? str : `${str} read as ${via}` };
+        } else if ((m = str.match(ENG))) {
+          const ft = parseFloat(m[1]);
+          if (ft <= 0) return null;
+          const ratio = 12 * ft;
+          if (!nearImperialStandard(ratio)) return null;
+          return { ratio, weight: repaired ? 0.9 : 1, kind: 'imperial', keyword, label: repaired ? `${str} (digits repaired)` : str };
+        } else if (keyword && (m = str.match(ENG_FUSED))) {
+          // the whole note fused into one token with the leading 1" and the
+          // trailing foot mark lost ('"=10' for 1" = 10')
+          const ft = parseInt(m[1], 10);
+          const ratio = 12 * ft;
+          if (!nearImperialStandard(ratio)) return null;
+          return { ratio, weight: 0.7, kind: 'imperial', keyword, label: `${str} read as 1" = ${ft}'` };
+        } else if (keyword && (m = str.match(ARCH_LEFT_ONLY))) {
+          // the note's right side is the smallest print in the title block and
+          // the first thing a degraded scan destroys: a keyword'd bare
+          // fraction ('SCALE: 1/4"', '= 1'-0"' unread) still names the scale,
+          // gated to the printed standards and weighted below a whole note
+          const v = inches(m[1]);
+          const ratio = 12 / v;
+          if (nearImperialStandard(ratio)) return { ratio, weight: 0.6, kind: 'imperial', keyword, label: `${str} (right side unread)` };
+        } else if (/^full\s*size$/i.test(str)) {
+          return { ratio: 1, weight: 1, kind: 'size', keyword, label: 'FULL SIZE' };
+        } else if (/^half\s*size$/i.test(str)) {
+          return { ratio: 2, weight: 1, kind: 'size', keyword, label: 'HALF SIZE' };
+        } else if (keyword && ((m = str.match(COLON_SUBSTITUTE)) || (m = str.match(SPACED)))) {
+          const ratio = parseInt(m[1], 10);
+          return { ratio, weight: 0.5, kind: 'guess', keyword, label: `${str} read as 1:${ratio}` };
+        } else if (keyword && (m = str.match(RUN_TOGETHER))) {
+          const ratio = parseInt(m[1], 10);
+          const whole = parseInt(str, 10);
+          if (PREFERRED.has(ratio) && !PREFERRED.has(whole)) {
+            return { ratio, weight: 0.4, kind: 'guess', keyword, label: `${str} read as 1:${ratio}` };
+          }
         }
-      }
+        return null;
+      };
+      vote = parse(s, false) ?? (() => {
+        const fixedStr = repairDigits(s);
+        return fixedStr === s ? null : parse(fixedStr, true);
+      })();
       if (!vote || vote.ratio > 5000) continue;
-      if (ended.has(i + n)) continue;
-      ended.add(i + n);
-      const { label, ...rest } = vote;
-      votes.push({ ...rest, source: `${origin} ${label}`, at, conf });
+      found.push({ s: i, e: i + n, vote, at, conf });
     }
+  }
+  found.sort((a, b) => b.e - b.s - (a.e - a.s));
+  const kept: typeof found = [];
+  for (const f of found) {
+    if (kept.some((k) => f.s >= k.s && f.e <= k.e)) continue;
+    kept.push(f);
+  }
+  kept.sort((a, b) => a.s - b.s || a.e - b.e);
+  for (const f of kept) {
+    const { label, ...rest } = f.vote;
+    votes.push({ ...rest, source: `${origin} ${label}`, at: f.at, conf: f.conf });
   }
   return { votes, nts };
 }

@@ -7,8 +7,33 @@ pdf2takeoff turns construction PDF drawings into measured quantities. Calibrate 
 Everything runs in your browser. **Drawings are never uploaded**; rendering and measurement happen on your machine, so it's safe for confidential tender documents and keeps working offline once the page is loaded.
 
 - Price: free, no account, no file limits, no paid tier
-- Licence: Apache-2.0
+- Licence: Apache-2.0 — to our knowledge the **only permissively licensed takeoff engine** in a field of AGPL competitors, so you can embed and bundle it
 - Privacy: 100% client-side, zero telemetry
+
+## Benchmarks & evals — the numbers, the method, the failures
+
+We publish what the engine scores, how every number was produced, and what
+it is still bad at — including a benchmark we built and gave away (CC BY 4.0,
+usable by anyone, including to beat us):
+
+- **ScaledDrawingBench v0.1** (ours, deterministic, seeded): **99.8%** on
+  born-digital sheets, **37.3%** on degraded scans (up from 23.0% — the
+  improvement log is part of the disclosure), **0 hallucinations** on 92
+  unanswerable-by-design questions
+- **AECV-Bench** (external, public): 0.295 five-field exact match with a
+  deterministic engine and **no vision model**; bedroom/toilet counts at
+  0.708/0.500 from a label dictionary + OCR alone
+- **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519
+  — more than double any frontier VLM** on the identical sheets (0.18–0.29),
+  area precision 0.943, object F1 0.031 at the frontier-VLM range; a
+  click-free deterministic engine, no GPU, ~23 s per sheet
+- ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model —
+  in-browser, nothing uploaded
+- A correctness gate on every push: ten behavioural checks + the takeoff
+  bench + MCP smoke + PDF round-trip in CI
+
+Everything regenerates from this repo with one command per table — see
+[evals/README.md](evals/README.md).
 
 > Product strategy, phase plan, licensing rationale and cost model live in [STRATEGY.md](STRATEGY.md).
 
@@ -48,24 +73,30 @@ drawing" and do it yourself.
 ```bash
 npm run build      # type-check + production build in dist/
 npm run sample     # regenerate public/examples/sample-floor-plan.pdf
+npm run bench      # takeoff accuracy bench on synthetic sheets (rooms, counts, scales)
 ```
+
+`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)). `npm run bench:ledger` runs the fast benches and appends their headline numbers, with the commit, to [bench/results/ledger.jsonl](bench/results/README.md) (`--compare` prints the delta against the previous run).
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 
 ## Headless CLI (agents & scripts)
 
-The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, no
-network calls:
+The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, and
+no network calls except one: the first `ocr` run on a scan downloads a ~3 MB
+language pack (cached; see `PDF2TAKEOFF_TESSDATA` below):
 
 ```bash
 npm run cli -- info drawing.pdf                      # pages, sizes, annotation counts
 npm run cli -- compare r2.pdf r3.pdf --png diff.png  # per-sheet change fractions + regions
 npm run cli -- compare r2/ r3/ --png-dir ov/         # folders: batch the whole set, pair by filename
 npm run cli -- scan drawing.pdf --page 1 --at 88,271 # click-point auto-count, JSON hits
+npm run cli -- scan plan.png --page 1 --at 318,447   # PNG/JPG input (every command): one page of W/3 x H/3 points
 npm run cli -- export drawing.pdf --scale 1:100      # annotations → quantities CSV
 npm run cli -- annotate drawing.pdf --spec takeoff.yaml -o marked.pdf
 npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantities
 npm run cli -- set tender/ -o current-issue.pdf     # slip-sheet: newest per sheet, sorted
+npm run cli -- ocr scan.pdf --page 1 [--region x,y,w,h]  # scanned sheet: OCR words, scale note, room labels by class
 ```
 
 `run` is takeoff-as-code: the spec names the scale, one click-point per
@@ -73,20 +104,30 @@ symbol type (a `class:` field activates automatically once a model ships),
 and the exports. Re-run it on every revision with `--prev` to see exactly
 which quantities changed — the CI-friendly revision loop.
 
-`compare --json` is designed for pipelines (`jq '.changedSheets'`); `scan`
+Every `<file.pdf>` above also takes a PNG or JPG directly (the MCP
+`open_document` included), as well as image-only (scanned) PDFs: an image is
+one page of width/3 by height/3 points, so a click at pixel (px, py) is
+`--at px/3,(H - py)/3` and the scan sees the native pixels. `compare --json`
+is designed for pipelines (`jq '.changedSheets'`); `scan`
 returns the same hits the web Scan tool finds. This is the substrate for the
 agent API (MCP) — see [specs/headless-engine.md](specs/headless-engine.md).
 
+Environment variables: `PDF2TAKEOFF_MODEL_DIR` (or `scan --model <dir>`)
+selects a trained ONNX detector directory — without it the scan stays on the
+CV tier; `PDF2TAKEOFF_TESSDATA` points the OCR language pack at an
+offline/frozen copy instead of downloading it; `PDF2TAKEOFF_OCR_DUMP`
+writes the binarised OCR crops to a folder for debugging.
+
 ## Agent API (MCP)
 
-`pdf2takeoff mcp` starts a local MCP server on stdio with twelve tools —
+`pdf2takeoff mcp` starts a local MCP server on stdio with thirteen tools —
 `open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
 `read_text` (the sanctioned way to read printed scales/dimensions/labels —
 exact, positioned, never off the rendered image), `set_scale`, `measure`,
-`scan_symbol`, `compare_revisions`, `list_markups`, `set_status`,
-`delete_markup`, `export`, `save_annotated` — so an AI agent can run a whole
-takeoff and hand the marked-up PDF to a human for review. Local process,
-local files, nothing uploaded.
+`fill_area`, `scan_symbol`, `compare_revisions`, `list_markups`,
+`set_status`, `delete_markup`, `export`, `save_annotated` — so an AI agent
+can run a whole takeoff and hand the marked-up PDF to a human for review.
+Local process, local files, nothing uploaded.
 
 Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 
@@ -100,6 +141,21 @@ Register it with any MCP client (ZCode, Claude Desktop, Cursor):
   }
 }
 ```
+
+## ScaledDrawingBench
+
+No public benchmark tests measuring a length or an area from a scaled drawing,
+so the repo ships one. [bench/scaled-drawing-bench](bench/scaled-drawing-bench/README.md)
+is a deterministic, CC BY 4.0 set of 200 synthetic floor-plan sheets (half
+born-digital, half degraded 150 dpi scans; five scale notations; A3, A1 and
+ARCH D; some rotated; some with a revision B) and about 2,000 estimator-style
+questions with exact answers: scale, wall lengths, room areas and perimeters,
+symbol counts, printed dimensions and revision changes. `npm run bench:scaled -- generate`
+builds it from a seed, `score` grades a predictions file (within 2 and 5
+percent, MAPE, exact counts, change-set F1, hallucination rate) and
+`reference` runs pdf2takeoff's own deterministic solver, whose table is in the
+benchmark README: near perfect on the vector half, with the raster half
+showing where the engine's scan and OCR paths still fall short.
 
 ## Architecture
 

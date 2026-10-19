@@ -36,6 +36,15 @@ training pipeline); commit only this README. Keep trained checkpoints in the
 release they came from, or re-train via `training/` — the pipeline is
 reproducible from the synthetic generator seed.
 
+## Headless (CLI, MCP, benches)
+
+The same two files serve the Node side: `pdf2takeoff scan <pdf> --page N
+--at x,y --model <dir>`, the `PDF2TAKEOFF_MODEL_DIR` environment variable,
+or this folder when it holds the binary (a manifest whose `model` is a URL
+is read as `<dir>/<basename>`; the CLI never downloads). The loader is
+`src/headless/detector-node.ts` (onnxruntime-web's Node entry, WASM, no extra
+dependency). With no model present the scan stays on the vector and CV tiers.
+
 ## How it behaves in the app
 
 - No files here → tier-1 CV scan (template match) is used, nothing extra is

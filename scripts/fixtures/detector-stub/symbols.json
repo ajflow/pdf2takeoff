@@ -1,0 +1,12 @@
+{
+  "model": "symbols.onnx",
+  "input": 128,
+  "classes": [
+    "sparse",
+    "dense"
+  ],
+  "score": 0.4,
+  "iou": 0.45,
+  "head": "yolox-raw",
+  "stub": "grid detector for scripts/check-detector-node.mjs, built by scripts/make-detector-stub.py"
+}

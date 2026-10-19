@@ -4,8 +4,13 @@
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
+import { openAny, imageToPdf, sniffImage, imageKindByExt } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
 import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
+import { ocrRaster, terminateOcr } from './ocr-node.ts';
+import { RASTER_SCALE } from '../engine/ports.ts';
+import { findScaleRatio } from '../engine/ocr.ts';
+import { countRoomsByClass } from '../engine/room-labels.ts';
 import { basename, join } from 'node:path';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
@@ -18,22 +23,31 @@ import { PDFDocument } from 'pdf-lib';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
+Every <file.pdf> below also takes a PNG or JPG: the image opens as one
+page of width/3 x height/3 points (scale 3 renders the native pixels), and
+commands that write a PDF wrap the image into one.
+
 Usage:
   pdf2takeoff info <file.pdf>
       Pages, page sizes, and annotation counts as JSON.
   pdf2takeoff set <folder> -o current-issue.pdf
       Slip-sheet: walk the folder, keep the newest file per sheet name
-      (by modified time), merge into one sorted multi-sheet PDF.
+      (PDF, PNG or JPG, paired by file stem, by modified time), merge into
+      one sorted multi-sheet PDF.
   pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
-      Two PDFs: per-sheet change fractions and changed regions.
-      Two folders: batch compare — sheets paired by filename across the
-      revision sets, with added/removed sheets listed. --png writes the
-      overlay of the first changed sheet; --png-dir (folder mode) writes
-      an overlay per changed pair.
-  pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages]
-      Click-point auto-count (tier-1 CV): every match on the page as JSON.
+      Two PDFs (or images): per-sheet change fractions and changed regions.
+      Two folders: batch compare, sheets paired by file stem across the
+      revision sets (a PNG scan pairs with the PDF of the same sheet), with
+      added/removed sheets listed. --png writes the overlay of the first
+      changed sheet; --png-dir (folder mode) writes an overlay per changed
+      pair.
+  pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages] [--model dir]
+      Click-point auto-count: every match on the page as JSON (vector match,
+      then the trained ONNX detector when a model is present, else tier-1 CV).
       --at is in PDF points; run "info" first to see page sizes.
       --all-pages scans every sheet and returns a per-page schedule.
+      --model names a folder with symbols.json + symbols.onnx; without it the
+      PDF2TAKEOFF_MODEL_DIR environment variable, then public/models/, is used.
   pdf2takeoff export <file.pdf> [--scale 1:100] [--unit m] [--format csv|tsv|xlsx] [-o out]
       Read pdf2takeoff annotations back out as a quantities table.
       csv/tsv print to stdout without -o; xlsx requires -o.
@@ -45,25 +59,42 @@ Usage:
       Takeoff-as-code: calibrate, scan-count every symbol type in the spec,
       write the exports (csv / xlsx / annotated-pdf / summary JSON).
       --prev diffs quantities against a previous run — the revision loop.
+  pdf2takeoff ocr <file.pdf> --page N [--region x,y,w,h] [--rotate 90] [--threshold 190]
+      OCR the rendered page (scans have no text layer): words with positions
+      in PDF points, the scale note read, and room labels counted by class,
+      as JSON. --region clips to a rectangle (PDF points, bottom-left origin);
+      --rotate adds a reading of text running bottom to top; --threshold
+      binarises soft scans. First use fetches the English language pack
+      (about 3 MB) into ~/.cache/pdf2takeoff/tessdata; set PDF2TAKEOFF_TESSDATA
+      to a folder holding eng.traineddata to run fully offline.
   pdf2takeoff mcp
       Start the MCP server on stdio (for AI agents; see specs/headless-engine.md).
 
-Everything runs locally; drawings never leave the machine.
+Everything runs locally; drawings never leave the machine (OCR fetches only
+its language pack, once).
 `;
 
 export { openPdf, renderRasterNode };
 
-function readPdf(path: string): Uint8Array {
-  return new Uint8Array(readFileSync(path));
-}
-
+// every file argument also takes a PNG or JPG: one page of W/3 x H/3 points
+// (see image-node.ts); commands that write a PDF get the image wrapped as one
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   return { doc, markups: await readMarkups(doc) };
 }
 
+/** PDF, PNG or JPG by extension (the file walkers of set and compare). */
+function isDrawingFile(name: string): boolean {
+  return name.toLowerCase().endsWith('.pdf') || imageKindByExt(name) !== null;
+}
+
+/** The sheet name a file stands for: its basename without the extension. */
+function sheetStem(name: string): string {
+  return basename(name).replace(/\.(pdf|png|jpe?g)$/i, '');
+}
+
 async function cmdInfo(file: string): Promise<unknown> {
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   const markups = await readMarkups(doc);
   let other = 0;
   const pages: { page: number; widthPt: number; heightPt: number }[] = [];
@@ -83,19 +114,19 @@ async function cmdInfo(file: string): Promise<unknown> {
   };
 }
 
-async function cmdScan(file: string, pageArg: string, atArg: string, allPages: boolean): Promise<unknown> {
+async function cmdScan(file: string, pageArg: string, atArg: string, allPages: boolean, modelDir?: string): Promise<unknown> {
   const page = parseInt(pageArg, 10);
   if (!Number.isInteger(page) || page < 1) throw new Error('--page must be a positive integer');
   const xy = atArg.split(',').map((v) => parseFloat(v));
   if (xy.length !== 2 || !xy.every((v) => Number.isFinite(v))) {
     throw new Error('--at must be "x,y" in PDF points');
   }
-  const doc = await openPdf(readPdf(file));
+  const { doc } = await openAny(file);
   if (allPages) {
-    const schedule = await scanDocAllPages(doc, { x: xy[0], y: xy[1] });
+    const schedule = await scanDocAllPages(doc, { x: xy[0], y: xy[1] }, { modelDir });
     return { file, ...schedule };
   }
-  const result = await scanDocAt(doc, page, { x: xy[0], y: xy[1] });
+  const result = await scanDocAt(doc, page, { x: xy[0], y: xy[1] }, { modelDir });
   if ('error' in result) throw new Error(result.error);
   return {
     file,
@@ -110,6 +141,41 @@ async function cmdScan(file: string, pageArg: string, atArg: string, allPages: b
   };
 }
 
+/** OCR a rendered page: words in PDF points, the scale note found, room labels by class. */
+async function cmdOcr(file: string, pageArg: string, regionArg: string | undefined, rotateArg: string | undefined, thresholdArg: string | undefined): Promise<unknown> {
+  const page = parseInt(pageArg, 10);
+  if (!Number.isInteger(page) || page < 1) throw new Error('--page must be a positive integer');
+  let region: { x0: number; y0: number; x1: number; y1: number } | undefined;
+  if (regionArg) {
+    const v = regionArg.split(',').map((s) => parseFloat(s));
+    if (v.length !== 4 || !v.every((n) => Number.isFinite(n)) || v[2] <= 0 || v[3] <= 0) {
+      throw new Error('--region must be "x,y,w,h" in PDF points (bottom-left origin)');
+    }
+    region = { x0: v[0], y0: v[1], x1: v[0] + v[2], y1: v[1] + v[3] };
+  }
+  const rotations = rotateArg ? rotateArg.split(',').map((s) => parseFloat(s)) : undefined;
+  if (rotations && !rotations.every((n) => Number.isFinite(n))) throw new Error('--rotate must be degrees, e.g. 90 or 90,270');
+  const threshold = thresholdArg ? parseFloat(thresholdArg) : undefined;
+  if (threshold !== undefined && !(threshold > 0 && threshold < 255)) throw new Error('--threshold must be 1..254');
+  const { doc } = await openAny(file);
+  if (page > doc.numPages) throw new Error(`page ${page} out of range (1..${doc.numPages})`);
+  const raster = await renderRasterNode(doc, page, RASTER_SCALE);
+  const words = await ocrRaster(raster, { region, rotations, threshold });
+  const scale = findScaleRatio(words, 'OCR');
+  const rooms = countRoomsByClass(words);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    file,
+    page,
+    source: 'ocr',
+    wordCount: words.length,
+    words: words.map((w) => ({ text: w.text, conf: Math.round(w.conf), xPt: r2(w.xPt), yPt: r2(w.yPt), wPt: r2(w.wPt), hPt: r2(w.hPt) })),
+    scaleRatio: scale ? { ratio: scale.ratio, source: scale.source } : null,
+    rooms: rooms.counts,
+    roomLabels: rooms.labels.map((l) => ({ ...l, xPt: r2(l.xPt), yPt: r2(l.yPt) })),
+  };
+}
+
 async function cmdCompare(fileA: string, fileB: string, png: string | undefined, pngDir: string | undefined, threshold: number): Promise<unknown> {
   // directory pair -> batch compare across the two revision folders
   const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -120,8 +186,8 @@ async function cmdCompare(fileA: string, fileB: string, png: string | undefined,
     if (pngDir) mkdirSync(pngDir, { recursive: true });
     return await compareFolders(fileA, fileB, { pngDir, threshold });
   }
-  const docA = await openPdf(readPdf(fileA));
-  const docB = await openPdf(readPdf(fileB));
+  const { doc: docA } = await openAny(fileA);
+  const { doc: docB } = await openAny(fileB);
   const result = await compareDocs(docA, docB, { png, threshold });
   return {
     a: fileA,
@@ -177,10 +243,11 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
   const output = outOverride ?? spec.output;
   if (!output) throw new Error('no output path: pass -o out.pdf or set "output" in the spec');
 
+  // an image comes back wrapped as a one-page PDF, so the writer has real PDF bytes
+  const { doc, bytes: source } = await openAny(file);
   const calibrations = new Map<number, Calibration>();
   if (spec.scale) {
     const metersPerPt = parseScaleSpec(spec.scale);
-    const doc = await openPdf(readPdf(file));
     for (let p = 1; p <= doc.numPages; p++) calibrations.set(p, { metersPerPt, source: `spec scale ${spec.scale}` });
   }
 
@@ -193,10 +260,10 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
     createdAt: Date.now(),
   }));
   // the writer replaces our earlier annotations, so carry them over to keep them
-  const existing = keepExisting ? (await readMarkupsFromPdf(file)).markups : [];
+  const existing = keepExisting ? await readMarkups(doc) : [];
 
   const bytes = await buildAnnotatedPdf({
-    bytes: readPdf(file),
+    bytes: source,
     markups: [...existing, ...markups],
     calibrations,
     displayUnit: (spec.unit ?? 'm') as DisplayUnit,
@@ -208,8 +275,8 @@ async function cmdAnnotate(file: string, specPath: string, outOverride: string |
 /** Execute a takeoff spec: calibrate, scan-count each symbol type, write exports. */
 async function cmdRun(specPath: string, prevPath: string | undefined): Promise<unknown> {
   const spec = parseRunSpec(readFileSync(specPath, 'utf8'), specPath);
-  const bytes = readPdf(spec.source);
-  const doc = await openPdf(bytes);
+  // PDF, or an image wrapped as a one-page PDF for the annotated-pdf export
+  const { doc, bytes } = await openAny(spec.source);
   const calibrations = new Map<number, Calibration>();
   if (spec.scale) {
     const metersPerPt = parseScaleSpec(spec.scale);
@@ -305,10 +372,10 @@ export async function run(argv: string[]): Promise<void> {
       const { values, positionals } = parseArgs({
         args: rest,
         allowPositionals: true,
-        options: { page: { type: 'string', default: '1' }, at: { type: 'string' }, 'all-pages': { type: 'boolean', default: false } },
+        options: { page: { type: 'string', default: '1' }, at: { type: 'string' }, 'all-pages': { type: 'boolean', default: false }, model: { type: 'string' } },
       });
-      if (positionals.length !== 1 || !values.at) throw new Error('usage: pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages]');
-      process.stdout.write(JSON.stringify(await cmdScan(positionals[0], values.page, values.at, values['all-pages']), null, 2) + '\n');
+      if (positionals.length !== 1 || !values.at) throw new Error('usage: pdf2takeoff scan <file.pdf> --page N --at x,y [--all-pages] [--model dir]');
+      process.stdout.write(JSON.stringify(await cmdScan(positionals[0], values.page, values.at, values['all-pages'], values.model), null, 2) + '\n');
       return;
     }
     if (cmd === 'compare') {
@@ -371,6 +438,20 @@ export async function run(argv: string[]): Promise<void> {
       process.stdout.write(JSON.stringify(await cmdRun(positionals[0], values.prev), null, 2) + '\n');
       return;
     }
+    if (cmd === 'ocr') {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { page: { type: 'string', default: '1' }, region: { type: 'string' }, rotate: { type: 'string' }, threshold: { type: 'string' } },
+      });
+      if (positionals.length !== 1) throw new Error('usage: pdf2takeoff ocr <file.pdf> --page N [--region x,y,w,h] [--rotate 90] [--threshold 190]');
+      try {
+        process.stdout.write(JSON.stringify(await cmdOcr(positionals[0], values.page, values.region, values.rotate, values.threshold), null, 2) + '\n');
+      } finally {
+        await terminateOcr(); // the recogniser's worker thread would otherwise keep the process alive
+      }
+      return;
+    }
     if (cmd === 'mcp') {
       const { runMcpServer } = await import('./mcp.ts');
       await runMcpServer();
@@ -383,30 +464,33 @@ export async function run(argv: string[]): Promise<void> {
   }
 }
 
-/** Slip-sheet a folder of per-sheet PDFs into one current-issue set:
- *  sheets pair by filename, the newest file (mtime) wins, output is sorted. */
+/** Slip-sheet a folder of per-sheet PDFs (and PNG / JPG scans) into one
+ *  current-issue set: sheets pair by file stem, the newest file (mtime)
+ *  wins, output is sorted; an image becomes a page of its pixels / 3 points. */
 async function cmdSet(dir: string, out: string): Promise<unknown> {
   const byBase = new Map<string, { file: string; mtime: number }>();
   const walk = (d: string) => {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.toLowerCase().endsWith('.pdf')) {
+      else if (isDrawingFile(entry.name)) {
         const mtime = statSync(full).mtimeMs;
-        const key = basename(entry.name);
+        const key = sheetStem(entry.name);
         const prev = byBase.get(key);
         if (!prev || mtime > prev.mtime) byBase.set(key, { file: full, mtime });
       }
     }
   };
   walk(dir);
-  if (byBase.size === 0) throw new Error(`no PDFs found under ${dir}`);
+  if (byBase.size === 0) throw new Error(`no PDFs or images found under ${dir}`);
   const merged = await PDFDocument.create();
   merged.setProducer('pdf2takeoff 0.1.0');
   const sheets: { sheet: string; from: string; superseded: number }[] = [];
   for (const sheet of [...byBase.keys()].sort()) {
     const { file } = byBase.get(sheet)!;
-    const src = await PDFDocument.load(readFileSync(file));
+    const raw = new Uint8Array(readFileSync(file));
+    const kind = sniffImage(raw) ?? imageKindByExt(file);
+    const src = await PDFDocument.load(kind ? await imageToPdf(raw, kind) : raw);
     const count = await merged.copyPages(src, src.getPageIndices());
     for (const page of count) merged.addPage(page);
     // count how many files shared this sheet name (superseded = losers)
@@ -415,7 +499,7 @@ async function cmdSet(dir: string, out: string): Promise<unknown> {
       for (const entry of readdirSync(d, { withFileTypes: true })) {
         const full = join(d, entry.name);
         if (entry.isDirectory()) recount(full);
-        else if (basename(entry.name) === sheet && full !== file) dupes++;
+        else if (isDrawingFile(entry.name) && sheetStem(entry.name) === sheet && full !== file) dupes++;
       }
     };
     recount(dir);

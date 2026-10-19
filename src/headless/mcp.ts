@@ -13,19 +13,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
-import { openPdf } from './pdfjs-node.ts';
+import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, vectorDocPage, quantityDelta } from './ops.ts';
-import { doorBridgesFor } from '../engine/fill-vector.ts';
+import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor } from './ops.ts';
+import { terminateOcr } from './ocr-node.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
 import { buildMatrix, toDelimited, xlsxBytes } from '../engine/export.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
-import { METERS_PER_PT, toMeters } from '../engine/units.ts';
-import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type TextLayerWord } from '../engine/ocr.ts';
+import { METERS_PER_PT, toMeters, metersPerPtForRatio } from '../engine/units.ts';
+import { findScaleRatio } from '../engine/ocr.ts';
 import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
@@ -120,12 +120,12 @@ export async function runMcpServer(): Promise<void> {
     'open_document',
     {
       description:
-        'Open a local PDF drawing for takeoff. Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
-      inputSchema: { path: z.string().describe('path to the PDF on this machine') },
+        'Open a local PDF drawing for takeoff (a PNG or JPG scan works too: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
+      inputSchema: { path: z.string().describe('path to the PDF (or PNG/JPG) on this machine') },
     },
     async ({ path }) => {
-      const bytes = new Uint8Array(readFileSync(path));
-      const doc = await openPdf(bytes);
+      // images come back wrapped as PDF bytes so save_annotated still works
+      const { doc, bytes } = await openAny(path);
       const id = `doc-${++docSeq}`;
       const markups = await readMarkups(doc);
       const pages: { page: number; widthPt: number; heightPt: number }[] = [];
@@ -191,10 +191,11 @@ export async function runMcpServer(): Promise<void> {
     'read_text',
     {
       description:
-        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values — scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Returns few or no words on scanned sheets, which have no text layer.',
+        'Read the sheet\'s embedded text layer: words with positions in PDF points (bottom-left origin) and each word\'s baseline angle (angleDeg, 90 = vertical text reading bottom to top), optionally clipped to a region. This is the sanctioned way to obtain printed values: scales ("1:100"), dimension strings, labels, title-block fields. Never read numbers off the render_page PNG: transcribe them from this tool (or set_scale/measure) instead, they are exact. Scanned sheets have no text layer: then the render is OCR\'d instead (source: "ocr", each word with the recogniser\'s confidence; slower, and the first use fetches a 3 MB language pack). Pass a region to keep OCR fast.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
+        ocr: z.boolean().optional().describe('true: OCR the render even when a text layer exists; false: text layer only; omitted: OCR only when the text layer is empty'),
         region: z
           .object({
             x0: z.number().describe('left edge, PDF points'),
@@ -206,18 +207,15 @@ export async function runMcpServer(): Promise<void> {
           .describe('clip to this rectangle (e.g. a title block you located on the rendered page)'),
       },
     },
-    async ({ id, page, region }) => {
+    async ({ id, page, ocr, region }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
-      const pdfPage = await d.doc.getPage(page);
-      const tc = await pdfPage.getTextContent();
       // text items → whitespace-split words in PDF-point space. The text
       // layer is exact (born-digital), so confidence is 100 — the point of
       // this tool vs OCR-ing the render is that these numbers are trustworthy.
-      const words: TextLayerWord[] = [];
-      for (const item of tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]) {
-        words.push(...wordsFromTextItem(typeof item.str === 'string' ? item.str : '', item.transform, item.width, item.height));
-      }
+      // Without a text layer (scans) the render is OCR'd and source says so.
+      const { words, source } = await pageWordsWithOcr(d.doc, page, undefined, { ocr, region });
+      const origin = source === 'ocr' ? 'OCR' : 'text layer';
       const clipped = region
         ? words.filter(
             (wd) =>
@@ -227,11 +225,12 @@ export async function runMcpServer(): Promise<void> {
               wd.yPt <= Math.max(region.y0, region.y1),
           )
         : words;
-      const scaleHit = findScaleRatio(clipped, 'text layer');
-      const { votes, nts } = scaleVotesFromWords(clipped, 'text layer');
+      const scaleHit = findScaleRatio(clipped, origin);
+      const { votes, nts } = scaleVotesFromWords(clipped, origin);
       const consensus = scaleConsensus(votes, nts);
       return text({
         page,
+        source,
         wordCount: clipped.length,
         ...(clipped.length > 200
           ? { note: 'long text layer — pass a region to clip; only the first 200 words are listed' }
@@ -256,7 +255,7 @@ export async function runMcpServer(): Promise<void> {
     'set_scale',
     {
       description:
-        'Calibrate the drawing scale — required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0") or measure a known dimension: give both endpoints in PDF points and its true length.',
+        'Calibrate the drawing scale, required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0"), measure a known dimension (give both endpoints in PDF points and its true length), or pass neither to read the printed scale note off the sheet (text layer, OCR of the render on scans).',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -274,11 +273,20 @@ export async function runMcpServer(): Promise<void> {
     },
     async ({ id, page, all_pages, ratio, from_points }) => {
       const d = getDoc(id);
+      // the sheet's own scale notes: text layer, else (auto-read only, so a
+      // typed ratio stays instant on scans) OCR of the render
+      const sheet = await pageWordsWithOcr(d.doc, page, undefined, { ocr: ratio || from_points ? false : undefined });
+      const origin = sheet.source === 'ocr' ? 'OCR' : 'text layer';
       let metersPerPt: number;
       let source: string;
       if (ratio) {
         metersPerPt = parseScaleSpec(ratio);
         source = `mcp preset ${ratio}`;
+      } else if (!from_points) {
+        const hit = findScaleRatio(sheet.words, origin);
+        if (!hit) throw new Error('no scale note could be read off the sheet: pass ratio or from_points');
+        metersPerPt = metersPerPtForRatio(hit.ratio);
+        source = `sheet ${hit.source}`;
       } else if (from_points) {
         const ptDist = distPt(
           { x: from_points.a[0], y: from_points.a[1] },
@@ -292,12 +300,8 @@ export async function runMcpServer(): Promise<void> {
       }
       const pages = all_pages ? Array.from({ length: d.doc.numPages }, (_, i) => i + 1) : [page];
       for (const p of pages) d.calibrations.set(p, { metersPerPt, source });
-      // cross-check against the sheet's own scale notes (text layer)
-      const tc = await (await d.doc.getPage(page)).getTextContent();
-      const words = (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
-        wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
-      );
-      const { votes, nts } = scaleVotesFromWords(words, 'text layer');
+      // cross-check against the sheet's own scale notes
+      const { votes, nts } = scaleVotesFromWords(sheet.words, origin);
       const setRatio = metersPerPt / METERS_PER_PT;
       // measured scales carry hand-placement error, typed ratios do not
       const check = checkAgainstSheet(setRatio, votes, nts, from_points ? 0.05 : 0.02);
@@ -339,17 +343,19 @@ export async function runMcpServer(): Promise<void> {
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point inside the room, PDF points'),
         label: z.string().optional(),
+        ocr: z.boolean().optional().describe('also OCR the sheet and mask the recognised text out of the fill boundary (scans and raster imports have no text layer); slower'),
       },
     },
-    async ({ id, page, at, label }) => {
+    async ({ id, page, at, label, ocr }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
       const raster = await renderRasterNode(d.doc, page, RASTER_SCALE);
-      const items = (await (await d.doc.getPage(page)).getTextContent()).items as { str?: string; transform?: number[]; width?: number; height?: number }[];
-      const labels = roomLabelPoints(items);
       const cal = d.calibrations.get(page);
-      const bridges = doorBridgesFor(await vectorDocPage(d.doc, page), cal?.metersPerPt);
-      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, { labels, bridges, ...(cal ? { metersPerPt: cal.metersPerPt } : {}) });
+      // text-layer labels and word boxes, vector doorway bridges, the scale, OCR boxes on request
+      const hints = await fillHintsFor(d.doc, page, raster, { metersPerPt: cal?.metersPerPt, ocr });
+      const labels = hints.labels ?? [];
+      const bridges = hints.bridges ?? [];
+      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, hints);
       if ('error' in result) throw new Error(result.error);
       const markup: Markup = {
         id: nextId('mcp'),
@@ -376,6 +382,7 @@ export async function runMcpServer(): Promise<void> {
           // only gaps that actually bound this room; absent for a sealed room
           ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
           ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
+          ...(result.swings ? { doorSwingArcErased: true } : {}),
           // the doorway rule in force: gaps between wall ends up to this width close by default
           ...(result.doorPx
             ? {
@@ -388,6 +395,7 @@ export async function runMcpServer(): Promise<void> {
             : {}),
           roomLabelsOnSheet: labels.length,
           vectorDoorBridges: bridges.length,
+          textBoxesMasked: hints.textBoxes?.length ?? 0,
         },
       });
     },
@@ -461,22 +469,24 @@ export async function runMcpServer(): Promise<void> {
     'scan_symbol',
     {
       description:
-        'Click-to-teach auto-count: give one instance of a repeated symbol (its centre in PDF points) and the CV scan finds and counts every match on the sheet, adding each as a count markup. Look at render_page output first to pick a symbol.',
+        'Click-to-teach auto-count: give one instance of a repeated symbol (its centre in PDF points) and the scan finds and counts every match on the sheet (vector match, then the trained ONNX detector when a local model is present, else the CV scan), adding each as a count markup. Look at render_page output first to pick a symbol. The detector loads from model_dir, else the PDF2TAKEOFF_MODEL_DIR environment variable, else public/models/.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point on the symbol to teach from, PDF points'),
         label: z.string().optional().describe('label for the count markups'),
         all_pages: z.boolean().default(false).describe('scan every sheet and return a per-page schedule (counts added per page)'),
+        model_dir: z.string().optional().describe('folder holding symbols.json + symbols.onnx for the trained detector (default: PDF2TAKEOFF_MODEL_DIR, then public/models/)'),
       },
     },
-    async ({ id, page, at, label, all_pages }) => {
+    async ({ id, page, at, label, all_pages, model_dir }) => {
       const d = getDoc(id);
+      const scanOpts = { modelDir: model_dir };
       if (all_pages) {
-        const schedule = await scanDocAllPages(d.doc, { x: at[0], y: at[1] });
+        const schedule = await scanDocAllPages(d.doc, { x: at[0], y: at[1] }, scanOpts);
         for (const p of schedule.pages) {
           if (p.count === 0) continue;
-          const result = await scanDocAt(d.doc, p.page, { x: at[0], y: at[1] });
+          const result = await scanDocAt(d.doc, p.page, { x: at[0], y: at[1] }, scanOpts);
           if ('error' in result) continue;
           for (const hit of result.hits) {
             d.markups.push({
@@ -491,7 +501,7 @@ export async function runMcpServer(): Promise<void> {
         }
         return text({ schedule, label: label ?? 'Scanned symbol' });
       }
-      const result = await scanDocAt(d.doc, page, { x: at[0], y: at[1] });
+      const result = await scanDocAt(d.doc, page, { x: at[0], y: at[1] }, scanOpts);
       if ('error' in result) throw new Error(result.error);
       const fallback = label ?? 'Scanned symbol';
       for (const hit of result.hits) {
@@ -524,7 +534,7 @@ export async function runMcpServer(): Promise<void> {
     'compare_revisions',
     {
       description:
-        'Compare two revisions: pass two PDF files for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by filename, added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
+        'Compare two revisions: pass two PDF files (or PNG/JPG scans) for per-sheet change fractions and changed regions, or two folders to batch-compare a whole drawing set (sheets paired by file stem, so a scan pairs with the PDF of the same sheet; added/removed sheets listed). Red-family regions exist only in A (removed), blue-family only in B (added). Born-digital sheets also get an exact vector diff (added/removed regions, moved pieces) and a text-layer diff (printed values changed in place). With quantities: true, the pdf2takeoff markups saved in A are re-run on B (counts re-scanned, areas re-filled) and the deltas returned. Report changes from this result, never by eyeballing two renders.',
       inputSchema: {
         a: z.string().describe('path to the older revision (file or folder)'),
         b: z.string().describe('path to the newer revision (file or folder)'),
@@ -538,8 +548,8 @@ export async function runMcpServer(): Promise<void> {
         const result = await compareFolders(a, b);
         return text(result);
       }
-      const docA = await openPdf(new Uint8Array(readFileSync(a)));
-      const docB = await openPdf(new Uint8Array(readFileSync(b)));
+      const { doc: docA } = await openAny(a);
+      const { doc: docB } = await openAny(b);
       const result = await compareDocs(docA, docB);
       const delta = quantities ? await quantityDelta(docA, docB) : undefined;
       return text({ a: basename(a), b: basename(b), ...result, ...(delta ? { quantities: delta } : {}) });
@@ -647,7 +657,9 @@ export async function runMcpServer(): Promise<void> {
   );
 
   await server.connect(new StdioServerTransport());
-  // the transport keeps the process alive until the client closes stdin
+  // the transport keeps the process alive until the client closes stdin;
+  // an OCR worker thread, once started, must not outlive it
+  process.stdin.once('end', () => void terminateOcr());
 }
 
 // direct invocation: node --experimental-strip-types src/headless/mcp.ts

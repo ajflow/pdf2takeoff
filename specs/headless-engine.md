@@ -197,7 +197,8 @@ non-zero exit on failure, nothing interactive.
 | `mcp` | start the MCP server (§6) | stdio |
 
 All file processing is local; the CLI makes no network calls (model files come
-from a local path or are absent → CV fallback).
+from a local path or are absent → CV fallback), with one exception: `ocr`
+fetches its 3 MB language pack once (see §6, OCR on scans).
 
 ---
 
@@ -213,7 +214,7 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `read_text` | `doc, page, region?` | positioned words (PDF pts, with baseline `angleDeg`) + the best scale found + `scaleNotes` (every note parsed: ratios, imperial, keyword-gated guesses; status agreed / conflict / insufficient / none) — **the agent's reading path**; numbers come from tools, never off the PNG |
 | `set_scale` | `doc, page, {ratio \| from_points + real_length}` | confirmation + effective metres/point + `sheetCheck` against the sheet's printed (title-block) scale: agrees / disagrees (with a likely cause) / ambiguous / none, plus `doorWidth`: for sheets that print no usable scale, the door size this scale implies for the sheet's own doorways, plausible / implausible with the likely slip; null when a printed scale was checked instead (agrees / disagrees), when the sheet shows fewer than two interior doorways of at least 14 pt, or when the page exceeds A1 at 3 px/pt |
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
-| `fill_area` | `doc, page, at: [x,y], label?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
+| `fill_area` | `doc, page, at: [x,y], label?, ocr?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows; text-layer words are masked out of the boundary, OCR words too with `ocr`; door swing arcs are erased and their door lines drawn), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |
 | `compare_revisions` | `path_a, path_b` | changed sheets, changed regions, summary |
 | `list_markups` / `delete_markup` | `doc` / `doc, id` | markups table / confirmation |
@@ -236,6 +237,31 @@ Design rules:
   caller provides; the server never uploads, never phones home.
 - Human verification loop is built in: `save_annotated` output opens in the
   web app / Revu / Acrobat with every markup visible.
+
+**OCR on scans (2026-10-18).** `read_text` falls back to OCR of the render
+when a sheet has no text layer (or with `ocr: true`), reporting
+`source: "ocr"` and the recogniser's confidence per word; `set_scale` with
+neither `ratio` nor `from_points` reads the printed scale note the same way;
+the CLI gains `ocr <pdf> --page N [--region x,y,w,h] [--rotate 90]
+[--threshold 190]`. The Node adapter (`src/headless/ocr-node.ts`) is the twin
+of the browser one on tesseract.js: pages are read in 640 px windows with a
+quarter overlap (tesseract's whole-page layout pass loses labels scattered
+over a drawing, while a window around them reads cleanly), a second pass at
+2 to 4x runs when the confident words are under 20 px (scans at screen
+resolution), extra reading angles catch vertical text, and dimensions use the
+same rotated, line-art-pruned corridor read as the app. Language data loads
+from `PDF2TAKEOFF_TESSDATA` or `~/.cache/pdf2takeoff/tessdata` and is fetched
+once (3 MB, from the tessdata mirror on raw.githubusercontent.com) when
+absent: the only network access in the headless engine, and never the
+drawing. `src/engine/room-labels.ts` maps printed room names (English,
+French, Finnish, German, Italian, Spanish, Swedish, plus drafting
+abbreviations such as MH, KPH, SDB, CH) to room classes, keeps the
+AECV-Bench counting rules as data (`Lavatory` is not a toilet, `Bath` is)
+and counts labels from positioned words (`countRoomsByClass`), so a scanned
+set can yield a bedroom and bathroom schedule without a text layer.
+Measured on AECV-Bench plans in `docs/research/benchmarks/aecv-bench.md`
+(status line): labels print at 8 to 14 px on the smaller plans, which is the
+limit of this approach, not of the dictionary.
 
 ---
 
@@ -277,7 +303,11 @@ and every cloud AI takeoff:
 - The MCP server is a **local stdio process**. Drawings are opened, rendered
   and measured on the user's machine; the model sees only what the local
   server sends it (page images the user's agent asked for).
-- The CLI makes **zero network calls**.
+- The CLI makes **zero network calls**, with one documented exception: the
+  first `ocr` run on a scan fetches a ~3 MB language pack (cached under
+  `~/.cache/pdf2takeoff/tessdata`, redirectable via `PDF2TAKEOFF_TESSDATA`;
+  see §6). Everything else — rendering, scanning, detection, measurement,
+  export — never touches the network.
 - No accounts, no telemetry, unchanged from the web app's promises.
 - Threat model note: an MCP client can already read files the user gives it;
   our server adds no privileged access — it only formalizes takeoff verbs.
@@ -290,7 +320,7 @@ and every cloud AI takeoff:
 |---|---|---|
 | pdfjs-dist (legacy build) | Node PDF rendering | Apache-2.0 |
 | @napi-rs/canvas | Node rasterizer | MIT |
-| onnxruntime-node | Node ONNX inference | MIT |
+| onnxruntime-web | ONNX inference in Node (WASM backend via its Node entry — §11c) | MIT |
 | @modelcontextprotocol/sdk | MCP server | MIT |
 | pdf-lib / xlsx / pdfjs-dist | unchanged | MIT / Apache-2.0 / Apache-2.0 |
 
@@ -354,18 +384,39 @@ Running pdf.js v5's legacy build on @napi-rs/canvas in Node:
    symbols) in both environments. Reproduce with `scripts/golden-raster.mjs`
    + the in-browser compare-canvas recipe.
 
-   **Sequel (2026-10-18):** pdfjs-dist also declares its own
-   `@napi-rs/canvas` (0.1.x), which npm nests under `node_modules/pdfjs-dist`.
-   pdf.js's `NodeCanvasFactory` requires that copy, so every image's
-   temporary canvas came from a second skia binary and `drawImage` into our
-   page context segfaulted on the first real sheet with a logo. The fix is a
-   `CanvasFactory` passed to `getDocument` that creates canvases from our
-   module (`pdfjs-node.ts`), plus our `DOMMatrix` on the global. The bench
-   embeds a PNG logo on every sheet so the path is exercised in CI.
+5. **Image XObjects segfaulted (exit 139, silent) until one skia instance
+   was enforced.** `pdfjs-dist` pins its own nested `@napi-rs/canvas` 0.1.x
+   under `node_modules/pdfjs-dist/node_modules`, and its `NodeCanvasFactory`
+   requires that copy, so two skia binaries load in one process. Vector
+   drawing never leaves our canvas, but an image is painted through a
+   factory-made temporary canvas, and handing that foreign `CanvasElement`
+   to `drawImage()` on our canvas crashes native code. Fix: `openPdf` passes
+   a `CanvasFactory` built on our `@napi-rs/canvas` (`pdfjs-node.ts`) and
+   `raster-node.ts` also pins the `DOMMatrix` global. Guarded by
+   `scripts/check-raster-input.mjs`.
 
-H2 ships without the ONNX detector in Node (no model exists yet — training
-is in flight); the `DetectorSession` port is ready for `onnxruntime-node`
-the moment `symbols.onnx` lands (H4 prep).
+### 11c. Raster input (PNG / JPG and image-only PDFs)
+
+`src/headless/image-node.ts` opens a PNG or JPG as a one-page, document-like
+object that every PDF code path accepts unchanged (`openAny(path)` picks
+PDF or image by magic bytes, then extension). Convention: the image's native
+pixels are the `RASTER_SCALE` render, so a W x H px image is a page of
+W/3 by H/3 PDF points; `toPdf`/`toRaster` match the pdf.js viewport of the
+same image wrapped as a PDF (y flipped, origin bottom-left), and a click at
+pixel (px, py) is `--at px/3,(H - py)/3`. The page has no text layer
+(`read_text` returns no words), no annotations and no vectors, so scans take
+the CV tier. The CLI `info`, `scan` and `export` commands and the MCP
+`open_document` accept images; `render_page`, `scan_symbol`, `count`,
+`fill_area` and `read_text` work on them, and `save_annotated` writes a PDF
+with the image embedded at the same geometry.
+
+The ONNX detector tier ships in Node: `src/headless/detector-node.ts` loads
+the model directory (manifest + `symbols.onnx`) selected by `--model dir` or
+`PDF2TAKEOFF_MODEL_DIR`, running inference on `onnxruntime-web`'s Node entry
+(the WASM backend in-process — one dependency, no native addon; the earlier
+`onnxruntime-node` plan was dropped in favour of it). Without a model
+directory the scan path stays on the CV tier; asking for a directory without
+a model is an error, not a silent fallback.
 
 ## 12. Risks & mitigations
 

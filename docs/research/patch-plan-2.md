@@ -10,16 +10,14 @@
 > |---|---|
 > | P7 to P11 | shipped |
 > | P12 | shipped: `npm run bench`, in CI |
-> | P13 | shipped: scale and room-label triggers; the no-hints case (`fill/interior-door-no-hints`) closes via the sheet's own doorway widths (two-jamb wall-end gaps) tried under a room-sized split test, in place of distance-transform neck cuts |
-> | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open; 2026-10-18: the sheet's own door width is a second opinion on any calibration (`doorWidthCheck`, surfaced by `set_scale` and the app) |
+> | P13 | shipped: scale and room-label triggers; door-width cuts of bounded fills (wall ends both sides, room-sized parts) close `fill/interior-door-no-hints`; distance-transform necks at any angle still open |
+> | P14 | shipped: votes, consensus, grammars, app and MCP checks; graphic scale-bar tier still open |
 > | P15 | shipped, plus a `fill_area` MCP tool |
 > | P16 | shipped: go ([vector-spike.md](vector-spike.md)); real CAD exports still to check |
 > | P17, P18, P19 | shipped |
 > | P3b, P5b, P2b, P20 | open: need a dependency decision (PaddleOCR.js), model artifacts (DINOv2), a dataset licence check and training run (ResPlan), or an agent harness with model access (public benchmarks) |
 >
-> Bench after phase 3: fill 11/12, count 2/2, scale 9/9.
-> Continued in [patch-plan-3.md](patch-plan-3.md): counting without asking the model to count (P21 to P26).
-> Bench after the sheet door width (2026-10-18): fill 21/22, count 2/2, scale 9/9; the open case is a diagonal door on a sheet with no vector layer (axis-aligned closing cannot bridge it).
+> Bench after phase 3: fill 11/12, count 2/2, scale 9/9. After the room-area bench sweep (`npm run bench:rooms`, [benchmarks/room-area-datasets.md](benchmarks/room-area-datasets.md)): fill 12/12.
 
 ## Principles
 
@@ -213,18 +211,6 @@ DUDE, 2026); door swing arcs mark openings; born-digital room labels.
    door width only when wall ends sit on both sides and a second cue
    agrees (door arc, labels on both sides), so L-rooms are not cut at the
    elbow.
-   *Shipped instead (2026-10-18):* the sheet's own doorway widths. The
-   threshold pass already finds every gap between facing wall ends; those
-   with a jamb on both sides, open floor on both sides and a far wall on at
-   least one are doorways (one-ended corner gaps still close but never
-   vote: the elbow of an L-room is one). Their widths cluster at the door
-   width. Each width is tried as a closing rung, narrowest first, up to
-   1.5× the narrowest plus the best-supported cluster, and kept only when
-   it bounds a fill that leaked or cuts a room-sized part off the fill (the
-   guard the label split already uses), never for an alcove. A width that
-   swallows the click or still leaks is skipped, so nothing the sheet shows
-   can break a fill that was already bounded, and open-plan openings stay
-   open. No distance transform needed.
 
 **Check.** P12 interior-door fixtures return the clicked room within 3%.
 No regression on L-rooms or sealed rooms.
@@ -341,3 +327,9 @@ measured result.
   sequence floor plan parsers (Raster2Seq, RoomFormer): GPU-bound and
   trained on research-only data. Revisit only with an optional server.
 - Asking a VLM to read numbers, find changes or count from pixels.
+
+<!-- merged from main 2026-10-19 (PR #3): the same P13/P14 status as seen from
+     the dynamic-fill-sheet-door-width branch, plus its bench state -->
+> | P13 (main's line) | shipped there: no-hints case closed via the sheet's own doorway widths (two-jamb wall-end gaps) under a room-sized split test |
+> | P14 (main's line) | shipped there: 2026-10-18 doorWidthCheck — the sheet's own door width as a second opinion on any calibration, surfaced by set_scale and the app |
+> Continued in [patch-plan-3.md](patch-plan-3.md): counting without asking the model to count (P21 to P26). Bench after the sheet door width (2026-10-18) on that branch: fill 21/22 — the open case a diagonal door on a sheet with no vector layer.

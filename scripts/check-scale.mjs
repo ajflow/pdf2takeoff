@@ -36,6 +36,26 @@ const parse = [
   [['1"=50\''], [600]],
   [['FULL', 'SIZE'], [1]],
   [['SCALE:', 'HALF', 'SIZE'], [2]],
+  // OCR damage on degraded rasters: letter-for-digit slips, and the fraction
+  // slash dropped so `1/4" = 1'-0"` reads `14" =1'0"` — repaired, or when a
+  // repair cannot reach a printed standard, rejected rather than answered wrong
+  [['14"', "=1'0\""], [48]],
+  [['18"', '=', "1'0\""], [96]],
+  [['34"', '=', "1'-0\""], [16]],
+  [['1"', '=', "2O'"], [240]],
+  [['1"', '=', "lO'"], [120]],
+  [['SCALE', '1:IOO'], [100]],
+  [['SCALE:', '1:2SO'], [250]],
+  [['13"', '=', "1'-0\""], []], // 12/13 is no printed scale and no repair reaches one
+  [['1"', '=', "13'"], []], // 156 feet per inch is no engineer scale
+  // the note's right side destroyed by the scan: the keyword'd bare fraction
+  // votes alone (reduced weight), and never double-votes beside the full note
+  [['SCALE:', '1/4"'], [48]],
+  [['SCALE:', '1/8"'], [96]],
+  [['1/4"'], []], // without the keyword a bare fraction is just a dimension
+  [['SCALE:', '"=10'], [120]], // the note fused: leading 1" and trailing foot mark lost
+  [['SCALE:', '"=2O'], [240]],
+  [['SCALE:', '"=13'], []], // 13 feet per inch is no engineer scale
 ];
 for (const [input, want] of parse) {
   const got = ratios(...input);

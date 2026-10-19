@@ -1,25 +1,27 @@
 // Document operations shared by the CLI and the MCP server: one code path
 // for scanning, comparing and annotation reading, whatever drives it.
 
-import { writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { writeFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
 import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
-import { openPdf } from './pdfjs-node.ts';
-import { RASTER_SCALE } from '../engine/ports.ts';
-import { cvScan } from '../engine/scan-cv.ts';
-import { vectorScan } from '../engine/scan-vector.ts';
+import { imageKindByExt, openAny } from './image-node.ts';
+import { RASTER_SCALE, type RasterPage, type ScanDeps } from '../engine/ports.ts';
+import { scanForSimilar } from '../engine/scan.ts';
+import { cvScan, type TextBox } from '../engine/scan-cv.ts';
+import { loadDetectorNode } from './detector-node.ts';
+import { ocrRaster, type OcrPageOptions } from './ocr-node.ts';
 import { vectorize } from '../engine/vector.ts';
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
-import type { Markup, Pt } from '../engine/types.ts';
+import type { Markup, Pt, ScanResult } from '../engine/types.ts';
 import { vectorDiff, textDiff, type VectorDiff, type TextDiff } from '../engine/revdiff.ts';
-import { findScaleRatio, roomLabelPoints, wordsFromTextItem } from '../engine/ocr.ts';
+import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type OcrWord } from '../engine/ocr.ts';
 import { metersPerPtForRatio } from '../engine/units.ts';
-import { dynamicFill } from '../engine/dynamicfill.ts';
+import { dynamicFill, type FillHints } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 
 /** Read pdf2takeoff-authored annotations from every page of an open doc. */
@@ -40,13 +42,88 @@ export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
   return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => layers.isVisible(g as never) });
 }
 
-/** Scan at a click point (PDF points): vector match on born-digital symbols, else tier-1 CV. */
-export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt) {
-  const vec = await vectorDocPage(doc, page).catch(() => null);
-  const byVector = vec ? vectorScan(vec, at) : null;
-  if (byVector) return byVector;
-  const raster = await renderRasterNode(doc, page, RASTER_SCALE);
-  return cvScan(raster, at);
+export interface ScanOptions {
+  /** Directory holding symbols.json + the model (see detector-node.ts); default: PDF2TAKEOFF_MODEL_DIR, then public/models/. */
+  modelDir?: string;
+  /**
+   * When the CV scan finds fewer than 2 symbols and the page has no text
+   * layer, OCR the render and retry with the words erased from the ink
+   * (symbols fused with their tags). Off by default: OCR costs seconds.
+   * The text layer is always tried first when the page has one.
+   */
+  ocrTextMask?: boolean;
+}
+
+/** The engine's scan ports bound to an open document: pdf.js vectors and raster, the local ONNX model when one is present. */
+export function scanDeps(doc: PDFDocumentProxy, opts: ScanOptions = {}): ScanDeps {
+  return {
+    renderRaster: (page, scale) => renderRasterNode(doc, page, scale),
+    detector: () => loadDetectorNode(opts.modelDir),
+    vector: (page) => vectorDocPage(doc, page).catch(() => null),
+    // stdout carries JSON (CLI) or the MCP protocol, so recoverable tier failures go to stderr
+    warn: (message) => process.stderr.write(`pdf2takeoff: ${message}\n`),
+  };
+}
+
+/** Padding around a word box before it is erased, as a fraction of the word height (glyph overshoot, anti-aliasing). */
+const TEXT_BOX_PAD = 0.15;
+/** OCR words below this confidence, or without two alphanumerics, are symbol fragments read as text and are not erased. */
+const OCR_MASK_MIN_CONF = 60;
+
+/**
+ * Word boxes (PDF points, centre plus length and height, with the baseline
+ * angle when known) as axis-aligned raster-px boxes for cvScan's textBoxes.
+ * Text-layer words (conf 100) all count; OCR words only when they read
+ * like text, so a valve the recogniser took for a letter is not erased.
+ */
+export function wordBoxesToRaster(words: (OcrWord & { angleDeg?: number })[], raster: RasterPage): TextBox[] {
+  const out: TextBox[] = [];
+  for (const wd of words) {
+    if (wd.conf < 100 && (wd.conf < OCR_MASK_MIN_CONF || (wd.text.match(/[0-9A-Za-z]/g) ?? []).length < 2)) continue;
+    const a = ((wd.angleDeg ?? 0) * Math.PI) / 180;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    const hw = wd.wPt / 2 + wd.hPt * TEXT_BOX_PAD;
+    const hh = wd.hPt / 2 + wd.hPt * TEXT_BOX_PAD;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [sa, sb] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const p = raster.toRaster(wd.xPt + ux * hw * sa - uy * hh * sb, wd.yPt + uy * hw * sa + ux * hh * sb);
+      x0 = Math.min(x0, p.x);
+      y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x);
+      y1 = Math.max(y1, p.y);
+    }
+    if (x1 > x0 && y1 > y0) out.push({ x0, y0, x1, y1 });
+  }
+  return out;
+}
+
+/**
+ * Scan at a click point (PDF points): vector match on born-digital symbols,
+ * then the trained detector when a model is present, else tier-1 CV. When
+ * the CV scan comes back with fewer than 2 hits, the page's words (text
+ * layer; OCR of the render only with `ocrTextMask`) are erased from the
+ * ink and the scan is retried, for symbols fused with their tags; the
+ * retry is kept when it finds more.
+ */
+export async function scanDocAt(doc: PDFDocumentProxy, page: number, at: Pt, opts: ScanOptions = {}): Promise<ScanResult> {
+  const deps = scanDeps(doc, opts);
+  // keep the render so the retry does not pay for it again
+  let rendered: RasterPage | undefined;
+  const render = deps.renderRaster;
+  deps.renderRaster = async (p, scale) => (rendered = await render(p, scale));
+  const first = await scanForSimilar(page, at, deps);
+  if ('error' in first || first.provider !== 'cv' || first.hits.length >= 2 || !rendered) return first;
+  let words: OcrWord[] = await pageWords(doc, page).catch(() => []);
+  if (!words.length && opts.ocrTextMask) words = await ocrRaster(rendered).catch(() => []);
+  if (!words.length) return first;
+  const textBoxes = wordBoxesToRaster(words, rendered);
+  const retry = cvScan(rendered, at, { textBoxes });
+  if ('error' in retry || retry.hits.length <= first.hits.length) return first;
+  return { ...retry, note: `${retry.note ?? ''} (retried with ${textBoxes.length} text boxes erased)`.trim() };
 }
 
 /** A sheet counts as changed above this fraction of changed pixels. */
@@ -73,6 +150,76 @@ async function pageWords(doc: PDFDocumentProxy, page: number) {
   return (tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[]).flatMap((it) =>
     wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height),
   );
+}
+
+export interface PageWordsResult {
+  words: OcrWord[];
+  /** where the words came from: the PDF text layer (exact, conf 100) or OCR of the render (recogniser confidence per word) */
+  source: 'text-layer' | 'ocr';
+}
+
+/**
+ * Words of a page with OCR as the fallback: the text layer when it has
+ * words (born-digital sheets), else OCR of the page render (scans, raster
+ * imports). `ocr` true forces OCR, false forbids it. `raster` supplies an
+ * already rendered page, or an image with no PDF behind it (then pass doc
+ * as null). `region` (PDF points) narrows the OCR, not the text layer.
+ */
+export async function pageWordsWithOcr(
+  doc: PDFDocumentProxy | null,
+  page: number,
+  raster?: RasterPage,
+  opts: { ocr?: boolean; region?: OcrPageOptions['region']; rotations?: number[] } = {},
+): Promise<PageWordsResult> {
+  const layer = doc && opts.ocr !== true ? await pageWords(doc, page).catch(() => []) : [];
+  if (layer.length && opts.ocr !== true) return { words: layer, source: 'text-layer' };
+  if (opts.ocr === false || (!doc && !raster)) return { words: layer, source: 'text-layer' };
+  const r = raster ?? (await renderRasterNode(doc!, page, RASTER_SCALE));
+  const words = await ocrRaster(r, { region: opts.region, rotations: opts.rotations });
+  return { words, source: 'ocr' };
+}
+
+/** A word's box in raster px (its baseline may be rotated), padded by a pixel, for FillHints.textBoxes. */
+function wordBox(raster: RasterPage, wd: OcrWord & { angleDeg?: number }): NonNullable<FillHints['textBoxes']>[number] {
+  const a = ((wd.angleDeg ?? 0) * Math.PI) / 180;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  const hw = wd.wPt / 2;
+  const hh = wd.hPt / 2;
+  const pts = [
+    [-hw, -hh],
+    [hw, -hh],
+    [hw, hh],
+    [-hw, hh],
+  ].map(([s, t]) => raster.toRaster(wd.xPt + ux * s - uy * t, wd.yPt + uy * s + ux * t));
+  return {
+    x0: Math.floor(Math.min(...pts.map((p) => p.x))) - 1,
+    y0: Math.floor(Math.min(...pts.map((p) => p.y))) - 1,
+    x1: Math.ceil(Math.max(...pts.map((p) => p.x))) + 1,
+    y1: Math.ceil(Math.max(...pts.map((p) => p.y))) + 1,
+  };
+}
+
+/**
+ * Everything Dynamic Fill takes from a sheet besides the click point: room
+ * label centres and word boxes from the text layer (the glyphs inside the
+ * boxes are masked out of the fill boundary, so a label or dimension
+ * string touching a wall makes no false neck), vector doorway bridges, the
+ * scale when known, and with `ocr` the OCR words' boxes too (scans and
+ * raster imports have no text layer). One call per sheet; the hints are
+ * reusable across clicks on it.
+ */
+export async function fillHintsFor(doc: PDFDocumentProxy, page: number, raster: RasterPage, opts: { metersPerPt?: number; ocr?: boolean } = {}): Promise<FillHints> {
+  const [tc, vec] = await Promise.all([doc.getPage(page).then((pg) => pg.getTextContent()), vectorDocPage(doc, page).catch(() => null)]);
+  const items = tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+  const words: (OcrWord & { angleDeg?: number })[] = items.flatMap((it) => wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height));
+  if (opts.ocr) words.push(...(await ocrRaster(raster).catch(() => [] as OcrWord[])));
+  return {
+    labels: roomLabelPoints(items),
+    textBoxes: words.map((wd) => wordBox(raster, wd)),
+    ...(vec ? { bridges: doorBridgesFor(vec, opts.metersPerPt) } : {}),
+    ...(opts.metersPerPt ? { metersPerPt: opts.metersPerPt } : {}),
+  };
 }
 
 /** Keep diff listings readable: the first n entries (totals are reported beside them). */
@@ -255,25 +402,13 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
     counts.push({ page, label, a: g.length, b, delta: b - g.length });
   }
   // everything a re-fill needs from a B sheet, prepared once per sheet
-  const sheets = new Map<number, Promise<Parameters<typeof dynamicFill>[3] & { raster: Awaited<ReturnType<typeof renderRasterNode>> }>>();
+  const sheets = new Map<number, Promise<FillHints & { raster: Awaited<ReturnType<typeof renderRasterNode>> }>>();
   const sheet = (page: number) => {
     let s = sheets.get(page);
     if (!s) {
       s = (async () => {
-        const [raster, items, vec, mppB, mppA] = await Promise.all([
-          renderRasterNode(docB, page, RASTER_SCALE),
-          docB.getPage(page).then((pg) => pg.getTextContent()),
-          vectorDocPage(docB, page),
-          sheetMetersPerPt(docB, page),
-          sheetMetersPerPt(docA, page),
-        ]);
-        const metersPerPt = mppB ?? mppA;
-        return {
-          raster,
-          labels: roomLabelPoints(items.items as { str?: string; transform?: number[]; width?: number; height?: number }[]),
-          bridges: doorBridgesFor(vec, metersPerPt),
-          ...(metersPerPt ? { metersPerPt } : {}),
-        };
+        const [raster, mppB, mppA] = await Promise.all([renderRasterNode(docB, page, RASTER_SCALE), sheetMetersPerPt(docB, page), sheetMetersPerPt(docA, page)]);
+        return { raster, ...(await fillHintsFor(docB, page, raster, { metersPerPt: mppB ?? mppA })) };
       })();
       sheets.set(page, s);
     }
@@ -299,21 +434,27 @@ export async function quantityDelta(docA: PDFDocumentProxy, docB: PDFDocumentPro
 
 // --- batch compare across folders ---
 
-function listPdfs(dir: string): string[] {
+/** PDFs and PNG / JPG scans under a folder, recursively. */
+function listDrawings(dir: string): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.toLowerCase().endsWith('.pdf')) out.push(full);
+      else if (entry.name.toLowerCase().endsWith('.pdf') || imageKindByExt(entry.name)) out.push(full);
     }
   };
   walk(dir);
   return out;
 }
 
+/** The sheet a file stands for: its basename without the .pdf / .png / .jpg extension, so a scan pairs with the PDF of the same sheet. */
+export function sheetStem(file: string): string {
+  return basename(file).replace(/\.(pdf|png|jpe?g)$/i, '');
+}
+
 export interface FolderPairResult {
-  sheet: string; // basename
+  sheet: string; // file stem (basename without extension)
   aPages: number;
   bPages: number;
   changedSheets: number[];
@@ -330,7 +471,7 @@ export interface FolderCompareResult {
   notes: string[];
 }
 
-/** Recursively pair PDFs across two revision folders by filename and diff every pair. */
+/** Recursively pair PDFs and images across two revision folders by file stem and diff every pair. */
 export async function compareFolders(
   dirA: string,
   dirB: string,
@@ -338,8 +479,8 @@ export async function compareFolders(
 ): Promise<FolderCompareResult> {
   const byBase = (dir: string) => {
     const map = new Map<string, string[]>();
-    for (const f of listPdfs(dir)) {
-      const key = basename(f);
+    for (const f of listDrawings(dir)) {
+      const key = sheetStem(f);
       map.set(key, [...(map.get(key) ?? []), f]);
     }
     return map;
@@ -364,11 +505,11 @@ export async function compareFolders(
     const fb = b.get(sheet)?.[0];
     if (fa && !fb) continue; // handled by removedFromA below
     if (!fa && fb) continue;
-    const docA = await openPdf(new Uint8Array(readFileSync(fa!)));
-    const docB = await openPdf(new Uint8Array(readFileSync(fb!)));
+    const { doc: docA } = await openAny(fa!);
+    const { doc: docB } = await openAny(fb!);
     const result = await compareDocs(docA, docB, {
       threshold: opts.threshold,
-      ...(opts.pngDir ? { png: join(opts.pngDir, `${sheet.replace(/\.pdf$/i, '')}-overlay.png`) } : {}),
+      ...(opts.pngDir ? { png: join(opts.pngDir, `${sheet}-overlay.png`) } : {}),
     });
     pairs.push({
       sheet,
@@ -393,11 +534,11 @@ export async function compareFolders(
 }
 
 /** Scan a symbol across every page; pages without it count 0. */
-export async function scanDocAllPages(doc: PDFDocumentProxy, at: Pt) {
+export async function scanDocAllPages(doc: PDFDocumentProxy, at: Pt, opts: ScanOptions = {}) {
   const pages: { page: number; count: number }[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     try {
-      const result = await scanDocAt(doc, p, at);
+      const result = await scanDocAt(doc, p, at, opts);
       pages.push({ page: p, count: 'error' in result ? 0 : result.hits.length });
     } catch {
       pages.push({ page: p, count: 0 });

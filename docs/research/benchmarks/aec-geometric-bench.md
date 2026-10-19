@@ -91,3 +91,14 @@ removes windows whose outside walk crosses wall ink on these dense sheets
 (37 → 12 true positives). Both are AECV-motivated trades; if this anchor's
 window or area numbers matter for a comparison, run with
 `windowExterior=false` / `minSpaceShare=0` and say so.
+
+
+## Area recall round, 2026-10-19: a spaces-only kernel
+
+Area instance F1 0.087 with pixel precision 0.94 meant rooms were being merged, not invented. Three hypotheses were probed on the worst sheets before anything was built: relaxing the gap scan's wall-end and minimum-gap rules (spaces barely moved; the merged rooms are not joined through mis-scanned doorways), sealing pinholes in the bridged solid mask (no movement; the holes are wider than a wall thickness), and a thinner opening kernel for the space pass alone (sheet_10 1 -> 32 spaces against 53 truth, sheet_14 60 -> 160 against 125, sheet_15 18 -> 45 against 139, sheet_12 -> 61 exactly). The binding constraint on the undercounted sheets is interior partitions thinner than the outer wall the thickness estimate latches onto: the 0.75t wall kernel erases them and every room behind them merges.
+
+So `spaceKernelFraction` (default 0.75, engine behaviour unchanged) rebuilds the mask for the enclosed-space pass at a fraction of the wall kernel — the anchor pins 0.5, matching how partitions actually scale against outer walls. Wall extraction, opening detection and the product defaults are untouched.
+
+Pinned anchor re-run with the spaces kernel: wall pixel F1 0.519 (identical), area pixel 0.324 -> **0.370** (P 0.941 / R 0.230), area instance 0.089 -> **0.099**, objects unchanged at 0.011.
+
+What remains, from the same probes: six sheets (01, 06, 08, 09, 10, 13) still submit 0-4 areas against 25-97 truth because the wall mask itself leaks — their thickness estimates run 21-64 px against partitions the mask never captures, and no bridging or sealing of the flood fill recovers a boundary the mask does not have. That is wall-extraction recall work (the same tail AECV round 3 left), not a spaces change.

@@ -22,6 +22,7 @@
 // // widths the sheet itself shows (kept only for room-sized cuts).
 
 import { dynamicFill, sheetDoorWidthPx } from '../src/engine/dynamicfill.ts';
+import { simpleRingError } from '../src/engine/polygon.ts';
 
 const W = 300;
 const H = 200;
@@ -505,4 +506,20 @@ const slotSheet = (slotPx) => {
   if (dp40 < 38 || dp40 > 42) { console.error(`FAIL door-sized slots not reported: ${dp40}px`); process.exit(1); }
 }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; curved walls kept; wide front doors sealed by where they lead; unbounded errors');
+// A ring that revisits a non-adjacent vertex is two lobes touching at one
+// point. Area and proper-crossing checks alone accept it, but downstream
+// polygon repair can turn the single fill into multiple scored instances.
+{
+  const touching = [
+    { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 },
+    { x: 0, y: 0 }, { x: -4, y: 0 }, { x: -4, y: -4 }, { x: 0, y: -4 },
+  ];
+  const reason = simpleRingError(touching);
+  if (!reason || !/repeated vertex|self-intersecting/.test(reason)) {
+    console.error(`FAIL touching two-lobe ring accepted: ${reason}`);
+    process.exit(1);
+  }
+  console.log(`invalid ring rejected: ${reason}`);
+}
+
+console.log('PASS: gap rooms bound with area within tolerance; valid simple rings returned; doorway and opening cases classified');

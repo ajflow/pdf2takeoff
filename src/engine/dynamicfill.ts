@@ -58,6 +58,7 @@
 import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
 import { estimateStrokeWidth } from './line-removal.ts';
+import { simpleRingError } from './polygon.ts';
 
 /** A filled region larger than this share of the page counts as unbounded. */
 const MAX_FILL_FRACTION = 0.4;
@@ -1260,11 +1261,16 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   let cy = startY;
   let dir = 0; // heading east along the top edge of the start pixel
   let perimeter = 0;
+  let closed = false;
+  const seen = new Set<number>();
   // the start corner is a true vertex: the trace leaves it eastward and,
   // with nothing above or left of the start pixel, returns to it heading
   // north, and no other pixel touches that corner
   boundaryPts.push({ x: cx, y: cy });
   for (let guard = 0; guard <= 4 * region.length + 4; guard++) {
+    const vertex = cy * (w + 1) + cx;
+    if (seen.has(vertex)) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
+    seen.add(vertex);
     // a filled pixel ahead-left means the boundary turns left (diagonal
     // contacts stay joined, as the pixel trace did); ahead-right filled means
     // straight on; nothing ahead means the outline turns right
@@ -1276,12 +1282,18 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     cx += DX[dir];
     cy += DY[dir];
     perimeter++;
-    if (cx === startX && cy === startY) break;
+    if (cx === startX && cy === startY) {
+      closed = true;
+      break;
+    }
   }
+  if (!closed) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
   if (perimeter < 12) return { error: 'that region is too small to fill' };
 
-  const simplified = douglasPeucker(boundaryPts, 1.5);
+  const candidate = douglasPeucker(boundaryPts, 1.5);
+  const simplified = simpleRingError(candidate) === null ? candidate : boundaryPts;
   if (simplified.length < 3) return { error: 'that region is too small to fill' };
+  if (simpleRingError(simplified) !== null) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
 
   // plausibility: the outline encloses exactly the filled pixels (plus any
   // ink islands inside the room, which count excludes), so its area is at
@@ -1290,6 +1302,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   if (area < 0.8 * count || area > 5 * count) return unbounded();
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
+  if (simpleRingError(points) !== null) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
   // the doorway rule in force on this fill: the calibrated scale's door
   // rung, or — only without a scale, when a sheet-derived width won the
   // guarded trial — the sheet's own

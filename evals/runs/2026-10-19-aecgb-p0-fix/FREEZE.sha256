@@ -1,0 +1,9 @@
+7a06d093db21d67152e7cca7e55a4736160cebab129f319e1648549f8a71091c  evals/runs/2026-10-19-aecgb-p0-fix/prediction-assisted.json
+8282ba140097dc31cd439485e5aed3033ead7a368d541c77564a0984900f3379  evals/runs/2026-10-19-aecgb-p0-fix/score-assisted.json
+4c2f2bcfd92165168297d4f582d08671c2d1ad386f957c857c7aae94bda038dd  evals/runs/2026-10-19-aecgb-p0-fix/RESULT.md
+ca66efca26ea9f6a8f2e9048e42bfba1a0afed45f83135f697097611389f44f5  src/engine/dynamicfill.ts
+f1e10e8ffd7c461de65619e026e405a4ff5dc5a01a9667f56adfc66ec0f98f91  src/engine/polygon.ts
+a07bd7f7ed21c6eed59fc802af09b94b3d2c559b683092a425858915ddbe510e  scripts/check-fill.mjs
+007bcb1607d5d6c8dce4b287b0bb0625449ed9e579da45580f9a7bb2bb48a2a5  evals/aecgb/predict-sheet02.mjs
+7b09ac1712bea416aa2f525b3017ee2f961dc98e57785f595fc4fd4ae865a56a  evals/aecgb/repo/dataset/pdf/sheet_02.pdf
+e338b71e3de5f781067fb9f3532aa421557ffa480f804f39a29dec9796aac767  evals/aecgb/repo/scoring/score.py

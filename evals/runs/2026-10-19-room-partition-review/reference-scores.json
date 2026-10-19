@@ -1,0 +1,41 @@
+{
+  "scorer_sha256": "e338b71e3de5f781067fb9f3532aa421557ffa480f804f39a29dec9796aac767",
+  "peer_commit": "f18595c4c39451fab8f47d06a61bc9b7c515f1db",
+  "peer_predictions_sha256": "d40c909eaef5978953581843c60fa6599208479a515fbf6054717a98ff0a6856",
+  "kamai_predictions_sha256": "33c0d1672dbef0dde68e3039f558a1e8f3eff8e9f3ff212db6e19ee11dd9fe59",
+  "gt_sha256": "ee0702a4353b14b6fe520321190deeb037e64b9b81b9716f6b223c3fbbc0d056",
+  "results": [
+    {
+      "system": "opentakeoff",
+      "tp": 14,
+      "fp": 6,
+      "fn": 8,
+      "instance_prf": [
+        0.7,
+        0.6363636363636364,
+        0.6666666666666666
+      ],
+      "pixel_prf": [
+        0.9859554206396808,
+        0.8065751976144081,
+        0.8872899354054125
+      ]
+    },
+    {
+      "system": "kamai",
+      "tp": 17,
+      "fp": 2,
+      "fn": 5,
+      "instance_prf": [
+        0.8947368421052632,
+        0.7727272727272727,
+        0.8292682926829269
+      ],
+      "pixel_prf": [
+        0.9781644732425955,
+        0.9922356112478496,
+        0.9851497994223763
+      ]
+    }
+  ]
+}

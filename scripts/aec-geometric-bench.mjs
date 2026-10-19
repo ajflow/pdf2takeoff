@@ -93,7 +93,7 @@ for (const sheet of manifest.sheets) {
     // since grew an extended ladder (hatched residential scans) whose guards
     // trade wall recall on these large commercial sheets for count sanity;
     // pinning keeps the anchor's time series comparable run over run.
-    const anchor = { closeRadii: [0, 1, 2, 3], closeCellFactor: 1e9, closeCellAdd: 1e9, closeGrowthLimit: 1e9 };
+    const anchor = { closeRadii: [0, 1, 2, 3], closeCellFactor: 1e9, closeCellAdd: 1e9, closeGrowthLimit: 1e9, spaceKernelFraction: 0.5 };
     const res = detectOpenings(raster, anchor);
     const spaces = countEnclosedSpaces(raster, anchor, res);
     const box = (b) => [b.x0 * kx, b.y0 * ky, b.x1 * kx, b.y1 * ky];

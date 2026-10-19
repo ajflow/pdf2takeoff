@@ -108,6 +108,13 @@ export interface OpeningOptions {
   wallThicknessPx?: number;
   /** Opening kernel side as a fraction of the wall thickness (kept odd, at least 3). */
   kernelFraction: number;
+  /**
+   * Kernel fraction for the enclosed-space pass alone. Interior partitions are
+   * often thinner than the outer wall the thickness estimate latches onto, so
+   * counting rooms against the wall mask merges them; a smaller kernel here
+   * keeps partitions without touching wall extraction or opening detection.
+   */
+  spaceKernelFraction: number;
   /** Wall-mask blobs whose bounding box is shorter than this many t on both axes are dropped. */
   minWallBlobT: number;
   /** Gap widths considered, in multiples of t. */
@@ -188,6 +195,7 @@ export const DEFAULT_OPENING_OPTIONS: OpeningOptions = {
   maxWallPx: 80,
   peakShare: 0.1,
   kernelFraction: 0.75,
+  spaceKernelFraction: 0.75,
   minWallBlobT: 4,
   minGapT: 1.5,
   maxGapT: 25,
@@ -282,6 +290,8 @@ export interface WallSummary {
   countHistogram: Float64Array;
   /** 1 = wall, row-major, at the working scale. */
   mask: Uint8Array;
+  /** Mask the enclosed-space pass uses (partitions kept at spaceKernelFraction); null = same as mask. */
+  spaceMask: Uint8Array | null;
 }
 
 export interface OpeningsResult {
@@ -1403,6 +1413,19 @@ export function detectOpenings(raster: RasterPage, options: Partial<OpeningOptio
   let inkCount = 0;
   let wallCount = 0;
   for (let i = 0; i < ink.length; i++) { inkCount += ink[i]; wallCount += wall[i]; }
+  // partitions for the space pass: a kernel under the wall estimate keeps
+  // interior partitions the wall kernel erodes, at the cost of furniture
+  // lines (the space area/relative floors absorb those)
+  let spaceMask: Uint8Array | null = null;
+  if (o.spaceKernelFraction < o.kernelFraction) {
+    let k2 = Math.floor(o.spaceKernelFraction * t);
+    if (k2 % 2 === 0) k2--;
+    k2 = Math.max(3, k2);
+    if (k2 < est.k) {
+      spaceMask = open(est.closed, w, h, (k2 - 1) / 2);
+      dropSmallBlobs(spaceMask, w, h, Math.round(o.minWallBlobT * t));
+    }
+  }
   return {
     doors,
     windows: mergeWindows(windows, t / s, o.mergeGapT),
@@ -1423,6 +1446,7 @@ export function detectOpenings(raster: RasterPage, options: Partial<OpeningOptio
       minWallPx: est.minWall ?? o.minWallPx,
       countHistogram: est.countHistogram ?? new Float64Array(0),
       mask: wall,
+      spaceMask,
     },
   };
 }
@@ -1526,7 +1550,8 @@ function exteriorFlags(regions: SolidRegion[]): Uint8Array {
 export function countEnclosedSpaces(raster: RasterPage, options: Partial<OpeningOptions> = {}, openings?: OpeningsResult): SpaceResult {
   const o: OpeningOptions = { ...DEFAULT_OPENING_OPTIONS, ...options };
   const res = openings ?? detectOpenings(raster, options);
-  const { width: w, height: h, mask, scale: s } = res.walls;
+  const { width: w, height: h, scale: s } = res.walls;
+  const mask = res.walls.spaceMask ?? res.walls.mask;
   const t = res.walls.thicknessPx * s; // working px
   const solid = solidWithBridges(mask, w, h, [...res.doors, ...res.windows, ...res.passages], s, res.walls.thicknessPx, o);
   const { label: _label, regions } = labelSolidRegions(solid, w, h);

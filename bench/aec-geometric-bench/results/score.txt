@@ -14,5 +14,5 @@ Cooktops                  0      0     56   0.000   0.000   0.000
 OBJECT MICRO             12    459   1620   0.025   0.007   0.011
 
 wall pixel                                  0.784   0.388   0.519
-area pixel                                  0.940   0.196   0.324
-area instance                               0.139   0.066   0.089
+area pixel                                  0.941   0.230   0.370
+area instance                               0.149   0.074   0.099

@@ -18,10 +18,11 @@ an account, or our servers.
 | **ScaledDrawingBench v0.1** (ours) — vector half, 980 questions | **99.8%** overall accuracy, 100% on scale/length/area/perimeter | born-digital PDFs with a text layer | `npm run bench:scaled -- generate && npm run bench:scaled -- reference --half vector` |
 | **ScaledDrawingBench v0.1** — raster half, 968 questions | **37.3%** overall (was 23.0% ten commits earlier — see the improvement log) | 100 degraded scans: blur, speckle, photocopy, skew, contrast; no text layer; OCR is the only input | `npm run bench:scaled -- reference --half raster` |
 | **ScaledDrawingBench** — hallucinations | **0 of 92** | questions that are unanswerable by design (NTS sheets): the engine abstained every time, never invented a number | scored as part of either half |
-| **AECV-Bench** (external, public) — five-field mean exact match | **0.295** | best published VLM 0.543; frontier VLMs 0.35–0.54 | harness in `scripts/aecv-bench.mjs`; notes in [docs/research/benchmarks/aecv-bench.md](../docs/research/benchmarks/aecv-bench.md) |
-| **AECV-Bench** — bedroom / toilet counts | **0.708 / 0.500** exact match | with a room-label dictionary + OCR and **no vision model at all**; published VLMs sit at 0.7–0.93 | same |
+| **AECV-Bench** (external, public) — five-field mean exact match | **0.295** EM, **53.9%** mean MAPE | MAPE was 107.7% before the hatch-aware opening-detector round; best published VLM 0.543 EM / 15.3% MAPE | harness in `scripts/aecv-bench.mjs`; notes in [docs/research/benchmarks/aecv-bench.md](../docs/research/benchmarks/aecv-bench.md) |
+| **AECV-Bench** — windows / spaces | **0.117 / 0.083** exact match, 52.4% / 89.6% MAPE | windows 184.5%→52.4% and spaces 221.4%→89.6% MAPE in one detector round (extended closing ladder + wall-network and exterior-facing gates); still below the best VLM EM | same |
+| **AECV-Bench** — bedroom / toilet counts | **0.708 / 0.458** exact match | with a room-label dictionary + OCR and **no vision model at all**; published VLMs sit at 0.7–0.93 | same |
 | **AEC-Geometric-Bench** (external, released scorer) — wall pixel F1 | **0.519** | frontier VLMs 0.18–0.29 on the identical 15 sheets; Kamai's purpose-built pipeline 0.931 | `scripts/aec-geometric-bench.mjs --bench <clone>`; notes in [docs/research/benchmarks/aec-geometric-bench.md](../docs/research/benchmarks/aec-geometric-bench.md) |
-| **AEC-Geometric-Bench** — area pixel precision | **0.943** | when the engine claims a room it is one; recall 0.239 is the gap (Kamai 0.987) | same |
+| **AEC-Geometric-Bench** — area pixel precision | **0.940** | when the engine claims a room it is one; recall 0.196 is the gap (Kamai 0.987) | same |
 | **ResPlan room areas** (external, CC BY 4.0) — 200 real plans | **94.1%** of rooms recovered, median area error **−1.8%** | run log in [docs/research/benchmarks/room-area-datasets.md](../docs/research/benchmarks/room-area-datasets.md); ledger line pending the next scheduled run | `npm run bench:rooms` (downloads ResPlan) |
 | **Internal takeoff bench** (in CI, every push) | **23/24** fill (1 documented open: diagonal door without a vector layer) · **2/2** count · **9/9** scale · **3/3** doorcheck | regression gate; a dropped case fails the build | `npm run bench` |
 | **Scan latency / size** | **~100 ms** CV tier · **1.6 s** cached in-browser ONNX scan · **76 MB** model | in-browser (WASM), nothing uploaded | open the app, press `S`, click |
@@ -81,6 +82,23 @@ unrepairable damage abstains instead of answering wrong; the graphic scale
 bar is read from a least-squares fit over consistent ticks. Full story in
 [docs/research/benchmarks/drawing-vqa-benchmarks.md](../docs/research/benchmarks/drawing-vqa-benchmarks.md).
 
+| AECV-Bench geometry fields | intake | after the hatch-aware detector round |
+|---|---|---|
+| window EM / MAPE | 0.092 / 184.5% | **0.117 / 52.4%** |
+| space EM / MAPE | 0.058 / 221.4% | **0.083 / 89.6%** |
+| door EM / MAPE | 0.117 / 72.9% | **0.108 / 63.6%** |
+| five-field mean | 0.295 EM / 107.7% MAPE | **0.295 EM / 53.9% MAPE** |
+
+What moved it: the raster opening detector learned hatched and double-line
+walls — the closing ladder now climbs to cavity scale under two guards (a
+closing may not multiply the enclosed cells of every smaller radius, nor
+outgrow the unclosed mask), doors and windows must anchor to a band-like
+wall component, windows must face the exterior (one side reaches the page
+edge without crossing a room), and spaces must span 3% of the largest room.
+Total absolute error over the three geometry fields fell from 5239 to 2228;
+the ten worst plans went from 2247 to 568. Full story in
+[docs/research/benchmarks/aecv-bench.md](../docs/research/benchmarks/aecv-bench.md), round 3.
+
 ## Published failures
 
 The parts we are still bad at, so nobody has to find out the hard way:
@@ -92,9 +110,10 @@ The parts we are still bad at, so nobody has to find out the hard way:
   OCR pass we run; ratio- and bar-notation sheets read at 17/21 and 16/19.
 - **Raster count MAPE 18.8%** over answered counts — degraded symbol renders
   still confuse the template matcher.
-- **AECV-Bench doors/windows**: 0.117/0.092 exact match — needs the raster
-  opening detector wired into the harness (the module exists; see
-  `src/engine/openings.ts`).
+- **AECV-Bench doors/windows/spaces**: 0.108/0.117/0.083 exact match against
+  best-VLM 0.43/0.39/0.14 — the deterministic detector is at or above the VLM
+  floor on spaces but far behind on doors; hatched CubiCasa scans still
+  over-count texture as walls (worst ten plans are all that family).
 - **AEC-Geometric-Bench**: object F1 0.031 (frontier-VLM range; doors
   over-fire on real drawings, fixtures not attempted — no click-free
   detector), area recall 0.239 behind the VLMs' 0.55–0.80. The full reading

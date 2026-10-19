@@ -53,7 +53,7 @@ An Apache-2.0 engine with a first-class MCP surface open-sources exactly that
 tier's differentiator. This is the same move as the rest of the product: free
 where Bluebeam charges, local where cloud tools upload.
 
-### 2.3 Why it compounds our moats (per STRATEGY.md §1)
+### 2.3 Why it compounds our moats
 
 | Moat | How headless strengthens it |
 |---|---|
@@ -427,7 +427,7 @@ a model is an error, not a silent fallback.
 | Agents misuse/confuse coordinate frames | Top-left convention everywhere; width/height returned with every image; tool descriptions state the frame |
 | Scope creep toward "hosted API product" | §10 non-goals; revisit only as an explicit strategy decision |
 | MCP spec churn (protocol is young) | Pin SDK version; tools are thin wrappers — protocol churn can't reach the engine |
-| Single-maintainer load (STRATEGY.md §9) | Each phase is independently shippable and useful; H1 alone pays for itself in code health |
+| Single-maintainer load | Each phase is independently shippable and useful; H1 alone pays for itself in code health |
 
 ---
 

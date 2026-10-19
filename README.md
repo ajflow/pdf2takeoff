@@ -35,7 +35,7 @@ usable by anyone, including to beat us):
 Everything regenerates from this repo with one command per table — see
 [evals/README.md](evals/README.md).
 
-> Product strategy, phase plan, licensing rationale and cost model live in [STRATEGY.md](STRATEGY.md).
+> Phase plan: the [Roadmap](#roadmap) below. Feature-by-feature position against Bluebeam Revu, and what we deliberately won't build: [docs/feature-comparison.md](docs/feature-comparison.md). Licensing rationale: [Why open source?](#why-open-source).
 
 ## What it does today
 

@@ -21,8 +21,8 @@ what does your boss want in the Excel export? Open an issue titled
    discussed in stages.
 3. **CI must pass.** `npm ci && npm run build` green is the first review.
 4. **No new dependencies without discussion.** The permissive-licence,
-   zero-backend architecture is a feature (see STRATEGY.md). Propose the dep in
-   an issue first.
+   zero-backend architecture is a feature (see *Why open source?* in the
+   README). Propose the dep in an issue first.
 5. **No drive-by refactors, formatting sweeps, framework migrations or
    "modernisation" PRs.** They will be closed.
 6. **Describe how you verified it.** Which drawing (the bundled samples are

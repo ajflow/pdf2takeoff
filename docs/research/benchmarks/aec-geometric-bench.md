@@ -61,3 +61,33 @@ Full per-class output in `bench/aec-geometric-bench/results/score.txt`.
 3. Room recall: the ResPlan exterior-aware wide-door machinery exists in
    Dynamic Fill; porting it into the openings path should lift area recall
    the same way it lifted room recovery there (53.8% → 94.1%).
+
+## Re-run 2026-10-19: config pin, wall F1 unchanged
+
+The openings module gained an extended closing ladder with two closing
+guards, wall-network anchoring and an exterior-facing window gate (see the
+AECV-Bench round-3 note). Unpinned, those defaults cost wall recall on these
+large commercial sheets (wall F1 0.458): the guards reject cavity-scale
+closings whose unclosed reference mask is nearly empty, which is exactly the
+state of several sheets here. The harness therefore pins the first pass's
+configuration — base ladder `[0,1,2,3]`, guards off — so this anchor's wall
+time series stays comparable run over run; the rationale is documented in
+the harness header.
+
+Pinned re-run, fifteen sheets, same scorer:
+
+| field | first pass | pinned re-run |
+|---|---|---|
+| wall pixel P / R / F1 | 0.784 / 0.388 / **0.519** | 0.784 / 0.388 / **0.519** |
+| area pixel P / R / F1 | 0.943 / 0.239 / 0.381 | 0.940 / 0.196 / 0.324 |
+| area instance F1 | 0.087 | 0.089 |
+| window object TP / F1 | 37 / 0.089 | 12 / 0.041 |
+
+Wall predictions reproduce the first pass exactly. The two fields that
+moved track the engine's new gates rather than the pin: the spaces
+relative-size floor (3% of the largest kept region) drops small room
+rectangles (area recall 0.239 → 0.196), and the exterior-facing window test
+removes windows whose outside walk crosses wall ink on these dense sheets
+(37 → 12 true positives). Both are AECV-motivated trades; if this anchor's
+window or area numbers matter for a comparison, run with
+`windowExterior=false` / `minSpaceShare=0` and say so.

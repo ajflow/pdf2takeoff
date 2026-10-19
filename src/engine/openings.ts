@@ -21,9 +21,13 @@
 //      holds the first fifth of the ink) sets a floor; walls are the
 //      thinnest significant peak above it (partitions are thinner than the
 //      outer walls, and a kernel sized for the outer wall would erase them)
-//   3. optionally close with a small square so hatched or double-line walls
-//      become solid bands; a closing is kept only when it clearly raises the
-//      share of ink that lies in long bands of wall-class thickness
+//   3. optionally close so hatched or double-line walls become solid bands:
+//      the ladder climbs past 3 px because wall cavities are several times
+//      the outline stroke. A closing is kept only when it clearly raises the
+//      share of ink in long bands of wall-class thickness, leaves at most a
+//      few times more enclosed cells than every smaller radius, and does not
+//      outgrow the unclosed mask many times over (a closing that blobs text
+//      or floor hatch into walls passes the score test and fails these two)
 //   4. thin walls (under 7 px) make the page work at an integer upsample,
 //      so the opening kernel can sit between the wall and the line weight
 //   5. morphological opening with a square just under t: the wall mask
@@ -40,10 +44,18 @@
 //      nothing; parallel lines along an otherwise empty band are a Window
 //      group (sliding doors read the same way, as the benchmark wants);
 //      anything else is an open passage
-//   8. Window groups closer than one wall thickness merge (adjacent units
+//   8. doors and windows must sit on a major band-like wall component (the
+//      network: solid filled blocks, furniture outlines and dimension
+//      chains are not it); windows must also face the exterior — one side
+//      of the wall reaches the page edge without crossing a room-sized
+//      region, the other side is inside — so glazing read between hatch
+//      bands, furniture pairs or dimension chains is dropped
+//   9. Window groups closer than one wall thickness merge (adjacent units
 //      without a wall between them count as one group)
-//   9. spaces: flood-fill the complement of the wall mask with every gap
-//      bridged, count enclosed regions above a minimum area, exterior out
+//  10. spaces: flood-fill the complement of the wall mask with every gap
+//      bridged, count enclosed regions above a minimum absolute area and a
+//      minimum share of the largest region (furniture interiors and text
+//      cells are small against real rooms), exterior out
 //
 // Coordinates: Opening.px fields are page pixels (top-left origin), `at`
 // is the gap centre in PDF user space via RasterPage.toPdf; the wall mask
@@ -59,6 +71,17 @@ export interface OpeningOptions {
   closeRadii: number[];
   /** A closing is used only when its wall score beats no closing by this factor (hatched walls score near zero unclosed). */
   closeGain: number;
+  /**
+   * A closing radius above the base ladder is additionally rejected unless it
+   * leaves the drawing at most this many enclosed cells (plus closeCellAdd,
+   * over the best smaller radius): a closing that blobs text and floor hatch
+   * into walls fragments space into many more cells than any smaller radius
+   * left, while one that merges paired wall lines unifies or mildly splits.
+   */
+  closeCellFactor: number;
+  closeCellAdd: number;
+  /** A closing whose wall mask grows beyond this multiple of the unclosed mask has swallowed texture, not cavities. */
+  closeGrowthLimit: number;
   /** Fixed closing radius (px); overrides the automatic choice when set. */
   closeRadius?: number;
   /** Walls thinner than this (px) make the page work at an integer upsample so the kernel can separate walls from lines. */
@@ -127,16 +150,32 @@ export interface OpeningOptions {
   fullCover: number;
   /** Window groups separated by less than this many t merge into one group. */
   mergeGapT: number;
+  /** Openings (doors, windows) must sit on a major wall component (this share of the largest band-like component by mass). */
+  openingNetwork: boolean;
+  networkShare: number;
+  /** A wall component's mass may fill at most this share of its bounding box (solid blocks are not walls). */
+  networkFill: number;
+  /** Windows must face the exterior: enclosed interior on one side of the wall, the page-edge region on the other. */
+  windowExterior: boolean;
   /** Space: minimum enclosed area in t squared. */
   minSpaceAreaT2: number;
+  /** Space: rooms also span a family of sizes — regions under this share of the largest kept region are furniture interiors and text cells. */
+  minSpaceShare: number;
   /** Space: gaps up to this many t wide are bridged before counting (wider ones stay open). */
   spaceBridgeT: number;
 }
 
 export const DEFAULT_OPENING_OPTIONS: OpeningOptions = {
   inkThreshold: 200,
-  closeRadii: [0, 1, 2, 3],
+  // the ladder climbs past 3 px because hatched and double-line walls carry
+  // cavities several times the outline stroke: only a cavity-scale closing
+  // merges them into the solid band the opening kernel expects (clean
+  // solid-wall sheets still choose r=0 by the closeGain score gate)
+  closeRadii: [0, 1, 2, 3, 5, 8, 12],
   closeGain: 1.5,
+  closeCellFactor: 4,
+  closeCellAdd: 2,
+  closeGrowthLimit: 8,
   minWorkingT: 7,
   maxUpsample: 3,
   maxWorkingPx: 16e6,
@@ -171,7 +210,12 @@ export const DEFAULT_OPENING_OPTIONS: OpeningOptions = {
   maxClutter: 0.2,
   fullCover: 0.95,
   mergeGapT: 1.0,
+  openingNetwork: true,
+  networkShare: 0.12,
+  networkFill: 0.6,
+  windowExterior: true,
   minSpaceAreaT2: 30,
+  minSpaceShare: 0.03,
   spaceBridgeT: 25,
 };
 
@@ -230,8 +274,8 @@ export interface WallSummary {
   score: number;
   /** Length-weighted stroke-width histogram the thickness came from (working px bins). */
   histogram: Float64Array;
-  /** Every closing radius tried at the working scale, with its thickness, kernel, score and long-run histogram. */
-  tried: { r: number; t: number; k: number; score: number; histogram: Float64Array }[];
+  /** Every closing radius tried at the working scale, with its thickness, kernel, score, cells and long-run histogram. */
+  tried: { r: number; t: number; k: number; score: number; cells: number; histogram: Float64Array }[];
   /** Pen weight (page px), the resulting wall floor, and the pixel-count stroke histogram of the raw ink. */
   penPx: number;
   minWallPx: number;
@@ -499,8 +543,7 @@ function wallThickness(hist: Float64Array, minWallPx: number, peakShare: number,
 // --- connected components ---------------------------------------------------------
 
 /** Clears blobs whose bounding box is shorter than minLen on both axes (4-connected). */
-function dropSmallBlobs(mask: Uint8Array, w: number, h: number, minLen: number): void {
-  const seen = new Uint8Array(w * h);
+function dropSmallBlobs(mask: Uint8Array, w: number, h: number, minLen: number): void {  const seen = new Uint8Array(w * h);
   const stack: number[] = [];
   const members: number[] = [];
   for (let start = 0; start < mask.length; start++) {
@@ -533,6 +576,63 @@ function dropSmallBlobs(mask: Uint8Array, w: number, h: number, minLen: number):
   }
 }
 
+/**
+ * Marks the major wall components: band-like connected blobs (fill ratio
+ * under `fill` of their bounding box — a wall network is thin lines, a solid
+ * title block is not) at least `share` of the largest such blob by mass (a
+ * two-unit sheet has two networks of similar mass). The building's walls are
+ * the network; furniture outlines, dimension chains, filled blocks and the
+ * drawing frame survive in the mask only as small or solid stray blobs, so
+ * an opening that does not touch the network is not an opening in the
+ * building.
+ */
+function networkMask(mask: Uint8Array, w: number, h: number, share: number, fill: number): Uint8Array | null {
+  const id = new Int32Array(w * h);
+  const masses: number[] = [];
+  const fills: number[] = [];
+  const stack: number[] = [];
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || id[start]) continue;
+    const cur = masses.length + 1;
+    stack.length = 0;
+    stack.push(start);
+    id[start] = cur;
+    let mass = 0;
+    let x0 = w;
+    let x1 = 0;
+    let y0 = h;
+    let y1 = 0;
+    while (stack.length) {
+      const i = stack.pop()!;
+      mass++;
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
+      for (const j of nb) {
+        if (j < 0 || !mask[j] || id[j]) continue;
+        id[j] = cur;
+        stack.push(j);
+      }
+    }
+    masses.push(mass);
+    fills.push(mass <= fill * (x1 - x0 + 1) * (y1 - y0 + 1) ? 1 : 0);
+  }
+  if (!masses.length) return null;
+  let top = 0;
+  for (let i = 0; i < masses.length; i++) if (fills[i] && masses[i] > top) top = masses[i];
+  if (!top) return null;
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) {
+    const c = id[i];
+    if (c && fills[c - 1] && masses[c - 1] >= share * top) out[i] = 1;
+  }
+  return out;
+}
+
 // --- wall mask ------------------------------------------------------------------------
 
 interface WallEstimate {
@@ -543,7 +643,11 @@ interface WallEstimate {
   k: number;
   histogram: Float64Array;
   score: number;
-  tried?: { r: number; t: number; k: number; score: number; histogram: Float64Array }[];
+  /** Enclosed cells its wall mask leaves (guard input; masks may be freed). */
+  cells: number;
+  /** Wall-mask mass (guard input). */
+  mass: number;
+  tried?: { r: number; t: number; k: number; score: number; cells: number; histogram: Float64Array }[];
   pen?: number;
   minWall?: number;
   countHistogram?: Float64Array;
@@ -551,6 +655,41 @@ interface WallEstimate {
 
 /** Stand-in for a freed trial's masks (see estimateWalls). */
 const NO_MASK = new Uint8Array(0);
+
+/**
+ * Non-edge enclosed regions of the wall-mask complement above the minimum
+ * room area. estimateWalls uses it as the closing guard: merging paired wall
+ * lines unifies rooms, so a closing that leaves more cells than every smaller
+ * radius has blobbed text or floor hatch into walls, however good its score.
+ */
+function enclosedCells(wall: Uint8Array, w: number, h: number, minArea: number): number {
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  let cells = 0;
+  for (let start = 0; start < wall.length; start++) {
+    if (wall[start] || seen[start]) continue;
+    stack.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    let area = 0;
+    let edge = false;
+    while (stack.length) {
+      const i = stack.pop()!;
+      const x = i % w;
+      const y = (i / w) | 0;
+      area++;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
+      for (const j of nb) {
+        if (j < 0 || wall[j] || seen[j]) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    if (!edge && area >= minArea) cells++;
+  }
+  return cells;
+}
 
 /**
  * Share of the original ink that the wall mask keeps AND that lies on an
@@ -616,6 +755,10 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
   let minWall = Math.max(o.minWallPx, Math.round((o.minWallFraction * Math.max(w, h)) / scale));
   let pen = 1;
   let countHistogram: Float64Array = new Float64Array(0);
+  // every trial's cell floor uses the unclosed thickness, so cell counts
+  // compare across radii (a trial's own t shifts its floor and the comparison
+  // would admit a closing that merely re-scaled the noise)
+  let plainT = 0;
   for (const r of radii) {
     const closed = r > 0 ? close(ink, w, h, r) : ink;
     const hist = strokeHistogram(closed, w, h, o.maxWallPx, scale, histLongPx);
@@ -632,13 +775,26 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
     const histogram = hist.long;
     const t = o.wallThicknessPx !== undefined ? o.wallThicknessPx * scale : wallThickness(histogram, minWall, o.peakShare, 1) * scale;
     const tHeavy = heaviestPeak(histogram, minWall) * scale;
+    if (r === 0) plainT = t;
     // odd kernel just under the wall thickness
     let k = Math.floor(o.kernelFraction * t);
     if (k % 2 === 0) k--;
     k = Math.max(3, k);
     const wall = open(closed, w, h, (k - 1) / 2);
     dropSmallBlobs(wall, w, h, Math.round(o.minWallBlobT * t));
-    const e: WallEstimate = { closed, wall, t, r, k, histogram, score: wallScore(ink, wall, w, h, t, tHeavy, longPx, inkCount) };
+    let mass = 0;
+    for (let i = 0; i < wall.length; i++) mass += wall[i];
+    const e: WallEstimate = {
+      closed,
+      wall,
+      t,
+      r,
+      k,
+      histogram,
+      score: wallScore(ink, wall, w, h, t, tHeavy, longPx, inkCount),
+      cells: enclosedCells(wall, w, h, o.minSpaceAreaT2 * (plainT || t) * (plainT || t)),
+      mass,
+    };
     tried.push(e);
     // free the masks of trials that can no longer win, as soon as that is
     // known: at full-sheet size each trial holds two w*h masks, and with the
@@ -657,14 +813,31 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
     }
   }
   // closing fuses text lines into bars that look like walls, so it has to
-  // earn its place: only when it beats the unclosed score by closeGain (a
-  // hatched or double-line wall barely scores unclosed) does the best
-  // closed estimate win
+  // earn its place three times: its wall score must beat the unclosed score
+  // by closeGain (a hatched or double-line wall barely scores unclosed), it
+  // may not leave many more enclosed cells than every smaller radius, and its
+  // mask may not outgrow the unclosed one by closeGrowthLimit (a closing that
+  // blobs floor hatch or sparse texture swallows the page). A fixed
+  // closeRadius skips all three gates.
   const plain = tried.find((e) => e.r === 0)!;
   let best = plain;
   if (o.closeRadius !== undefined) best = tried[tried.length - 1];
-  else for (const e of tried) if (e.score >= o.closeGain * plain.score && e.score > best.score) best = e;
-  best.tried = tried.map((e) => ({ r: e.r, t: e.t, k: e.k, score: e.score, histogram: e.histogram }));
+  else {
+    for (const e of tried) {
+      const smaller = tried.filter((p) => p.r < e.r);
+      if (smaller.length && e.cells > o.closeCellFactor * Math.min(...smaller.map((p) => p.cells)) + o.closeCellAdd) continue;
+      if (e.mass > o.closeGrowthLimit * plain.mass) continue;
+      if (e.score >= o.closeGain * plain.score && e.score > best.score) best = e;
+    }
+  }
+  // the winner may be a trial whose masks were freed when a higher-scoring
+  // (but guard-rejected) trial took the running best: rebuild them
+  if (best.r > 0 && best.closed === NO_MASK) {
+    const closed = close(ink, w, h, best.r);
+    best = { ...best, closed, wall: open(closed, w, h, (best.k - 1) / 2) };
+    dropSmallBlobs(best.wall, w, h, Math.round(o.minWallBlobT * best.t));
+  }
+  best.tried = tried.map((e) => ({ r: e.r, t: e.t, k: e.k, score: e.score, cells: e.cells, histogram: e.histogram }));
   best.pen = pen;
   best.minWall = minWall;
   best.countHistogram = countHistogram;
@@ -1172,6 +1345,61 @@ export function detectOpenings(raster: RasterPage, options: Partial<OpeningOptio
     } else if (c.kind === 'windowGroup') windows.push(toOpening(c, raster, s));
     else passages.push(toOpening(c, raster, s));
   }
+  if (o.openingNetwork) {
+    const net = networkMask(wall, w, h, o.networkShare, o.networkFill);
+    if (net) {
+      // anchored: network wall ink within 0.75 t of the gap box (the jambs)
+      const g = Math.max(2, Math.round(0.75 * t));
+      const anchored = (op: Opening) => {
+        const x0 = Math.max(0, op.px.x0 * s - g);
+        const x1 = Math.min(w - 1, (op.px.x1 + 1) * s - 1 + g);
+        const y0 = Math.max(0, op.px.y0 * s - g);
+        const y1 = Math.min(h - 1, (op.px.y1 + 1) * s - 1 + g);
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (net[y * w + x]) return true;
+        return false;
+      };
+      for (let i = doors.length - 1; i >= 0; i--) if (!anchored(doors[i])) doors.splice(i, 1);
+      for (let i = windows.length - 1; i >= 0; i--) if (!anchored(windows[i])) windows.splice(i, 1);
+    }
+  }
+  if (o.windowExterior && windows.length) {
+    // glazing faces the outside: one side of its wall must open onto the
+    // exterior region, the other onto enclosed space. Glazing read between
+    // hatch-grid bands or dimension chains has interiors (or margins) on
+    // both sides and is not glazing.
+    const solid = solidWithBridges(wall, w, h, [...doors, ...windows, ...passages], s, t / s, o);
+    const { label, regions } = labelSolidRegions(solid, w, h);
+    const ext = exteriorFlags(regions);
+    const keep = windows.filter((win) => {
+      const cx = Math.round(((win.px.x0 + win.px.x1 + 1) / 2) * s);
+      const cy = Math.round(((win.px.y0 + win.px.y1 + 1) / 2) * s);
+      const across = (win.axis === 'h' ? win.px.y1 - win.px.y0 : win.px.x1 - win.px.x0) + 1;
+      const dirs: [number, number][] = win.axis === 'h' ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]];
+      let sides = 0;
+      dirs.forEach(([dx, dy], k) => {
+        const from = Math.round(0.6 * across * s) + 2;
+        // walk past thin ink (a bay pocket, a margin strip sealed off by
+        // dimension chains) until real wall, a room, or the page edge: the
+        // far side of facade glazing reaches the outside without crossing a
+        // room; an interior band runs into a room or another wall first
+        const to = Math.round(Math.max(2.5 * t + 4, 0.06 * Math.min(w, h)));
+        const minRoom = o.minSpaceAreaT2 * t * t;
+        for (let d = from; d <= to; d++) {
+          const x = cx + dx * d;
+          const y = cy + dy * d;
+          if (x < 0 || y < 0 || x >= w || y >= h) { sides |= 1 << k; break; } // off the page: outside
+          if (wall[y * w + x]) break; // the next wall ends this side's world
+          const c = label[y * w + x];
+          if (!c) continue;
+          if (ext[c]) { sides |= 1 << k; break; }
+          if (regions[c - 1].area >= minRoom) break; // a room: this side is inside
+        }
+      });
+      return sides === 1 || sides === 2; // exactly one side exterior
+    });
+    windows.length = 0;
+    windows.push(...keep);
+  }
   let inkCount = 0;
   let wallCount = 0;
   for (let i = 0; i < ink.length; i++) { inkCount += ink[i]; wallCount += wall[i]; }
@@ -1207,23 +1435,38 @@ export function detectOpenings(raster: RasterPage, options: Partial<OpeningOptio
  * boxes of at least three others (a sheet with a frame line around the plan).
  * Regions under minSpaceAreaT2 t squared are posts, shafts and noise.
  */
-export function countEnclosedSpaces(raster: RasterPage, options: Partial<OpeningOptions> = {}, openings?: OpeningsResult): SpaceResult {
-  const o: OpeningOptions = { ...DEFAULT_OPENING_OPTIONS, ...options };
-  const res = openings ?? detectOpenings(raster, options);
-  const { width: w, height: h, mask, scale: s } = res.walls;
-  const t = res.walls.thicknessPx * s; // working px
+
+/** Wall mask with every opening box (up to spaceBridgeT wide) drawn solid. */
+function solidWithBridges(mask: Uint8Array, w: number, h: number, ops: Opening[], scale: number, thicknessPx: number, o: OpeningOptions): Uint8Array {
   const solid = mask.slice();
-  const bridgeMax = o.spaceBridgeT * res.walls.thicknessPx;
-  for (const op of [...res.doors, ...res.windows, ...res.passages]) {
+  const bridgeMax = o.spaceBridgeT * thicknessPx;
+  for (const op of ops) {
     if (op.widthPx > bridgeMax) continue;
-    const x0 = op.px.x0 * s;
-    const y0 = op.px.y0 * s;
-    const x1 = (op.px.x1 + 1) * s - 1;
-    const y1 = (op.px.y1 + 1) * s - 1;
+    const x0 = op.px.x0 * scale;
+    const y0 = op.px.y0 * scale;
+    const x1 = (op.px.x1 + 1) * scale - 1;
+    const y1 = (op.px.y1 + 1) * scale - 1;
     for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) solid[y * w + x] = 1;
   }
+  return solid;
+}
+
+interface SolidRegion {
+  id: number;
+  area: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  edge: boolean;
+  cx: number;
+  cy: number;
+}
+
+/** Labels the complement of a solid mask 4-connected, with area, bbox, centroid and page-edge contact per region. */
+function labelSolidRegions(solid: Uint8Array, w: number, h: number): { label: Int32Array; regions: SolidRegion[] } {
   const label = new Int32Array(w * h);
-  const regions: { id: number; area: number; x0: number; y0: number; x1: number; y1: number; edge: boolean; cx: number; cy: number }[] = [];
+  const regions: SolidRegion[] = [];
   const stack: number[] = [];
   for (let start = 0; start < solid.length; start++) {
     if (solid[start] || label[start]) continue;
@@ -1260,6 +1503,33 @@ export function countEnclosedSpaces(raster: RasterPage, options: Partial<Opening
     }
     regions.push({ id, area, x0, y0, x1, y1, edge, cx: sx / area, cy: sy / area });
   }
+  return { label, regions };
+}
+
+/**
+ * Regions that are the outside of the building: the page-edge regions plus,
+ * on a framed sheet, the largest inner region enclosing at least three
+ * others (the frame seals the margin off from the page edge).
+ */
+function exteriorFlags(regions: SolidRegion[]): Uint8Array {
+  const ext = new Uint8Array(regions.length + 1);
+  for (const r of regions) if (r.edge) ext[r.id] = 1;
+  const inner = regions.filter((r) => !r.edge);
+  if (inner.length) {
+    const largest = inner.reduce((p, q) => (q.area > p.area ? q : p));
+    const enclosed = inner.filter((r) => r !== largest && r.x0 >= largest.x0 && r.x1 <= largest.x1 && r.y0 >= largest.y0 && r.y1 <= largest.y1).length;
+    if (enclosed >= 3) ext[largest.id] = 1;
+  }
+  return ext;
+}
+
+export function countEnclosedSpaces(raster: RasterPage, options: Partial<OpeningOptions> = {}, openings?: OpeningsResult): SpaceResult {
+  const o: OpeningOptions = { ...DEFAULT_OPENING_OPTIONS, ...options };
+  const res = openings ?? detectOpenings(raster, options);
+  const { width: w, height: h, mask, scale: s } = res.walls;
+  const t = res.walls.thicknessPx * s; // working px
+  const solid = solidWithBridges(mask, w, h, [...res.doors, ...res.windows, ...res.passages], s, res.walls.thicknessPx, o);
+  const { label: _label, regions } = labelSolidRegions(solid, w, h);
   const minArea = o.minSpaceAreaT2 * t * t;
   const inner = regions.filter((r) => !r.edge);
   const dropped = new Map<(typeof inner)[number], 'small' | 'exterior'>();
@@ -1273,7 +1543,16 @@ export function countEnclosedSpaces(raster: RasterPage, options: Partial<Opening
     const enclosed = roomSized.filter((r) => r !== largest && r.x0 >= largest.x0 && r.x1 <= largest.x1 && r.y0 >= largest.y0 && r.y1 <= largest.y1).length;
     if (enclosed >= 3) dropped.set(largest, 'exterior');
   }
-  const kept = inner.filter((r) => !dropped.has(r));
+  // rooms come in a family of sizes: whatever the absolute floor keeps, a
+  // region far smaller than the largest room is furniture, a text cell or a
+  // bridged sliver, not a space
+  const candidates = inner.filter((r) => !dropped.has(r));
+  let kept = candidates;
+  if (o.minSpaceShare > 0 && candidates.length > 1) {
+    const largest = candidates.reduce((p, q) => (q.area > p.area ? q : p));
+    kept = candidates.filter((r) => r === largest || r.area >= o.minSpaceShare * largest.area);
+    for (const r of candidates) if (!kept.includes(r)) dropped.set(r, 'small');
+  }
   const pageBox = (r: (typeof inner)[number]) => ({
     areaPx: r.area / (s * s),
     x0: Math.floor(r.x0 / s),

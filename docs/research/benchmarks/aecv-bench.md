@@ -301,3 +301,35 @@ Local artefacts (scratch, not committed): `/tmp/claude-0/-home-user-pdf2takeoff/
 | Mean of four | 0.354 | 79.3% | 0.644 |
 
 Before OCR the five-field mean was 0.078. The label fields now carry the score; doors, windows and spaces are unchanged and remain the gap. The worst ten plans by door plus window plus space error are all 5000-family hatched scans plus two 0000 scans, which is the wall-thickness estimate locking onto the hatch pen (round-1 failure mode 1). Next levers in order: a hatch-aware wall model (or validating wall classes against Dynamic Fill room regions), feeding the enclosed-space mask into the OCR `isInsideRoom` hook, and a label-crop detector for the 5 px 5000-family labels.
+
+## Status 2026-10-19, round 3: the opening detector on hatched scans
+
+The merged engine's counts (round 2 combined, above) had three systematic biases on this set: spaces 3.3x over (worst CubiCasa plans 10-28x), windows 2x over, doors 1.3x over, all concentrated in the `5000`/`0000` hatched-scan families. Debug overlays showed the mechanism: the closing ladder stopped at 3 px, but a hatched or double-line wall's cavity is several times the outline stroke, so the thickness estimate latched onto the outline pen, the wall mask shattered into fragments, furniture outlines survived as "walls", and their interiors counted as spaces, their gaps as windows, their arcs as doors.
+
+Five changes to `src/engine/openings.ts`, each validated on an 18-plan diagnostic set (worst regressions and best wins of a first attempt) before the full run:
+
+1. Extended closing ladder `[0,1,2,3,5,8,12]`. On hatched plans the cavity-scale closing merges wall bands and the counts collapse toward truth (5000_0031 total error 303 -> 47, 5000_0024 220 -> 29). Clean sheets still choose r=0 by the score gate (4000/2000 families unchanged).
+2. Two guards on the new radii, because the score gate alone loves closings that blob text and floor hatch into "walls" (6000-0001: score 0.30 -> 0.67 while the space count goes 3 -> 48): a closing may not leave more than 4x (+2) the enclosed cells of every smaller radius, and its mask may not outgrow the unclosed one 8x. Cell counts were made comparable across trials by flooring every trial's minimum area at the unclosed thickness. Neither guard alone separates good from bad closings; the pair catches every diagnostic regression except 6000-0010 (its unclosed mask is so sparse that a 39x growth still passes; its cost is +32 abs error against the 5000 family's -1500).
+3. Wall-network anchoring. Doors and windows must touch a major band-like wall component (mass >= 12 percent of the largest, fill ratio <= 0.6 of the bbox — a solid title block is not a wall). This killed the fat-ink regression until the fill-ratio clause arrived: the fixture's 405k-px title block outmassed the fragmented wall ring and disqualified every opening.
+4. Exterior-facing windows. A window must have the outside on one side: walking each side of the wall to the next wall band, a room-sized region, or the page edge, exactly one side must reach the exterior. Bay pockets and margin strips sealed by dimension chains connect around to the edge; glazing read between hatch bands or furniture pairs runs into a room first. Window MAPE fell from 184.5 to 52.4 percent.
+5. Spaces relative floor. Kept regions must span at least 3 percent of the largest kept region — furniture interiors and text cells are small against real rooms whatever the absolute threshold does. 4000-0016: 34 spaces against a truth of 7 dropped to 5.
+
+Final run, 120 plans, 490 s, labels from the round-2 OCR pipeline regenerated this session (`/tmp/aecv-labels-v2.harness.json`):
+
+| field | round 2 EM | round 3 EM | round 2 MAPE | round 3 MAPE | best VLM EM |
+|---|---|---|---|---|---|
+| Door | 0.117 | 0.108 | 72.9 | 63.6 | 0.43 |
+| Window | 0.092 | 0.117 | 184.5 | 52.4 | 0.39 |
+| Space | 0.058 | 0.083 | 221.4 | 89.6 | 0.14 (best anywhere 0.27) |
+| Bedroom | 0.708 | 0.708 | 20.1 | 19.4 | 0.93 |
+| Toilet | 0.500 | 0.458 | 39.5 | 44.2 | 0.82 |
+| mean (5 fields) | 0.295 | 0.295 | 107.7 | 53.9 | 0.543 |
+| mean (4 fields) | 0.354 | 0.348 | 79.3 | 44.9 | 0.644 |
+
+Total absolute error across the three geometry fields fell from 5239 to 2228 (Door 796 -> 616, Window 1745 -> 595, Space 2698 -> 1017); the ten worst plans' total fell from 2247 to 568. The worst remaining plans are still `5000` hatched scans led by 5000_0016 (91) and 5000_0009 (70): texture cells above the relative floor, door arcs in hatch, and a few plans where the guards still admit an over-closing. Toilet EM drifted 0.500 -> 0.458 between two OCR label runs of unchanged label code (a handful of borderline 8 px reads flip with worker load); the label pipeline's own spread is a real floor on that field.
+
+What did not work, for the record: closed-mask ink fraction (good closings 0.31-0.66, bad 0.17-0.71 — full overlap), raw component-mass networks (a solid title block outmasses a fragmented ring), and network-gating passages (it defuses nothing downstream and drops legitimate passages on finely-cut partitions).
+
+Anchors held: the AEC-Geometric-Bench harness now pins its first-pass detector config (base ladder, guards off — the new guards trade wall recall on those large commercial sheets for count sanity here), reproducing wall pixel F1 0.519 exactly; area pixel F1 moved 0.381 -> 0.324 with the spaces floor, area instance 0.087 -> 0.089, window object F1 0.089 -> 0.041 under the exterior gate. The takeoff bench (23/24 fill, 2/2 count, 9/9 scale, 3/3 doorcheck) and both check-openings fixtures are unchanged.
+
+Next levers, ranked by remaining error mass: the `5000` texture problem (a wall model that uses hatch periodicity rather than closing, or door-arc evidence gated on local texture), 6000-0010-class sparse-ink over-closing (a growth cap scaled to ink density), and the toilet label spread (a second OCR pass over flipped WC labels).

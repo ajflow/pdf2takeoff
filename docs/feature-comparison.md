@@ -148,7 +148,7 @@ pdf2takeoff runs in any modern browser on any OS.
 
 ## Why we don't build these
 
-STRATEGY.md's principle: we own the estimator's hour, not all of PDF
+Our guiding principle: we own the estimator's hour, not all of PDF
 engineering. Specifically:
 
 - **Desktop/CAD plugins** — impossible in a browser and 20 years of catch-up;

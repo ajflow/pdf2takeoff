@@ -4,12 +4,49 @@
 // @ts-ignore -- pdfjs-dist's legacy build ships without type declarations
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, DOMMatrix, ImageData, Path2D } from '@napi-rs/canvas';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
+
+// pdf.js's own NodeCanvasFactory requires "@napi-rs/canvas" relative to
+// pdfjs-dist, which resolves to the copy nested under node_modules/pdfjs-dist
+// (0.1.x), not to ours (1.x). Every image on a page is first drawn into a
+// temporary canvas from that factory and then drawImage'd into the page
+// context, which comes from our copy: an object from one skia binary handed
+// to another, a segfault on the first sheet with a logo. One canvas module
+// for everything: this factory builds pdf.js's temporary canvases from ours.
+class OurCanvasFactory {
+  create(width: number, height: number) {
+    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
+    const canvas = createCanvas(width, height);
+    return { canvas, context: canvas.getContext('2d') };
+  }
+  reset(pair: { canvas: { width: number; height: number } }, width: number, height: number) {
+    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
+    pair.canvas.width = width;
+    pair.canvas.height = height;
+  }
+  destroy(pair: { canvas: { width: number; height: number } | null; context: unknown }) {
+    if (!pair.canvas) return;
+    pair.canvas.width = 0;
+    pair.canvas.height = 0;
+    pair.canvas = null;
+    pair.context = null;
+  }
+}
+// pdf.js's legacy build publishes Path2D, ImageData and DOMMatrix from that
+// nested copy on import (and before that, its own JS Path2D polyfill, which
+// skia's ctx.fill(path) cannot take). Assign ours UNCONDITIONALLY, after the
+// import above has run: whichever order modules load in, napi's classes from
+// our copy must win, or pdf.js renders through foreign objects and segfaults.
+// Every render path imports this module first, so this is the one place.
+const g = globalThis as unknown as Record<string, unknown>;
+g.Path2D = Path2D;
+g.ImageData = ImageData;
+g.DOMMatrix = DOMMatrix;
 
 // Standard-14 font data for PDFs that reference Helvetica & co. without
 // embedding them (the bundled samples do). pdf.js's Node font loader needs a
@@ -29,43 +66,11 @@ function standardFontsUrl(): string | undefined {
   }
 }
 
-/**
- * Canvas factory backed by OUR @napi-rs/canvas. pdfjs-dist pins its own,
- * older @napi-rs/canvas (0.1.x, nested under node_modules/pdfjs-dist), and
- * its built-in NodeCanvasFactory requires that copy, so two skia binaries
- * end up loaded in one process. Image XObjects are the only thing drawn via
- * a factory-made temporary canvas; handing that foreign CanvasElement to
- * drawImage() on a canvas from the top-level copy makes native code unwrap
- * an object of a class it does not know and segfault (exit 139, silent).
- * Vector pages never create a temporary canvas, which is why only image
- * pages crashed. Creating every canvas here keeps one native instance.
- */
-class SameInstanceCanvasFactory {
-  constructor(_opts?: { enableHWA?: boolean }) {}
-  create(width: number, height: number) {
-    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
-    const canvas = createCanvas(width, height);
-    return { canvas, context: canvas.getContext('2d') };
-  }
-  reset(entry: { canvas: ReturnType<typeof createCanvas> | null }, width: number, height: number) {
-    if (!entry.canvas) throw new Error('Canvas is not specified');
-    if (width <= 0 || height <= 0) throw new Error('Invalid canvas size');
-    entry.canvas.width = width;
-    entry.canvas.height = height;
-  }
-  destroy(entry: { canvas: ReturnType<typeof createCanvas> | null; context: unknown }) {
-    if (!entry.canvas) throw new Error('Canvas is not specified');
-    entry.canvas.width = entry.canvas.height = 0;
-    entry.canvas = null;
-    entry.context = null;
-  }
-}
-
 export async function openPdf(data: Uint8Array): Promise<PDFDocumentProxy> {
   return pdfjsLib.getDocument({
     data: data.slice(),
     verbosity: 0,
     standardFontDataUrl: standardFontsUrl(),
-    CanvasFactory: SameInstanceCanvasFactory,
+    CanvasFactory: OurCanvasFactory,
   }).promise;
 }

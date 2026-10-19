@@ -3,24 +3,15 @@
 // adapter, so both environments see equivalent pixels (see the H2 golden
 // raster check in specs/headless-engine.md).
 
-import { createCanvas, Path2D, ImageData, DOMMatrix } from '@napi-rs/canvas';
+import { createCanvas } from '@napi-rs/canvas';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { RasterPage } from '../engine/ports.ts';
 import type { RGBA } from '../engine/compare.ts';
 import type { Pt } from '../engine/types.ts';
 
-// pdf.js v5 builds fill/stroke paths through the global Path2D, and its
-// legacy build installs polyfills on import (from its OWN nested copy of
-// @napi-rs/canvas, an older 0.1.x), but skia's ctx.fill(path) only accepts
-// a native Path2D from the same binary it was built with. Assign
-// unconditionally (NOT only-if-missing): whichever order the modules load
-// in, OUR napi classes must win, or pdf.js hands native code objects from a
-// second skia instance and segfaults. Canvases pdf.js creates itself go
-// through the CanvasFactory in pdfjs-node.ts for the same reason.
-const g = globalThis as unknown as Record<string, unknown>;
-g.Path2D = Path2D;
-g.ImageData = ImageData;
-g.DOMMatrix = DOMMatrix;
+// The Path2D / ImageData / DOMMatrix globals pdf.js draws through are set to
+// our @napi-rs/canvas classes in pdfjs-node.ts (which every render path
+// imports first, and which also hands pdf.js a canvas factory from our copy).
 
 function pageTransforms(vp: { convertToPdfPoint: (x: number, y: number) => number[]; convertToViewportPoint: (x: number, y: number) => number[] }) {
   return {

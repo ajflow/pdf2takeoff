@@ -45,7 +45,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Volume | Core | ✅ | Area × depth with a depth prompt; depth stored in the annotation comment |
 | Angle | Core | ✅ | 3-click angle at a vertex; scale-free — works before calibration |
 | Multi-scale viewports on one page | Core | ✅ | Outline a detail region (W), pick its scale — measurements inside resolve automatically (verified: same 100 pt run = 1.76 m at 1:50 vs 3.53 m at 1:100) |
-| Dynamic Fill (flood-fill areas) | Complete | ✅ | Click inside a room → area off the walls in ~150 ms; door-gap closing is the follow-up |
+| Dynamic Fill (flood-fill areas) | Complete | ✅ | Click inside a room → area off the walls in ~150 ms; doorways close from the scale, room labels, the vector layer, or the sheet's own door width (uncalibrated scans) |
 | Formulas & custom columns | Complete | ✅ | Safe formula columns (value/count vars) in totals + every export + MCP; waste, rates |
 
 ## Auto-count & symbol search

@@ -327,3 +327,9 @@ measured result.
   sequence floor plan parsers (Raster2Seq, RoomFormer): GPU-bound and
   trained on research-only data. Revisit only with an optional server.
 - Asking a VLM to read numbers, find changes or count from pixels.
+
+<!-- merged from main 2026-10-19 (PR #3): the same P13/P14 status as seen from
+     the dynamic-fill-sheet-door-width branch, plus its bench state -->
+> | P13 (main's line) | shipped there: no-hints case closed via the sheet's own doorway widths (two-jamb wall-end gaps) under a room-sized split test |
+> | P14 (main's line) | shipped there: 2026-10-18 doorWidthCheck — the sheet's own door width as a second opinion on any calibration, surfaced by set_scale and the app |
+> Continued in [patch-plan-3.md](patch-plan-3.md): counting without asking the model to count (P21 to P26). Bench after the sheet door width (2026-10-18) on that branch: fill 21/22 — the open case a diagonal door on a sheet with no vector layer.

@@ -98,6 +98,9 @@ check('read_text: scale notes agree', read.scaleNotes?.status === 'agreed', JSON
 
 const wrong = textOf(await call('set_scale', { id: docId, ratio: '1:50' }));
 check('set_scale: a scale the sheet contradicts is flagged', wrong.sheetCheck?.status === 'disagrees' && /reduced/.test(wrong.sheetCheck?.warning ?? ''), JSON.stringify(wrong.sheetCheck));
+// the sample's only doorway is a one-jamb corner opening, so the door-width
+// second opinion has nothing to check and must say so rather than guess
+check('set_scale: door-width check present, null on a sheet with no two-jamb doorways', 'doorWidth' in (wrong.sheetCheck ?? {}) && wrong.sheetCheck.doorWidth === null, JSON.stringify(wrong.sheetCheck?.doorWidth));
 const scale = textOf(await call('set_scale', { id: docId, ratio: '1:100', all_pages: true }));
 check('set_scale: applied to all pages', scale.set.length === 2);
 check('set_scale: the sheet agrees with 1:100', scale.sheetCheck?.status === 'agrees', JSON.stringify(scale.sheetCheck));

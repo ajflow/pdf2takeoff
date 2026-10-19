@@ -47,7 +47,7 @@ Everything regenerates from this repo with one command per table — see
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
-- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps are bridged automatically with escalating morphological closing — wide openings and diagonal gaps can still leak)
+- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace). Doorways between wall ends close automatically: from the calibrated scale, from room labels in the text layer, from the vector layer (any angle), or, on an uncalibrated scan with none of those, from the door width the sheet itself shows. Wide open-plan openings stay open; a diagonal door on a scan with no vector layer can still leak
 - **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
 - **Notes**: pin a note anywhere (T); round-trips through the PDF
 - **Layers**: place per trade and hide layers while measuring the next; layer names ride inside the PDF

@@ -3,7 +3,7 @@
 // notation coverage, keyword gating of colon-less guesses, NTS, and the
 // consensus statuses with their diagnosis of common misreads.
 
-import { scaleVotesFromWords, scaleConsensus, dimensionVote, diagnoseFactor, checkAgainstSheet } from '../src/engine/scale.ts';
+import { scaleVotesFromWords, scaleConsensus, dimensionVote, diagnoseFactor, checkAgainstSheet, doorWidthCheck } from '../src/engine/scale.ts';
 import { metersPerPtForRatio } from '../src/engine/units.ts';
 
 let failed = false;
@@ -101,6 +101,18 @@ check('title-block 1:100 vs measured 1:50 conflicts as a reduced print', c.statu
   const loose = scaleVotesFromWords(words('1:100', 'DETAIL', '1:20'));
   check('sheet check: two unlabelled ratios and neither matches is ambiguous, not a warning', checkAgainstSheet(50, loose.votes, loose.nts).status === 'ambiguous');
   check('sheet check: no note to check against', checkAgainstSheet(100, [], false).status === 'none');
+}
+
+// door-width second opinion: 0.9 m doors at 1:100 render 76.5 px at 3 px/pt
+{
+  const px = 0.9 / metersPerPtForRatio(100) * 3;
+  const ok = doorWidthCheck(metersPerPtForRatio(100), px, 3);
+  check('door width: 1:100 makes the sheet\'s doors 0.9 m, plausible', ok?.status === 'plausible' && Math.abs(ok.impliedDoorM - 0.9) < 0.01, JSON.stringify(ok));
+  const half = doorWidthCheck(metersPerPtForRatio(200), px, 3);
+  check('door width: 1:200 on the same sheet makes them 1.8 m, implausible, reduced print', half?.status === 'implausible' && /reduced size/.test(half.likely ?? ''), JSON.stringify(half));
+  const tenth = doorWidthCheck(metersPerPtForRatio(10), px, 3);
+  check('door width: 1:10 makes them 9 cm, implausible, unit slip', tenth?.status === 'implausible' && /unit slip/.test(tenth.likely ?? ''), JSON.stringify(tenth));
+  check('door width: a sheet with no agreed doorways has nothing to check', doorWidthCheck(metersPerPtForRatio(100), 0, 3) === null);
 }
 
 if (failed) process.exit(1);

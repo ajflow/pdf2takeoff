@@ -272,6 +272,42 @@ export function scaleConsensus(votes: ScaleVote[], nts = false, tol = 0.02): Sca
   return { status, ratio: top.ratio, support: top.support, rivals, nts };
 }
 
+/** Doors narrower or wider than this (m) under a calibration mean the calibration is suspect. */
+const DOOR_PLAUSIBLE_M: [number, number] = [0.6, 1.3];
+
+export interface DoorWidthCheck {
+  /** plausible: the sheet's doors come out door-sized; implausible: they do not, so the scale is suspect */
+  status: 'plausible' | 'implausible';
+  /** what the sheet's agreed door width measures under this calibration (m) */
+  impliedDoorM: number;
+  /** the likely cause when implausible, from the factor to a typical door */
+  likely?: string;
+}
+
+/**
+ * A second opinion on a calibration that needs no printed scale: the sheet's
+ * own doorways (see sheetDoorWidthPx) should measure like doors. doorPx is
+ * the agreed door width in raster px (0 when the sheet shows none), pxPerPt
+ * the raster's px per PDF point. Returns null when there is nothing to
+ * check. When implausible, `likely` names the familiar slip (reduced print,
+ * unit slip) that would bring the doors back to door size, if one does.
+ */
+export function doorWidthCheck(metersPerPt: number, doorPx: number, pxPerPt: number): DoorWidthCheck | null {
+  if (!(doorPx > 0) || !(pxPerPt > 0) || !(metersPerPt > 0)) return null;
+  const impliedDoorM = (doorPx / pxPerPt) * metersPerPt;
+  const [lo, hi] = DOOR_PLAUSIBLE_M;
+  if (impliedDoorM >= lo && impliedDoorM <= hi) return { status: 'plausible', impliedDoorM };
+  // which familiar slip would bring the doors back to door size?
+  let likely: string | undefined;
+  for (const f of [Math.SQRT2, 2, 6, 10, 12, 1000]) {
+    if ((impliedDoorM / f >= lo && impliedDoorM / f <= hi) || (impliedDoorM * f >= lo && impliedDoorM * f <= hi)) {
+      likely = diagnoseFactor(f);
+      break;
+    }
+  }
+  return { status: 'implausible', impliedDoorM, ...(likely ? { likely } : {}) };
+}
+
 export interface SheetCheck {
   /**
    * agrees: matches the sheet's printed scale; disagrees: differs from it

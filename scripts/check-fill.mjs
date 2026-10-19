@@ -18,8 +18,10 @@
 // doorway: sealed because it faces the page exterior, while an interior
 // opening of the same width is judged on what lies behind it (a room is
 // cut off, an alcove is kept).
+// (merged from main 2026-10-19) // covers splits: by room labels, and with no hints at all by the doorway
+// // widths the sheet itself shows (kept only for room-sized cuts).
 
-import { dynamicFill } from '../src/engine/dynamicfill.ts';
+import { dynamicFill, sheetDoorWidthPx } from '../src/engine/dynamicfill.ts';
 
 const W = 300;
 const H = 200;
@@ -394,9 +396,15 @@ if ('error' in r) { console.error('FAIL room T (behind the 1.6 m opening):', r.e
 const aT = area(r.points);
 console.log(`room T (1.6 m opening to S): area ${aT.toFixed(0)} (ideal ~74451)`);
 if (Math.abs(aT - 74451) / 74451 > 0.01) { console.error(`FAIL room T: ${aT}`); process.exit(1); }
-// and without a scale nothing changes: a 160px gap is wider than any unscaled rung
+// without a scale the 160px gaps are wider than any unscaled rung — but this
+// sheet shows TWO of them at the same width, and the merged engine's sheet
+// door-width rule (PR #3) takes agreeing wall-end gaps as the sheet's own
+// doorway width: the fill bounds at that rule with the same area the scale
+// produces, and says it read the width off the sheet
 r = dynamicFill(raster8, at8(150, 170));
-if (!('error' in r)) { console.error('FAIL room S bounded without a scale through a 160px gap'); process.exit(1); }
+if ('error' in r) { console.error(`FAIL room S without a scale (sheet door width should bound it): ${r.error}`); process.exit(1); }
+const aSnoscale = area(r.points);
+if (Math.abs(aSnoscale - aS) / aS > 0.01 || r.doorSource !== 'sheet') { console.error(`FAIL room S without a scale: area ${aSnoscale.toFixed(0)} (want ~${aS.toFixed(0)}), doorSource ${r.doorSource}`); process.exit(1); }
 
 // --- ninth sheet: a curved wall is not a door swing ---------------------------
 // Room U: 8px filled walls on three sides, and across the bottom gap a thin
@@ -441,4 +449,60 @@ console.log(`room U (curved wall, curvy furniture by its centre): area ${aU.toFi
 if (Math.abs(aU - 93732) / 93732 > 0.01) { console.error(`FAIL room U lost the curve to a phantom swing: ${aU}`); process.exit(1); }
 if (r.swings) { console.error(`FAIL room U reported ${r.swings} swing(s) on a curved wall`); process.exit(1); }
 
-console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall and labelled rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; curved walls kept; wide front doors sealed by where they lead; unbounded errors');
+// --- merged from main (PR #3): the no-hints doorway rule and slot decoys ---
+// 10. no hints at all (a scan before calibration): the sheet shows two
+// doorway widths (the 40px door and the 60px alcove opening; the gaps
+// between the two boxes face the sheet edge). Tried narrowest first, the
+// 40px width cuts a room-sized part off the G+H fill, so room G stands alone
+r = dynamicFill(raster4, at4(470, 200));
+if ('error' in r) { console.error('FAIL room G (no hints):', r.error); process.exit(1); }
+const aG2 = area(r.points);
+console.log(`room G (no hints, sheet door width): area ${aG2.toFixed(0)} (ideal ~41561), door rule ${r.doorSource} ${r.doorPx}px`);
+if (Math.abs(aG2 - 41561) / 41561 > 0.03) { console.error(`FAIL room G not split without hints: ${aG2}`); process.exit(1); }
+if (r.doorSource !== 'sheet') { console.error(`FAIL room G: expected the sheet door width to be reported, got ${JSON.stringify({ doorPx: r.doorPx, doorSource: r.doorSource })}`); process.exit(1); }
+
+// 11. the same sheet, no hints, click in room F: neither doorway width may
+// shave the alcove off (closing its opening is not a room-sized cut)
+r = dynamicFill(raster4, at4(170, 200));
+if ('error' in r) { console.error('FAIL room F (no hints):', r.error); process.exit(1); }
+const aF2 = area(r.points);
+console.log(`room F (no hints, alcove kept): area ${aF2.toFixed(0)} (ideal ~91702 with the alcove)`);
+if (Math.abs(aF2 - 91702) / 91702 > 0.03) { console.error(`FAIL room F lost its alcove without hints: ${aF2}`); process.exit(1); }
+if (r.doorSource !== undefined) { console.error(`FAIL room F: no doorway rule should apply, got ${JSON.stringify({ doorPx: r.doorPx, doorSource: r.doorSource })}`); process.exit(1); }
+
+// 12 and 13. Exploded CAD text, hatching and schedule grids leave two-ended
+// slots between collinear strokes. Two rooms side by side, the wall between
+// them a row of long strokes broken by slots of a given width (pre-split
+// dashes, as CAD exporters emit); this raster is 1 px per pt.
+const slotSheet = (slotPx) => {
+  const W5 = 800; // the pair of rooms must stay under the page's unbounded cap (40%)
+  const H5 = 600;
+  const px5 = new Uint8ClampedArray(W5 * H5 * 4).fill(255);
+  const box5 = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (y * W5 + x) * 4; px5[i] = px5[i + 1] = px5[i + 2] = 0; } };
+  box5(20, 20, 380, 20); box5(20, 280, 380, 280); box5(20, 20, 20, 280); box5(380, 20, 380, 280);
+  for (let y = 21; y < 280; y += 50 + slotPx) box5(200, y, 200, Math.min(y + 49, 279));
+  return { width: W5, height: H5, data: px5, toPdf: (x, y) => ({ x, y: H5 - y }), toRaster: (x, y) => ({ x, y: H5 - y }) };
+};
+// 12. 4 px slots are below the fill's own floor (MIN_DOOR_PT): a no-hints fill
+// must not adopt them as a sheet door width (it would split the pair at a
+// 4 px "door"); it returns the merged pair, with no door rule claimed
+{
+  const r5 = dynamicFill(slotSheet(4), { x: 100, y: 600 - 150 });
+  if ('error' in r5) { console.error('FAIL 4 px slots: fill errored:', r5.error); process.exit(1); }
+  const a5 = area(r5.points);
+  console.log(`4 px slots: no-hints fill ${a5.toFixed(0)} (merged pair ~${359 * 259}), door rule ${r5.doorSource ?? 'none'}`);
+  if (r5.doorSource !== undefined || Math.abs(a5 - 359 * 259) / (359 * 259) > 0.03) { console.error(`FAIL 4 px slots adopted as a door width: ${JSON.stringify({ doorSource: r5.doorSource, doorPx: r5.doorPx, a5 })}`); process.exit(1); }
+}
+// 13. 10 px slots (a schedule grid on a real Revit sheet) pass the fill's
+// floor, but the scale CHECK must not warn on them (MIN_DOOR_CHECK_PT, 14 pt)
+{
+  const dp10 = sheetDoorWidthPx(slotSheet(10));
+  console.log(`10 px slots: sheet door width for the scale check ${dp10}px (expect 0)`);
+  if (dp10 !== 0) { console.error(`FAIL schedule-grid slots would raise a scale warning: ${dp10}px`); process.exit(1); }
+  // and a 40 px doorway on the same sheet is reported
+  const dp40 = sheetDoorWidthPx(slotSheet(40));
+  console.log(`40 px doorways: sheet door width for the scale check ${dp40}px (expect 40)`);
+  if (dp40 < 38 || dp40 > 42) { console.error(`FAIL door-sized slots not reported: ${dp40}px`); process.exit(1); }
+}
+
+console.log('PASS: gap rooms bound with area within tolerance; sealed, concave, bench, thick-wall, labelled and unhinted rooms traced; bare doorways cut without a leak; swing arcs and doorway text erased; curved walls kept; wide front doors sealed by where they lead; unbounded errors');

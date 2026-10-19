@@ -23,7 +23,7 @@ an account, or our servers.
 | **AEC-Geometric-Bench** (external, released scorer) — wall pixel F1 | **0.519** | frontier VLMs 0.18–0.29 on the identical 15 sheets; Kamai's purpose-built pipeline 0.931 | `scripts/aec-geometric-bench.mjs --bench <clone>`; notes in [docs/research/benchmarks/aec-geometric-bench.md](../docs/research/benchmarks/aec-geometric-bench.md) |
 | **AEC-Geometric-Bench** — area pixel precision | **0.943** | when the engine claims a room it is one; recall 0.239 is the gap (Kamai 0.987) | same |
 | **ResPlan room areas** (external, CC BY 4.0) — 200 real plans | **94.1%** of rooms recovered, median area error **−1.8%** | run log in [docs/research/benchmarks/room-area-datasets.md](../docs/research/benchmarks/room-area-datasets.md); ledger line pending the next scheduled run | `npm run bench:rooms` (downloads ResPlan) |
-| **Internal takeoff bench** (in CI, every push) | **12/12** fill · **2/2** count · **9/9** scale | regression gate; a dropped case fails the build | `npm run bench` |
+| **Internal takeoff bench** (in CI, every push) | **23/24** fill (1 documented open: diagonal door without a vector layer) · **2/2** count · **9/9** scale · **3/3** doorcheck | regression gate; a dropped case fails the build | `npm run bench` |
 | **Scan latency / size** | **~100 ms** CV tier · **1.6 s** cached in-browser ONNX scan · **76 MB** model | in-browser (WASM), nothing uploaded | open the app, press `S`, click |
 
 The full per-type tables (length, perimeter, dimension-read, revision

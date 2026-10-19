@@ -81,7 +81,7 @@ function repairDigits(s: string): string {
     .map((tok) => {
       if (!/[0-9]/.test(tok) && !/[OIl]/.test(tok)) return tok;
       const fixed = tok.replace(/[OoIlisSBZG]/g, (c) => slips[c] ?? c);
-      return /^[\d:./'"-]+$/i.test(fixed) || /^[\d./'"-]*(?:ft|in)\b/i.test(fixed) ? fixed : tok;
+      return /^[\d:./'"=-]+$/i.test(fixed) || /^[\d./'"=-]*(?:ft|in)\b/i.test(fixed) ? fixed : tok;
     })
     .join(' ');
 }

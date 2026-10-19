@@ -7,8 +7,29 @@ pdf2takeoff turns construction PDF drawings into measured quantities. Calibrate 
 Everything runs in your browser. **Drawings are never uploaded**; rendering and measurement happen on your machine, so it's safe for confidential tender documents and keeps working offline once the page is loaded.
 
 - Price: free, no account, no file limits, no paid tier
-- Licence: Apache-2.0
+- Licence: Apache-2.0 — to our knowledge the **only permissively licensed takeoff engine** in a field of AGPL competitors, so you can embed and bundle it
 - Privacy: 100% client-side, zero telemetry
+
+## Benchmarks & evals — the numbers, the method, the failures
+
+We publish what the engine scores, how every number was produced, and what
+it is still bad at — including a benchmark we built and gave away (CC BY 4.0,
+usable by anyone, including to beat us):
+
+- **ScaledDrawingBench v0.1** (ours, deterministic, seeded): **99.8%** on
+  born-digital sheets, **37.3%** on degraded scans (up from 23.0% — the
+  improvement log is part of the disclosure), **0 hallucinations** on 92
+  unanswerable-by-design questions
+- **AECV-Bench** (external, public): 0.295 five-field exact match with a
+  deterministic engine and **no vision model**; bedroom/toilet counts at
+  0.708/0.500 from a label dictionary + OCR alone
+- ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model —
+  in-browser, nothing uploaded
+- A correctness gate on every push: ten behavioural checks + the takeoff
+  bench + MCP smoke + PDF round-trip in CI
+
+Everything regenerates from this repo with one command per table — see
+[evals/README.md](evals/README.md).
 
 > Product strategy, phase plan, licensing rationale and cost model live in [STRATEGY.md](STRATEGY.md).
 

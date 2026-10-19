@@ -28,7 +28,13 @@ function pdfDate(): string {
 }
 
 function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit, viewports: Viewport[] = []): string {
+  // the page calibration rides in the comment — String(n) is the shortest
+  // representation that parses back to the exact double, so restored values
+  // recompute bit-identically (the B7 round-trip finding). Viewport markups
+  // carry their page's calibration; the value in the body stays viewport-aware.
+  const pageCal = calibrations.get(m.page);
   const tags = [
+    ...(pageCal ? [`[mpp:${String(pageCal.metersPerPt)}]`] : []),
     ...(m.status ? [`[${m.status}]`] : []),
     ...(m.layer ? [`[layer:${m.layer}]`] : []),
   ];

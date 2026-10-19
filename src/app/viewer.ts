@@ -65,6 +65,7 @@ export async function loadPdf(bytes: Uint8Array, name: string): Promise<void> {
   state.markups = [];
   state.selectedId = null;
   state.calibrations.clear();
+  state.scanStats.clear();
   const task = pdfjsLib.getDocument({ data: bytes.slice() });
   doc = await task.promise;
   state.pageCount = doc.numPages;

@@ -17,10 +17,26 @@ jobs:
       - run: npm ci
       - run: npm run sample
       - run: npm run build
+      - name: Deploy guard (Cloudflare Pages free-tier limits; see docs/hosting-cost-controls.md)
+        run: npm run check:deploy
+      - name: Synthetic generator invariant (label/ink containment asserts run on every symbol)
+        run: node scripts/generate-synthetic-dataset.mjs --count 5 --seed 42
       - run: npm run cli -- info public/examples/sample-floor-plan.pdf
       - run: npm run cli -- scan public/examples/sample-floor-plan.pdf --page 1 --at 88.35,271.42
       - run: node scripts/mcp-smoke.mjs
       - run: node --experimental-strip-types scripts/roundtrip-check.mjs
+      - name: Room-area eval — engine fill vs analytic reference (evals/README.md; bench patches B1/B2)
+        run: npm run eval:rooms
+      - name: Room-area scorer self-tests (incl. frozen-evidence byte stability)
+        run: node --test evals/score-rooms.test.mjs
+      - name: Detector-accuracy bench — tier-1 CV on synthetic val sheets (bench patch B3)
+        run: npm run eval:detectors
+      - name: Perf bench — deterministic counts feed the ratchet; ms are informational (bench patch B5)
+        run: npm run eval:perf
+      - name: MCP workflow conformance bench — contracts incl. expected null-before-calibration (bench patch B7)
+        run: npm run eval:mcp
+      - name: Baseline ratchet — fail on eval regressions (bench patch B4)
+        run: npm run eval:check
       - name: Smoke the takeoff spec runner
         run: |
           cat > /tmp/takeoff.yaml <<'EOF'

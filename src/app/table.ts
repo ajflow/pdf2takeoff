@@ -39,6 +39,11 @@ export function initTable(): void {
     const del = target.closest('[data-del]');
     if (del) {
       const id = del.getAttribute('data-del')!;
+      // a deleted scan proposal is a judged false positive — feed the kept-rate
+      const removed = state.markups.find((m) => m.id === id);
+      if (removed?.type === 'count' && state.scanStats.has(removed.label)) {
+        state.scanStats.get(removed.label)!.removed++;
+      }
       state.markups = state.markups.filter((m) => m.id !== id);
       if (state.selectedId === id) state.selectedId = null;
       syncDeleteMarkup(id);
@@ -77,6 +82,7 @@ export function initTable(): void {
     if (!window.confirm(`Remove all ${state.markups.length} measurements in this takeoff?`)) return;
     state.markups = [];
     state.selectedId = null;
+    state.scanStats.clear(); // clearing the list is housekeeping, not judgement
     syncClearMarkups();
     emit();
   });
@@ -164,6 +170,15 @@ function renderTotals(): void {
     let text: string;
     if (g.type === 'count') {
       text = `${g.items.length} ×`;
+      // B8 kept-rate: every scan proposal the estimator deleted was a judged
+      // false positive; kept/proposed is the live precision proxy per label
+      const s = state.scanStats.get(g.label);
+      if (s && s.proposed > 0) {
+        const kept = s.proposed - s.removed;
+        const confirmed = g.items.filter((m) => m.status === 'confirmed').length;
+        text += ` · kept ${kept}/${s.proposed} (${Math.round((kept / s.proposed) * 100)}%)`;
+        if (confirmed) text += ` · ✓ ${confirmed}`;
+      }
       const extras = columnValuesFor(g.items.length, g.items.length);
       if (extras.length) text += extras.map((x) => ` · ${x.name}: ${x.text}`).join('');
     } else if (g.type === 'angle') {

@@ -1,0 +1,47 @@
+{
+  "schema": "evals/score-rooms/1",
+  "eval": "room-area",
+  "verdict": "pass",
+  "summary": {
+    "rooms": 2,
+    "passed": 2,
+    "failed": 0
+  },
+  "failures": [],
+  "rooms": [
+    {
+      "label": "R1",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 1982.04,
+        "truth_area_pt2": 2000,
+        "area_pct": 0.898,
+        "iou": 0.99102,
+        "boundary_pt": 0.141421
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R2",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 1600,
+        "truth_area_pt2": 1600,
+        "area_pct": 0,
+        "iou": 1,
+        "boundary_pt": 0
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    }
+  ]
+}

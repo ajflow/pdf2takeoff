@@ -18,11 +18,11 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Scale calibration**: click both ends of a known dimension and type its real length, or pick a preset (1:50 … 1:500, 1/8″ = 1′-0″, 1/4″ = 1′-0″, 1″ = 10′/20′/30′). Each page keeps its own scale. Metric and imperial. Multi-scale viewports (W): outline a region drawn at a different scale (a 1:20 detail on a 1:100 sheet) and measurements inside it resolve to that scale automatically.
 - **OCR auto-read**: click both ends of a printed dimension and hit *Auto-read from sheet* — the value ("12.00") or the title-block scale ("1:100") is read straight off the drawing. First use fetches the OCR language pack (~4 MB, then cached); drawings still never leave your machine.
 - **Takeoff tools**: Length (segmented runs), Area, Perimeter, Volume (area × depth), Angle (scale-free) and Count, with live measurements on the drawing and per-label group totals
-- **Scan (auto-count)**: press `S` and click one instance of a repeated symbol: a local computer-vision pass (rasterize → binarize → connected components → shape matching) finds and counts every match on the page in ~100 ms, no model download and nothing uploaded. Drop a trained detector (`symbols.onnx` + `symbols.json`) into `public/models/` and the same click upgrades to an in-browser ONNX detector (via `onnxruntime-web`, WASM) that labels hits by class and handles cluttered sheets, with automatic fallback to the CV pass if the model is missing or fails. Train one with the pipeline in [`training/`](training/README.md).
+- **Scan (auto-count)**: press `S` and click one instance of a repeated symbol: a local computer-vision pass (rasterize → binarize → connected components → shape matching) finds and counts every match on the page in ~100 ms, no model download and nothing uploaded. Hits land as **flagged proposals** (⚑) — confirm (✓) or delete them, and the totals show a live **kept-rate** per label (kept/proposed: every deletion is a judged false positive), so the tool's accuracy on *your* symbols is always visible. Drop a trained detector (`symbols.onnx` + `symbols.json`) into `public/models/` and the same click upgrades to an in-browser ONNX detector (via `onnxruntime-web`, WASM) that labels hits by class and handles cluttered sheets, with automatic fallback to the CV pass if the model is missing or fails. Train one with the pipeline in [`training/`](training/README.md).
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
-- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps are bridged automatically with escalating morphological closing — wide openings and diagonal gaps can still leak)
+- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace; door gaps are bridged with escalating run-length-gated morphological closing — only long wall runs are bridged, so text and furniture inside a room never fuse into false walls — and light-line sheets with an escalating ink threshold; openings wider than the ladder's top rung can still leak)
 - **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
 - **Notes**: pin a note anywhere (T); round-trips through the PDF
 - **Layers**: place per trade and hide layers while measuring the next; layer names ride inside the PDF
@@ -30,7 +30,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - **Multi-sheet sets**: page filmstrip with lazily rendered thumbnails and per-page calibration badges; the bundled sample carries two sheets at different scales (1:100 and 1:50) to show per-page scales
 - **Live sessions**: hit **Live** and every tab/window with the same drawing shares the takeoff in real time — placements, edits (rename/status/drag), deletions, calibrations and presence (Yjs CRDT over BroadcastChannel; cross-machine relay is the next phase)
 - **Sessions persist**: markups and calibrations autosave to IndexedDB keyed by the file's hash, so a refresh or re-open restores your takeoff (PDF annotations still take precedence when present); the PDF itself is never stored or uploaded
-- **Save into the PDF**: markups are written as standard Line / PolyLine / Polygon / FreeText annotations (pdf-lib) with the measurement in the comment, and they round-trip: reopen the file and your takeoff comes back
+- **Save into the PDF**: markups are written as standard Line / PolyLine / Polygon / FreeText annotations (pdf-lib) with the measurement in the comment, and they round-trip: reopen the file — in pdf2takeoff, an AI agent or any MCP client — and your takeoff *and its calibration* come back (the page scale rides in the comments; old PDFs without it simply re-calibrate as before)
 - **Revision overlay compare**: pick two revisions of a sheet; red exists only in A (removed), blue only in B (added), dark ink is unchanged. Auto fit-to-page, 1 pt nudge alignment, and a *Changes only* mode that fades everything unchanged to grey. Try it with `sample-floor-plan.pdf` vs `sample-floor-plan-rev-b.pdf`.
 
 ## Quick start
@@ -50,7 +50,7 @@ npm run build      # type-check + production build in dist/
 npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 ```
 
-Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
+Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included). `npm run check:deploy` (also run in CI) guards the build against Pages free-tier limits and keeps the site static-only — the hosting cost model and rules live in [docs/hosting-cost-controls.md](docs/hosting-cost-controls.md).
 
 ## Headless CLI (agents & scripts)
 
@@ -138,6 +138,18 @@ Issues and PRs welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first (short ver
 issue before PR, small scoped changes, CI green). Trade-specific feature ideas
 (what does your takeoff actually look like?) are the most valuable input of all.
 
+## Getting help
+
+- **Bugs** — wrong measurement, broken export, crash: open a
+  [GitHub issue](https://github.com/ajflow/pdf2takeoff/issues) with the
+  drawing described (vector or scanned, page size, what you clicked).
+- **How do I…?** — GitHub Discussions.
+- **Hands-on help** — trade or tool-library setup, training a detector on
+  your symbol library, workflow integration, running a revision drop for a
+  live tender — is paid consulting. Ask in Discussions and the maintainer
+  will scope it.
+
 ## Licence
 
-[Apache-2.0](LICENSE) © pdf2takeoff contributors
+[Apache-2.0](LICENSE) © pdf2takeoff contributors. The licence covers the
+code, not the name — see [TRADEMARKS.md](TRADEMARKS.md).

@@ -1,0 +1,112 @@
+{
+  "schema": "evals/mcp-workflow/1",
+  "eval": "mcp-conformance",
+  "engine": {
+    "name": "pdf2takeoff",
+    "version": "0.1.0",
+    "server": "src/headless/mcp.ts"
+  },
+  "counts": {
+    "tool_calls": 18,
+    "roundtrip_markups": 12,
+    "tools": 12
+  },
+  "ms": {
+    "boot_a": 1013,
+    "boot_b": 552,
+    "total": 307,
+    "slowest": "scan_symbol 85"
+  },
+  "ledger": [
+    {
+      "tool": "open_document",
+      "ms": 57,
+      "ok": true
+    },
+    {
+      "tool": "render_page",
+      "ms": 66,
+      "ok": true
+    },
+    {
+      "tool": "measure",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "measure",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "read_text",
+      "ms": 9,
+      "ok": true
+    },
+    {
+      "tool": "set_scale",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "scan_symbol",
+      "ms": 85,
+      "ok": true
+    },
+    {
+      "tool": "measure",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "measure",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "set_status",
+      "ms": 0,
+      "ok": true
+    },
+    {
+      "tool": "list_markups",
+      "ms": 0,
+      "ok": true
+    },
+    {
+      "tool": "export",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "save_annotated",
+      "ms": 12,
+      "ok": true
+    },
+    {
+      "tool": "open_document",
+      "ms": 51,
+      "ok": true
+    },
+    {
+      "tool": "list_markups",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "read_text",
+      "ms": 18,
+      "ok": true
+    },
+    {
+      "tool": "set_scale",
+      "ms": 1,
+      "ok": true
+    },
+    {
+      "tool": "list_markups",
+      "ms": 1,
+      "ok": true
+    }
+  ]
+}

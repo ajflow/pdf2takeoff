@@ -15,7 +15,16 @@ export async function scanForSimilar(pageNum: number, clicked: Pt, deps: ScanDep
   const raster = await deps.renderRaster(pageNum, RASTER_SCALE);
   if (detector) {
     try {
-      return await detectorScan(raster, clicked, detector);
+      const r = await detectorScan(raster, clicked, detector);
+      // A zero/one-hit detector run on an out-of-family sheet is a miss, not
+      // an answer — hand the same click to the always-available CV tier
+      // ("anything fails → automatic fallback"). The CV result wins only
+      // when it actually finds repeats; otherwise the detector's honest
+      // empty result stands.
+      if (!('error' in r) && r.hits.length >= 2) return r;
+      const cv = cvScan(raster, clicked);
+      if ('error' in cv || cv.hits.length >= 2) return cv;
+      return r;
     } catch (err) {
       deps.warn?.(`tier-2 scan failed, falling back to CV: ${err instanceof Error ? err.message : String(err)}`);
     }

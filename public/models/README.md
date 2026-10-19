@@ -30,6 +30,19 @@ for a re-train: replace the files and reload.
 - `score` / `iou` — optional detection thresholds (defaults 0.25 / 0.45).
 - `head` — `"yolox-raw"` for official YOLOX exports (score = objectness ×
   class), `"mmdet"` for mmdetection exports where scores are pre-combined.
+- `tile` — optional tiled inference for large sheets
+  ([`specs/detector-tiling.md`](../../specs/detector-tiling.md)):
+  ```json
+  "tile": { "pxPerPt": 1.875, "overlapPx": 32 }
+  ```
+  `pxPerPt` is the pixels-per-point **at model input** the training recipe
+  presented symbols at — for the shipped v1 recipe (whole-page 1280×905
+  sheets letterboxed to its 800 px input) that is `800 × 3 / 1280 = 1.875`;
+  a 416 px retrain of the same sheets would be ≈ 0.98. With it, the sheet
+  is cut into edge-aligned square tiles resampled
+  to `input` at that rate and detections are fused by one cross-tile NMS;
+  without it, the whole page is letterboxed into a single input (v1
+  behaviour, which crushes symbols on A3/A0 sheets).
 
 The `.onnx` binaries are gitignored (they are build artifacts of the
 training pipeline); commit only this README. Keep trained checkpoints in the

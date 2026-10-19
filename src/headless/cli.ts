@@ -57,12 +57,12 @@ function readPdf(path: string): Uint8Array {
 
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
   const doc = await openPdf(readPdf(file));
-  return { doc, markups: await readMarkups(doc) };
+  return { doc, markups: (await readMarkups(doc)).markups };
 }
 
 async function cmdInfo(file: string): Promise<unknown> {
   const doc = await openPdf(readPdf(file));
-  const markups = await readMarkups(doc);
+  const markups = (await readMarkups(doc)).markups;
   let other = 0;
   const pages: { page: number; widthPt: number; heightPt: number }[] = [];
   for (let p = 1; p <= doc.numPages; p++) {

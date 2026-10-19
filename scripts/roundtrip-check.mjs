@@ -10,7 +10,7 @@ import { PDFDocument } from 'pdf-lib';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { buildAnnotatedPdf, ANNOTATION_AUTHOR } from '../src/engine/annotate.ts';
-import { parseMarkups } from '../src/engine/read.ts';
+import { parseMarkups, parseCalibration } from '../src/engine/read.ts';
 import { metersPerPtForRatio, formatLength } from '../src/engine/units.ts';
 import { markupLength } from '../src/engine/geometry.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
@@ -95,6 +95,25 @@ for (const unit of ['m', 'mm', 'cm', 'in', 'ft', 'ft-in']) {
   check(`[${unit}] deleted markup stays deleted`, post.length === pruned.length && !post.some((m) => m.label === 'External wall'), `got ${post.length}`);
 }
 
+// --- page calibration rides in the comments and restores on read -------------
+// (the B7 round-trip finding: a fresh open used to lose the scale until the
+// agent re-calibrated; now every markup comment on a calibrated page carries
+// [mpp:…] and read-side parsing recovers it)
+{
+  const savedCal = await buildAnnotatedPdf({ bytes: await basePdf(), markups, calibrations, displayUnit: 'm' });
+  const doc = await openPdf(savedCal);
+  const page = await doc.getPage(1);
+  const annots = await page.getAnnotations({ intent: 'display' });
+  const cal = parseCalibration(annots);
+  check('calibration round-trips from markup comments', !!cal && Math.abs(cal.metersPerPt - metersPerPtForRatio(100)) < 1e-9,
+    `got ${cal?.metersPerPt}`);
+  const { markups: back } = await readBack(savedCal);
+  check('[mpp:…] token never leaks into labels', back.every((m) => !m.label.includes('[mpp')));
+  const wall = back.find((m) => m.type === 'length' && m.label === 'External wall');
+  const expected = markupLength({ ...wall, points: [{ x: 60, y: 90 }, { x: 400.02, y: 90 }] }, cal.metersPerPt);
+  check('restored calibration recomputes the original value', Math.abs(markupLength(wall, cal.metersPerPt) - expected) < 1e-9);
+}
+
 // --- saved comment text honours viewport scales ------------------------------
 const mpp20 = metersPerPtForRatio(20);
 const viewports = [
@@ -108,7 +127,9 @@ const viewports = [
 ];
 const savedVp = await buildAnnotatedPdf({ bytes, markups: [markups[0]], calibrations, displayUnit: 'm', viewports });
 const wall = savedVp && (await rawContents(savedVp)).find((a) => a.subtype === 'Line');
-const expectedVp = `External wall: ${formatLength(markupLength(markups[0], mpp20), 'm')}`;
+// value from the viewport's mpp; the [mpp:…] tag is the PAGE calibration
+const mppTag = `[mpp:${String(metersPerPtForRatio(100))}]`;
+const expectedVp = `External wall: ${formatLength(markupLength(markups[0], mpp20), 'm')} ${mppTag}`;
 const expectedPage = `External wall: ${formatLength(markupLength(markups[0], metersPerPtForRatio(100)), 'm')}`;
 check('viewport scale used in saved comment text', wall?.contents === expectedVp, `got "${wall?.contents}", want "${expectedVp}"`);
 check('viewport value differs from page-scale value', expectedVp !== expectedPage);

@@ -1,16 +1,16 @@
 # Training the symbol detector
 
 This directory holds the data + training pipeline for the tier-2 ML scan
-(the ONNX detector that runs in the browser via `src/scan-onnx.ts` and
-handles symbols touching lines and cluttered or scanned sheets — the blind
-spots of the tier-1 connected-component scan).
+(the ONNX detector that runs in the browser via `src/engine/scan-onnx.ts`
+and handles symbols touching lines and cluttered or scanned sheets — the
+blind spots of the tier-1 connected-component scan).
 
 ## Pipeline
 
 ```
 scripts/generate-synthetic-dataset.mjs   synthetic sheets + perfect labels (zero deps)
 scripts/floorplancad-convert.py          FloorPlanCAD DXF -> images + labels
-training/kaggle-train-yolox.ipynb        train + eval + ONNX export (Kaggle GPU)
+training/kaggle-train-yolox.ipynb        train + eval + ONNX export (ABANDONED v1 — see Training below)
 public/models/                           drop-in: symbols.onnx + symbols.json
 ```
 
@@ -26,11 +26,18 @@ node scripts/generate-synthetic-dataset.mjs --count 200 --seed 42 --debug [--deg
 
 - 1280×905 PNG sheets, randomized: wall layouts with door gaps, faint grids,
   dimension lines, title blocks, line weights and ink densities
-- 5 symbol classes: `downlight, gpo, switch, smoke, diffuser`
+- 5 symbol classes: `downlight, gpo, switch, smoke-alarm, diffuser` — the
+  canonical name is `smoke-alarm` everywhere (generator, notebook, manifest);
+  class *indices* are what matter to the model, names only label hits
 - 14–42 symbols per sheet, size-jittered; most are rejection-sampled clear of
   walls and each other, but a per-sheet quota (15–35%) is parked on wall lines
   so the detector trains on symbols touching linework — the tier-1 CV scan's
   declared blind spot
+- An always-on invariant asserts every symbol's ink stays inside its label
+  box (+2px) — this is what caught the original smoke-alarm defect, where the
+  "solid centre dot" was drawn with a 99px brush stamp and presented class 3
+  as a giant ink blob; the generator now draws a true filled disc
+  (`fillDisc`)
 - Scan-simulation: `--degrade` (default 0.5) marks that fraction of sheets
   with one SESYD-style artifact each — blur, speckle noise, contrast/gamma,
   ±0.6° rotation (labels remapped to match), photocopy (edge shadow +
@@ -69,16 +76,33 @@ python3 scripts/floorplancad-convert.py --src <floorplancad-dxf-dir> \
   0/45/90/180): overlay inspection confirms every box tightly encloses its
   symbol
 
-## Training (Kaggle, free GPUs)
+## Training (Kaggle, free GPUs) — read this first
 
-Upload the generated dataset as a Kaggle Dataset, attach
-`training/kaggle-train-yolox.ipynb`, enable a T4 accelerator, run all cells.
-The notebook trains **YOLOX-nano** (depth 0.33 / width 0.25) at 416 px with
-mmdetection, sanity-checks detections on val sheets, and exports ONNX in
-exactly the `[1, N, 5+C]` xyxy+objectness+classes layout that
-`src/scan-onnx.ts` decodes (`head: "yolox-raw"` in the manifest).
+**The committed `kaggle-train-yolox.ipynb` is the abandoned v1 attempt, kept
+for reference.** mmdetection needs mmcv wheels that were never published for
+Kaggle's Python 3.13; after several iterations that stack was dropped. What
+actually shipped as the v1 model is a **torchvision Faster R-CNN
+(MobileNetV3-FPN)** export trained in plain torch — the honest account of
+those iterations lives in
+[`docs/blog/draft-open-symbol-detector.md`](../docs/blog/draft-open-symbol-detector.md).
 
-Outputs land in `/kaggle/working/`: `symbols.onnx` + `symbols.json`.
+The v2 retrain must additionally honour the **tile contract**
+([`specs/detector-tiling.md`](../specs/detector-tiling.md)): the engine now
+cuts large sheets into tiles when the manifest declares
+`tile: {pxPerPt, overlapPx}`, so the training recipe must present symbols at
+that same `pxPerPt` at model input and the export cell must write it into
+`symbols.json`. With 1280×905 synthetic sheets (~427×302 pt at 3 px/pt)
+letterboxed whole-page to a 416 px input, the effective rate is
+`416 × 3 / 1280 ≈ 0.98` px/pt — declare that number, not 3. (The shipped v1
+recipe — the same sheets letterboxed to its 800 px input — is
+`800 × 3 / 1280 = 1.875`.) A v2 notebook
+should start from the working torch stack, not the mmdet one.
+
+Upload the generated dataset as a Kaggle Dataset, attach the notebook,
+enable a T4 accelerator, run all cells. Outputs land in `/kaggle/working/`:
+`symbols.onnx` + `symbols.json` in exactly the `[1, N, 5+C]`
+xyxy+objectness+classes layout that `src/engine/scan-onnx.ts` decodes
+(`head: "yolox-raw"` in the manifest).
 
 ## Shipping a model
 

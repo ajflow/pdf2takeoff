@@ -337,28 +337,41 @@ async function runScan(p: Pt): Promise<void> {
     return;
   }
   const fallbackLabel = state.activePreset?.type === 'count' ? state.activePreset.label : 'Scanned symbol';
+  const proposed = new Map<string, number>();
   for (const hit of hits) {
+    const label = hit.label ?? fallbackLabel;
     const scanned: Markup = {
       id: nextId('mk'),
       page: state.pageNum,
       type: 'count',
       layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
-      label: hit.label ?? fallbackLabel,
+      label,
       points: [{ x: hit.x, y: hit.y }],
       createdAt: Date.now(),
+      // scan output is a proposal, not a quantity: hits land flagged (⚑) and
+      // the estimator confirms (✓) or deletes — decisions feed the kept-rate
+      status: 'check',
     };
     state.markups.push(scanned);
     syncUpsertMarkup(scanned);
+    proposed.set(label, (proposed.get(label) ?? 0) + 1);
+  }
+  for (const [label, n] of proposed) {
+    const s = state.scanStats.get(label) ?? { proposed: 0, removed: 0 };
+    s.proposed += n;
+    state.scanStats.set(label, s);
   }
   state.lastAction = null;
   setTool('pan');
   renderMarkups();
   emit();
   const label = hits[0].label ?? fallbackLabel;
+  const kept = state.scanStats.get(label);
+  const rate = kept && kept.proposed ? ` · kept ${kept.proposed - kept.removed}/${kept.proposed}` : '';
   hint(
     label !== 'Scanned symbol'
-      ? `Scan counted ${hits.length} × ${label} in ${ms} ms`
-      : `Scan found ${hits.length} symbols in ${ms} ms; rename "Scanned symbol" in the list to group them`,
+      ? `Scan proposed ${hits.length} × ${label} in ${ms} ms — flagged for review${rate}`
+      : `Scan found ${hits.length} symbols in ${ms} ms, flagged for review; rename "Scanned symbol" in the list to group them${rate}`,
   );
 }
 

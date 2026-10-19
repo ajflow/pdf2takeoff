@@ -41,6 +41,12 @@ export interface AppState {
     text: string;
     sort: 'added' | 'label' | 'page';
   };
+  /** B8 live accuracy readout: per label, how many symbols the scan proposed
+   *  and how many the user removed. Kept rate = (proposed − removed) /
+   *  proposed — every removal is a judged false positive, every keeper is at
+   *  least tolerated, and ✓ confirmations are explicit accepts. Reset when
+   *  the markups list is cleared wholesale (that is not a judgement). */
+  scanStats: Map<string, { proposed: number; removed: number }>;
 }
 
 export const state: AppState = {
@@ -61,6 +67,7 @@ export const state: AppState = {
   columns: [],
   viewports: [],
   listFilter: { status: 'all', text: '', sort: 'added' },
+  scanStats: new Map(),
 };
 
 type Listener = () => void;

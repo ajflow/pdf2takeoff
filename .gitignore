@@ -12,6 +12,7 @@ training/synthetic/
 # model binaries live on the model-v1 branch (raw.githubusercontent, CORS-enabled)
 # public/models/symbols.json IS committed (manifest)
 training/floorplancad/
+public/models/*.onnx
 public/examples/soak-*.pdf
 
 # business strategy doc stays local (never published)
@@ -23,3 +24,12 @@ FRIEND-ONBOARDING.md
 
 # ZCode session state
 .zcode/
+
+# eval artifacts — regenerate with node evals/make-room-sheet.mjs && node evals/run-rooms.mjs
+# (reference.json, fixtures and run logs ARE committed; these are derived)
+evals/artifacts/
+
+# AEC-Geometric-Bench: cloned alongside, never vendored (data CC BY-NC 4.0 —
+# eval-only; scorer is Apache-2.0). Predictions + adapters ARE committed.
+evals/aecgb/repo/
+evals/aecgb/*.png

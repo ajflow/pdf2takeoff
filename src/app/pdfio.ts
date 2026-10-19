@@ -5,7 +5,7 @@
 import { state, takeoffData } from './state';
 import { getPageAnnotations } from './viewer';
 import { buildAnnotatedPdf } from '../engine/annotate';
-import { parseMarkups, type AnnotationLike } from '../engine/read';
+import { parseMarkups, parseCalibration, type AnnotationLike } from '../engine/read';
 import { syncUpsertMarkup } from './session';
 import type { Markup } from '../engine/types';
 
@@ -20,7 +20,10 @@ export async function saveAnnotatedPdf(): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-/** Read pdf2takeoff-authored annotations from the open document into state. */
+/** Read pdf2takeoff-authored annotations from the open document into state.
+ *  Page calibrations embedded in the comments ([mpp:…], written by
+ *  buildAnnotatedPdf) restore for pages the current session hasn't
+ *  calibrated itself — an IndexedDB-restored calibration takes precedence. */
 export async function importMarkups(): Promise<number> {
   const found: Markup[] = [];
   for (let p = 1; p <= state.pageCount; p++) {
@@ -31,6 +34,10 @@ export async function importMarkups(): Promise<number> {
       continue;
     }
     found.push(...parseMarkups(annots as unknown as AnnotationLike[], p, found.length));
+    if (!state.calibrations.has(p)) {
+      const cal = parseCalibration(annots as unknown as AnnotationLike[]);
+      if (cal) state.calibrations.set(p, cal);
+    }
   }
   if (found.length) {
     state.markups = found;

@@ -13,10 +13,16 @@
     "dev": "vite",
     "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node scripts/check-fill.mjs && node scripts/check-detector.mjs",
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
+    "check:deploy": "node scripts/check-deploy.mjs",
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",
     "sample": "node scripts/make-sample.mjs",
-    "soak": "node scripts/make-soak.mjs"
+    "soak": "node scripts/make-soak.mjs",
+    "eval:rooms": "node evals/make-room-sheet.mjs && node evals/run-rooms.mjs && node evals/score-rooms.mjs --out evals/artifacts/score-rooms.json",
+    "eval:detectors": "node evals/bench-detector.mjs",
+    "eval:perf": "node evals/bench-perf.mjs",
+    "eval:mcp": "node evals/mcp-workflow-bench.mjs",
+    "eval:check": "node evals/compare.mjs"
   },
   "keywords": [
     "pdf",

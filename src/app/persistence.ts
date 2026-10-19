@@ -38,6 +38,7 @@ interface StoredSession {
   markups: Markup[];
   calibrations: [number, Calibration][];
   viewports?: Viewport[];
+  scanStats?: [string, { proposed: number; removed: number }][];
   savedAt: number;
 }
 
@@ -57,6 +58,7 @@ async function save(): Promise<void> {
     markups: state.markups,
     calibrations: [...state.calibrations],
     viewports: state.viewports,
+    scanStats: [...state.scanStats],
     savedAt: Date.now(),
   };
   try {
@@ -83,6 +85,7 @@ export async function restoreSession(bytes: Uint8Array): Promise<number> {
         state.markups = s.markups;
         state.calibrations = new Map(s.calibrations ?? []);
         state.viewports = Array.isArray(s.viewports) ? s.viewports : [];
+        state.scanStats = new Map(s.scanStats ?? []);
         resolve(s.markups.length);
       };
       req.onerror = () => resolve(0);

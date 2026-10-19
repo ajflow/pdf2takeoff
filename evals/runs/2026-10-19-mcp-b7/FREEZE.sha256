@@ -1,0 +1,3 @@
+bd4713977eca112a9e5857c4dd4622cb0e38dcade339aed45910ea1f5c5e121a  evals/mcp-workflow-bench.mjs
+b16079b35c0a6696eee0c12f49755b2f80174c0a3dfdacff7e4f0fcdd47e5e29  evals/runs/2026-10-19-mcp-b7/ledger.json
+4e2ac991926cd5cfefe43f69d3bd14285c2740cd22dfa8220704d9fea7c35618  src/headless/mcp.ts

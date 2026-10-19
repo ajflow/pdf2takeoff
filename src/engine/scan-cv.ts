@@ -30,7 +30,22 @@ interface Component {
   sig: Float32Array;
 }
 
-export function cvScan(raster: RasterPage, clicked: Pt): ScanResult {
+/** Opt-in instrumentation for the detector-accuracy bench (evals/bench-detector.mjs):
+ *  every component the scan considered, tagged with the first match gate it
+ *  failed — so a miss can say *why* it was missed. No behaviour change when
+ *  absent. */
+export interface CvTrace {
+  /** components dropped by the size bounds before matching began */
+  dropped: Array<{ cx: number; cy: number; count: number; reason: 'too-small' | 'too-large' }>;
+  /** every component that reached matching, with its outcome */
+  components: Array<{
+    cx: number; cy: number; count: number;
+    x0: number; y0: number; x1: number; y1: number;
+    status: 'hit' | 'size' | 'aspect' | 'fill' | 'signature';
+  }>;
+}
+
+export function cvScan(raster: RasterPage, clicked: Pt, trace?: CvTrace): ScanResult {
   const w = raster.width;
   const h = raster.height;
   const data = raster.data;
@@ -110,7 +125,13 @@ export function cvScan(raster: RasterPage, clicked: Pt): ScanResult {
         }
       }
     }
-    if (count < MIN_COMPONENT_PX || count > (w * h) / 16) continue;
+    if (count < MIN_COMPONENT_PX || count > (w * h) / 16) {
+      trace?.dropped.push({
+        cx: sx / count, cy: sy / count, count,
+        reason: count < MIN_COMPONENT_PX ? 'too-small' : 'too-large',
+      });
+      continue;
+    }
     comps.push(makeComponent(id, count, x0, y0, x1, y1, sx / count, sy / count, labels, w));
   }
 
@@ -137,20 +158,29 @@ export function cvScan(raster: RasterPage, clicked: Pt): ScanResult {
       error: 'that symbol is too small or part of a large structure; try a smaller, isolated symbol',
     };
 
-  // match every component against the template
+  // match every component against the template; the first gate a component
+  // fails is its trace status (gate order: size → aspect → fill → signature)
   const aspectT = (template.x1 - template.x0 + 1) / (template.y1 - template.y0 + 1);
   const hits: Pt[] = [];
   for (const c of comps) {
-    const sizeRatio = Math.sqrt(template.count / c.count);
-    if (sizeRatio < SIZE_BAND || sizeRatio > 1 / SIZE_BAND) continue;
-    const aspectC = (c.x1 - c.x0 + 1) / (c.y1 - c.y0 + 1);
-    if (Math.abs(Math.log(aspectT / aspectC)) > ASPECT_BAND) continue;
-    if (Math.abs(template.fill - c.fill) > FILL_BAND) continue;
-    let d = 0;
-    for (let i = 0; i < template.sig.length; i++) d += Math.abs(template.sig[i] - c.sig[i]);
-    if (d <= MATCH_DIST) {
-      hits.push(raster.toPdf(c.cx, c.cy));
+    const status: CvTrace['components'][number]['status'] = (() => {
+      const sizeRatio = Math.sqrt(template.count / c.count);
+      if (sizeRatio < SIZE_BAND || sizeRatio > 1 / SIZE_BAND) return 'size';
+      const aspectC = (c.x1 - c.x0 + 1) / (c.y1 - c.y0 + 1);
+      if (Math.abs(Math.log(aspectT / aspectC)) > ASPECT_BAND) return 'aspect';
+      if (Math.abs(template.fill - c.fill) > FILL_BAND) return 'fill';
+      return 'signature'; // proven below unless the distance passes
+    })();
+    if (status === 'signature') {
+      let d = 0;
+      for (let i = 0; i < template.sig.length; i++) d += Math.abs(template.sig[i] - c.sig[i]);
+      if (d <= MATCH_DIST) {
+        hits.push(raster.toPdf(c.cx, c.cy));
+        trace?.components.push({ cx: c.cx, cy: c.cy, count: c.count, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, status: 'hit' });
+        continue;
+      }
     }
+    trace?.components.push({ cx: c.cx, cy: c.cy, count: c.count, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, status });
   }
 
   // stable numbering: reading order, rows then columns

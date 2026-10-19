@@ -6,6 +6,12 @@
 > tier) are still open — both need model artifacts prepared outside this
 > repo. Patch 6 waits on the next Kaggle run; the generator now emits the
 > degraded + wall-touching mix it should train on.
+>
+> **2026-10-19:** this research line is unchanged, but a second,
+> parallel line was opened from the frontier-model feedback — the
+> verification/correction patches (sidecar, fill-repair UX, re-review
+> queue): see [verify-first-plan.md](verify-first-plan.md). Its point 2
+> feeds this line's patch 2 tier B (barriers = labelled openings).
 
 Findings summary and a file-level plan derived from
 [ai-literature-review.md](ai-literature-review.md). Each patch names the

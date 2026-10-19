@@ -50,10 +50,25 @@ The bundled sample (`Try the sample drawing`) has a printed 12.00 m dimension
 for testing calibration, repeated symbols for testing Scan, and a revision B
 for testing overlay compare.
 
-## Licensing
+## Licensing your contribution
 
-By contributing you agree your contributions are licensed under the project's
-Apache-2.0 licence.
+By contributing, you agree that:
+
+1. Your contributions are licensed under the project's Apache-2.0 licence,
+   and you keep your copyright — the project stays Apache-2.0.
+2. You also grant the project maintainer (A.J Awan) a broad, perpetual,
+   royalty-free, non-exclusive licence to use and redistribute your
+   contributions as part of the project under any licence chosen for future
+   versions — including a change away from Apache-2.0. Nothing like that is
+   planned; this clause just keeps the project's options open instead of
+   locking them in 2026.
+3. If your contribution was made as part of your employment or using an
+   employer's resources, you confirm your employer is fine with this grant.
+   If in doubt, contribute personally or attach your employer's written OK
+   to the PR.
+
+If any of that doesn't work for you, open an issue describing the change
+instead — the maintainer can implement it.
 
 ## Conduct
 

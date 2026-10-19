@@ -9,20 +9,26 @@ import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
 import { openPdf } from './pdfjs-node.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { cvScan } from '../engine/scan-cv.ts';
-import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
+import { parseMarkups, parseCalibration, type AnnotationLike } from '../engine/read.ts';
 import { blendOverlay } from '../engine/compare.ts';
 import { diffMask, maskRegions } from '../engine/diff.ts';
-import type { Markup, Pt } from '../engine/types.ts';
+import type { Calibration, Markup, Pt } from '../engine/types.ts';
 
-/** Read pdf2takeoff-authored annotations from every page of an open doc. */
-export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
+/** Read pdf2takeoff-authored annotations from every page of an open doc —
+ *  markups, plus any page calibrations embedded in their comments. */
+export async function readMarkups(
+  doc: PDFDocumentProxy,
+): Promise<{ markups: Markup[]; calibrations: Map<number, Calibration> }> {
   const markups: Markup[] = [];
+  const calibrations = new Map<number, Calibration>();
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const annots = await page.getAnnotations({ intent: 'display' });
     markups.push(...parseMarkups(annots as unknown as AnnotationLike[], p, markups.length));
+    const cal = parseCalibration(annots as unknown as AnnotationLike[]);
+    if (cal) calibrations.set(p, cal);
   }
-  return markups;
+  return { markups, calibrations };
 }
 
 /** Tier-1 CV scan at a click point, in PDF points. */

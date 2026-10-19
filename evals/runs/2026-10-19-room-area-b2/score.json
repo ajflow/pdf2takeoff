@@ -1,0 +1,115 @@
+{
+  "schema": "evals/score-rooms/1",
+  "eval": "room-area",
+  "verdict": "pass",
+  "summary": {
+    "rooms": 6,
+    "passed": 6,
+    "failed": 0
+  },
+  "failures": [],
+  "rooms": [
+    {
+      "label": "R1",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 71189,
+        "truth_area_pt2": 71456.25,
+        "area_pct": 0.374005,
+        "iou": 0.99626,
+        "boundary_pt": 0.600907
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R2",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 54753.6759,
+        "truth_area_pt2": 54945,
+        "area_pct": 0.34821,
+        "iou": 0.996518,
+        "boundary_pt": 0.600907
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R3",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 55123,
+        "truth_area_pt2": 55361.25,
+        "area_pct": 0.430355,
+        "iou": 0.995696,
+        "boundary_pt": 0.707107
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R4",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 49344,
+        "truth_area_pt2": 49568.75,
+        "area_pct": 0.453411,
+        "iou": 0.995466,
+        "boundary_pt": 0.471357
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R5",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 37952.0064,
+        "truth_area_pt2": 38115,
+        "area_pct": 0.427636,
+        "iou": 0.995724,
+        "boundary_pt": 0.471357
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    },
+    {
+      "label": "R6",
+      "status": "scored",
+      "passed": true,
+      "metrics": {
+        "area_pt2": 38208,
+        "truth_area_pt2": 38403.75,
+        "area_pct": 0.509716,
+        "iou": 0.994903,
+        "boundary_pt": 0.600907
+      },
+      "gates": {
+        "area": true,
+        "iou": true,
+        "boundary": true
+      }
+    }
+  ]
+}

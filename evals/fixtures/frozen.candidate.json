@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "eval": "room-area",
+  "source_pdf_sha256": "f00df00df00df00df00df00df00df00df00df00df00df00df00df00df00df00d",
+  "engine": { "name": "fixture", "version": "0" },
+  "produced_by": "hand-authored frozen fixture (score-rooms.test.mjs)",
+  "rooms": [
+    { "label": "R1", "polygon_pts": [[10.1, 10.1], [59.9, 10.1], [59.9, 49.9], [10.1, 49.9]] },
+    { "label": "R2", "polygon_pts": [[70, 10], [110, 10], [110, 50], [70, 50]] }
+  ]
+}

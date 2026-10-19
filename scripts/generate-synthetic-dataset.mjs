@@ -38,7 +38,7 @@ const DEGRADE = Number(arg('degrade', 0.5));
 const DEBUG = args.includes('--debug');
 const OUT = join(ROOT, 'training', 'synthetic');
 
-const CLASSES = ['downlight', 'gpo', 'switch', 'smoke', 'diffuser'];
+const CLASSES = ['downlight', 'gpo', 'switch', 'smoke-alarm', 'diffuser'];
 const W = 1280;
 const H = 905; // ~A4 landscape aspect
 
@@ -63,11 +63,22 @@ class Raster {
     this.w = w;
     this.h = h;
     this.px = new Uint8Array(w * h).fill(255);
+    // when non-null, put() records the ink extent — the label/ink invariant
+    // check below depends on it
+    this.trace = null;
   }
   put(x, y, v) {
     x |= 0;
     y |= 0;
-    if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.px[y * this.w + x] = v;
+    if (x >= 0 && y >= 0 && x < this.w && y < this.h) {
+      this.px[y * this.w + x] = v;
+      if (this.trace) {
+        if (x < this.trace.x0) this.trace.x0 = x;
+        if (y < this.trace.y0) this.trace.y0 = y;
+        if (x > this.trace.x1) this.trace.x1 = x;
+        if (y > this.trace.y1) this.trace.y1 = y;
+      }
+    }
   }
   brush(x, y, v, size) {
     if (size <= 1) this.put(x, y, v);
@@ -120,6 +131,14 @@ class Raster {
         }
       }
       for (let x = Math.max(0, Math.floor(xa)); x <= Math.min(this.w - 1, Math.ceil(xb)); x++) this.put(x, y, v);
+    }
+  }
+  fillDisc(cx, cy, rad, v) {
+    cx = Math.round(cx);
+    cy = Math.round(cy);
+    for (let dy = -rad; dy <= rad; dy++) {
+      const dx = Math.floor(Math.sqrt(rad * rad - dy * dy));
+      for (let x = cx - dx; x <= cx + dx; x++) this.put(x, cy + dy, v);
     }
   }
 }
@@ -190,9 +209,9 @@ function drawSymbol(r, cls, cx, cy, size, ink, thick) {
     case 2: // switch: filled triangle
       r.fillTriangle(cx - s, cy + s * 0.8, cx + s, cy + s * 0.8, cx, cy - s, ink);
       break;
-    case 3: // smoke detector: circle + solid centre
+    case 3: // smoke alarm: circle + solid centre
       r.circle(cx, cy, s, ink, thick);
-      r.circle(cx, cy, Math.max(2, s * 0.3), ink, 99);
+      r.fillDisc(cx, cy, Math.max(2, Math.round(s * 0.3)), ink);
       break;
     case 4: // diffuser: square + diagonals
       r.rect(cx - s * 0.85, cy - s * 0.85, 1.7 * s, 1.7 * s, ink, thick);
@@ -291,7 +310,22 @@ function generateSheet(index) {
     if (!p) continue;
     placed.push(p);
     const ink = randInt(20, 70);
+    // invariant: a symbol's own ink stays inside its label box (+2px for
+    // brush thickness/rounding). The trace only records puts made while
+    // drawSymbol runs, so walls crossing the box don't trigger it — but a
+    // geometry bug (e.g. a fill helper stamping a huge blob) fails here
+    // instead of silently poisoning the dataset.
+    r.trace = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
     const box = drawSymbol(r, p.cls, p.cx, p.cy, p.s, ink, randInt(1, 2));
+    const b = r.trace;
+    r.trace = null;
+    const M = 2;
+    if (b.x1 < b.x0 || b.x0 < box.x - M || b.y0 < box.y - M || b.x1 > box.x + box.w + M || b.y1 > box.y + box.h + M) {
+      throw new Error(
+        `sheet ${index}: ${CLASSES[p.cls]} at (${p.cx.toFixed(1)}, ${p.cy.toFixed(1)}) drew ink ` +
+          `[${b.x0},${b.y0}..${b.x1},${b.y1}] outside its label box [${box.x},${box.y} ${box.w}x${box.h}] — symbol geometry bug`,
+      );
+    }
     labels.push({ cls: p.cls, box });
   }
 

@@ -22,7 +22,7 @@ square windows and each is letterboxed to `inputSize` independently:
 ```json
 {
   "model": "symbols.onnx",
-  "classes": ["downlight", "gpo", "switch", "smoke", "diffuser"],
+  "classes": ["downlight", "gpo", "switch", "smoke-alarm", "diffuser"],
   "head": "yolox-raw",
   "tile": { "pxPerPt": 1.5, "overlapPx": 32 }
 }
@@ -56,7 +56,10 @@ The model must see symbols at the manifest's `pxPerPt` **at model input**.
 Concretely: if you re-train on synthetic sheets rendered at
 RASTER_SCALE = 3 (1280×905 px for ~427×302 pt) with whole-page letterbox to
 416 px, the effective rate is `416 × 3 / 1280 ≈ 0.98` px/pt — declare that,
-not 3. If you instead train on 416-px crops of the 3× raster, declare 3.
+not 3. The shipped v1 model's recipe — the same sheets letterboxed to its
+800 px input — corresponds to `800 × 3 / 1280 = 1.875`; that is the number
+to declare if it is ever opted into tiling. If you instead train on 416-px
+crops of the 3× raster, declare 3.
 Mismatched values make the window grid resample symbols to a size the model
 never saw: recall quietly dies, so this number belongs in the training
 notebook's export cell, written into `symbols.json` next to `head`.
@@ -64,8 +67,13 @@ notebook's export cell, written into `symbols.json` next to `head`.
 ## Verification
 
 `scripts/check-detector.mjs` (runs in `npm run typecheck:engine`) drives
-`detectorScan` with a fake session: every window returns one fixed detection
-in input coordinates, and the check asserts the hits land at the expected
-window centres in raster space, that the grid covers the sheet edge-to-edge
-with ≥ requested overlap, and that the legacy no-tile path still maps a
-whole-page detection back to the same point.
+`detectorScan` two ways. A fixed-answer fake session asserts the hits land at
+the expected tile centres in raster space, that duplicate rows merge under
+NMS, and that the legacy no-tile path maps a whole-page detection back to the
+same point. A self-locating stub then flood-fills dark blobs in the actual
+CHW input, verifying the full geometry round-trip (tile → resample → decode →
+offset → NMS → PDF points): every planted symbol on a 1200×840 pt sheet is
+recovered exactly once — including tile-border straddlers and sheet corners —
+with zero phantoms, column-major output tensors decode identically, a
+crushed-symbol legacy pass returns the documented error, and the MAX_DET cap
+and the runaway-tile guard both hold.

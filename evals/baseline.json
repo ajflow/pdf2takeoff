@@ -1,0 +1,27 @@
+{
+  "_comment": "eval baseline ratchet — see evals/README.md (bench patch B4). Update deliberately via: node evals/compare.mjs --update-baseline",
+  "_updated": "2026-10-19",
+  "_direction": {
+    "fill.area_pct_max": "lower",
+    "fill.boundary_pt_max": "lower"
+  },
+  "_threshold": {},
+  "fill.area_pct_max": 0.509716,
+  "fill.iou_min": 0.994903,
+  "fill.boundary_pt_max": 0.707107,
+  "det.clean.precision": 1,
+  "det.clean.recall": 0.2487,
+  "det.clean.f1": 0.3983,
+  "det.degraded.precision": 1,
+  "det.degraded.recall": 0.1789,
+  "det.degraded.f1": 0.3036,
+  "perf.render_pages": 12,
+  "perf.scan_hits": 8,
+  "perf.fill_rooms": 6,
+  "perf.compare_pages": 2,
+  "perf.compare_changed_sheets": 2,
+  "perf.roundtrip_markups": 7,
+  "mcp.tool_calls": 15,
+  "mcp.roundtrip_markups": 12,
+  "mcp.tools": 12
+}

@@ -50,6 +50,34 @@ function labelBefore(contents: string, tail: RegExp): string | null {
   return contents.slice(0, m.index).trimEnd() || RESTORED;
 }
 
+/**
+ * Page calibration restored from pdf2takeoff-authored annotations: the
+ * `[mpp:…]` token buildAnnotatedPdf writes into every markup comment on a
+ * calibrated page. Returns the first valid token found (all markups on a
+ * page carry the same one), or null for uncalibrated / third-party PDFs.
+ */
+export function parseCalibration(annots: AnnotationLike[]): { metersPerPt: number; source: string } | null {
+  const strOf = (v: unknown): string | null =>
+    v && typeof v === 'object' && typeof (v as { str?: unknown }).str === 'string'
+      ? (v as { str: string }).str
+      : typeof v === 'string'
+        ? v
+        : null;
+  for (const a of annots) {
+    const title = strOf(a.titleObj);
+    if (title !== ANNOTATION_AUTHOR) continue;
+    const contents = strOf(a.contentsObj) ?? '';
+    const m = contents.match(/\[mpp:([0-9.eE+-]+)\]/);
+    if (m) {
+      const metersPerPt = parseFloat(m[1]);
+      if (Number.isFinite(metersPerPt) && metersPerPt > 0) {
+        return { metersPerPt, source: 'restored from PDF annotations' };
+      }
+    }
+  }
+  return null;
+}
+
 export function parseMarkups(annots: AnnotationLike[], page: number, startIndex: number): Markup[] {
   const found: Markup[] = [];
 
@@ -68,11 +96,14 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     if (title !== ANNOTATION_AUTHOR) continue;
     const subtype = String(a.subtype ?? '');
     const contentsRaw = strOf(a.contentsObj) ?? (typeof a.contents === 'string' ? a.contents : '');
-    const layerMatch = contentsRaw.match(/\[layer:([^\]]+)\]\s*$/);
-    const statusMatch = contentsRaw.match(/\[(check|confirmed)\](?:\s*\[layer:[^\]]+\])?\s*$/);
+    // strip the calibration token first so labels and the end-anchored
+    // status/layer matches never see it
+    const mppStripped = contentsRaw.replace(/\s?\[mpp:[0-9.eE+-]+\]/, '');
+    const layerMatch = mppStripped.match(/\[layer:([^\]]+)\]\s*$/);
+    const statusMatch = mppStripped.match(/\[(check|confirmed)\](?:\s*\[layer:[^\]]+\])?\s*$/);
     const contents = (statusMatch || layerMatch)
-      ? contentsRaw.slice(0, (statusMatch ?? layerMatch)!.index!).trimEnd()
-      : contentsRaw;
+      ? mppStripped.slice(0, (statusMatch ?? layerMatch)!.index!).trimEnd()
+      : mppStripped;
 
     const toPt = (x: number, y: number): { x: number; y: number } => ({ x, y });
     let points: { x: number; y: number }[] = [];

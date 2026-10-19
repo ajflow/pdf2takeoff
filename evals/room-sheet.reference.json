@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "eval": "room-area",
+  "source_pdf": "artifacts/room-sheet.pdf",
+  "source_pdf_sha256": "b78f5963465b78b8bf76b7c13383f8a5f25f3955b15422f451e168fd52ec91f5",
+  "page": 1,
+  "pdf_points": {
+    "page_width": 842,
+    "page_height": 595
+  },
+  "coordinate_frame": "PDF user space (pt, origin bottom-left)",
+  "wall_stroke_pt": {
+    "outer": 3,
+    "inner": 2
+  },
+  "rooms": [
+    {
+      "label": "R1",
+      "seed_pt": [
+        190.25,
+        200.25
+      ],
+      "truth_pts": [
+        [
+          61.5,
+          61.5
+        ],
+        [
+          319,
+          61.5
+        ],
+        [
+          319,
+          339
+        ],
+        [
+          61.5,
+          339
+        ]
+      ],
+      "truth_area_pt2": 71456.25
+    },
+    {
+      "label": "R2",
+      "seed_pt": [
+        420,
+        200.25
+      ],
+      "truth_pts": [
+        [
+          321,
+          61.5
+        ],
+        [
+          519,
+          61.5
+        ],
+        [
+          519,
+          339
+        ],
+        [
+          321,
+          339
+        ]
+      ],
+      "truth_area_pt2": 54945
+    },
+    {
+      "label": "R3",
+      "seed_pt": [
+        620.75,
+        200.25
+      ],
+      "truth_pts": [
+        [
+          521,
+          61.5
+        ],
+        [
+          720.5,
+          61.5
+        ],
+        [
+          720.5,
+          339
+        ],
+        [
+          521,
+          339
+        ]
+      ],
+      "truth_area_pt2": 55361.25
+    },
+    {
+      "label": "R4",
+      "seed_pt": [
+        190.25,
+        437.25
+      ],
+      "truth_pts": [
+        [
+          61.5,
+          341
+        ],
+        [
+          319,
+          341
+        ],
+        [
+          319,
+          533.5
+        ],
+        [
+          61.5,
+          533.5
+        ]
+      ],
+      "truth_area_pt2": 49568.75
+    },
+    {
+      "label": "R5",
+      "seed_pt": [
+        420,
+        437.25
+      ],
+      "truth_pts": [
+        [
+          321,
+          341
+        ],
+        [
+          519,
+          341
+        ],
+        [
+          519,
+          533.5
+        ],
+        [
+          321,
+          533.5
+        ]
+      ],
+      "truth_area_pt2": 38115
+    },
+    {
+      "label": "R6",
+      "seed_pt": [
+        620.75,
+        437.25
+      ],
+      "truth_pts": [
+        [
+          521,
+          341
+        ],
+        [
+          720.5,
+          341
+        ],
+        [
+          720.5,
+          533.5
+        ],
+        [
+          521,
+          533.5
+        ]
+      ],
+      "truth_area_pt2": 38403.75
+    }
+  ],
+  "tolerances": {
+    "area_percent": 1,
+    "overlap_iou": 0.985,
+    "boundary_max_pt": 1
+  }
+}

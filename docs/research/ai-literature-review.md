@@ -3,7 +3,9 @@
 Deep-research sweep (October 2026) mapping academic work onto the product's
 sub-problems. Papers verified against arXiv/journal pages during research;
 links are primary sources where possible. Organized by the feature the work
-informs. Companion file: [patch-plan.md](patch-plan.md) — what we do with this.
+informs. Companion files: [patch-plan.md](patch-plan.md) — what we do with
+this; [market-scan.md](market-scan.md) — the open-source repo landscape and
+external idea roadmap.
 
 Headline: the product's problems are all studied fields. "Press S, click one
 symbol, count them all" is **class-agnostic few-shot counting**; the Scan tool

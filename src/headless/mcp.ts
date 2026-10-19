@@ -110,19 +110,21 @@ export async function runMcpServer(): Promise<void> {
       const bytes = new Uint8Array(readFileSync(path));
       const doc = await openPdf(bytes);
       const id = `doc-${++docSeq}`;
-      const markups = await readMarkups(doc);
+      const restored = await readMarkups(doc);
+      const markups = restored.markups;
       const pages: { page: number; widthPt: number; heightPt: number }[] = [];
       for (let p = 1; p <= doc.numPages; p++) {
         const vp = (await doc.getPage(p)).getViewport({ scale: 1 });
         pages.push({ page: p, widthPt: Math.round(vp.width), heightPt: Math.round(vp.height) });
       }
-      docs.set(id, { id, path, bytes, doc, calibrations: new Map(), markups });
+      docs.set(id, { id, path, bytes, doc, calibrations: restored.calibrations, markups });
       return text({
         id,
         fileName: basename(path),
         pageCount: doc.numPages,
         pages,
         restoredMarkups: markups.length,
+        restoredCalibrations: restored.calibrations.size,
         next: 'render_page to see a sheet, then set_scale before measuring',
       });
     },

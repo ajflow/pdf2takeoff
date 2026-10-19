@@ -47,6 +47,8 @@ const ARCH = new RegExp(String.raw`^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*${
 const ENG = new RegExp(String.raw`^1\s*${INCH}\s*=\s*(\d+(?:\.\d+)?)\s*${FOOT}\s*(?:-?\s*0\s*${INCH}?)?$`, 'i');
 /** A keyword'd bare architectural fraction: the note's '= 1'-0"' half did not survive the scan. */
 const ARCH_LEFT_ONLY = new RegExp(String.raw`^(\d+\/\d+)\s*${INCH}$`, 'i');
+/** A fused engineer note: leading 1" and trailing foot mark lost ('"=10' for 1" = 10'). */
+const ENG_FUSED = new RegExp(String.raw`^[="']+\s*(\d{1,3})\s*'?"?$`);
 const NTS = /^(n\.?\s*t\.?\s*s\.?|not\s+to\s+scale)$/i;
 
 /**
@@ -153,6 +155,13 @@ export function scaleVotesFromWords(words: OcrWord[], origin = 'OCR'): { votes: 
           const ratio = 12 * ft;
           if (!nearImperialStandard(ratio)) return null;
           return { ratio, weight: repaired ? 0.9 : 1, kind: 'imperial', keyword, label: repaired ? `${str} (digits repaired)` : str };
+        } else if (keyword && (m = str.match(ENG_FUSED))) {
+          // the whole note fused into one token with the leading 1" and the
+          // trailing foot mark lost ('"=10' for 1" = 10')
+          const ft = parseInt(m[1], 10);
+          const ratio = 12 * ft;
+          if (!nearImperialStandard(ratio)) return null;
+          return { ratio, weight: 0.7, kind: 'imperial', keyword, label: `${str} read as 1" = ${ft}'` };
         } else if (keyword && (m = str.match(ARCH_LEFT_ONLY))) {
           // the note's right side is the smallest print in the title block and
           // the first thing a degraded scan destroys: a keyword'd bare

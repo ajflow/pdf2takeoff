@@ -53,6 +53,9 @@ const parse = [
   [['SCALE:', '1/4"'], [48]],
   [['SCALE:', '1/8"'], [96]],
   [['1/4"'], []], // without the keyword a bare fraction is just a dimension
+  [['SCALE:', '"=10'], [120]], // the note fused: leading 1" and trailing foot mark lost
+  [['SCALE:', '"=2O'], [240]],
+  [['SCALE:', '"=13'], []], // 13 feet per inch is no engineer scale
 ];
 for (const [input, want] of parse) {
   const got = ratios(...input);

@@ -393,13 +393,16 @@ async function rereadScaleNote(ctx) {
   const raster = await ctx.raster();
   const regions = [
     { x0: anchor.xPt + anchor.wPt / 2 + 1, y0: anchor.yPt - 6, x1: anchor.xPt + anchor.wPt / 2 + 130, y1: anchor.yPt + 9, where: 'beside' },
+    { x0: anchor.xPt - 100, y0: anchor.yPt - 6, x1: anchor.xPt - anchor.wPt / 2 - 1, y1: anchor.yPt + 9, where: 'left of' },
     { x0: anchor.xPt - 24, y0: anchor.yPt + 4, x1: anchor.xPt + 126, y1: anchor.yPt + 22, where: 'below' },
   ];
   for (const r of regions) {
     if (r.x1 <= r.x0 || r.y1 <= r.y0) continue;
     let words;
     try {
-      words = await ocrRaster(raster, { region: r, upsample: 4 });
+      // a one-line strip: single-line segmentation reads the note where the
+      // sparse layout pass decides the tiny print is not text
+      words = await ocrRaster(raster, { region: r, upsample: 4, psm: '7' });
     } catch {
       return null;
     }

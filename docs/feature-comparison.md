@@ -1,7 +1,7 @@
 # Feature comparison: pdf2takeoff vs Bluebeam Revu
 
 Living document — update when features ship or Bluebeam's lineup changes.
-Last verified against **bluebeam.com/au/pricing** on **2026-10-16**; updated 2026-10-16 after the measurement-completeness release.
+Last verified against **bluebeam.com/au/pricing** on **2026-10-16**; updated 2026-10-19 — headless CLI/MCP and the v1 symbol detector moved to shipped.
 
 Purpose: (1) honest public comparison for users evaluating a free alternative,
 (2) internal roadmap tracker showing exactly which Bluebeam capabilities we
@@ -29,7 +29,7 @@ pdf2takeoff runs in any modern browser on any OS.
 
 - ✅ **Shipped** — works today at pdf2takeoff.com
 - ⭐ **Goes further** — shipped, and beats or has no equivalent at Bluebeam's price point
-- 🔜 **Planned** — on the roadmap (see [specs/headless-engine.md](../specs/headless-engine.md) and the README roadmap)
+- 🔜 **Planned** — on the roadmap (see the README roadmap)
 - ➖ **Not planned** — deliberate non-goal (see [Why we don't build these](#why-we-dont-build-these))
 
 ## Measurement & takeoff
@@ -45,7 +45,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Volume | Core | ✅ | Area × depth with a depth prompt; depth stored in the annotation comment |
 | Angle | Core | ✅ | 3-click angle at a vertex; scale-free — works before calibration |
 | Multi-scale viewports on one page | Core | ✅ | Outline a detail region (W), pick its scale — measurements inside resolve automatically (verified: same 100 pt run = 1.76 m at 1:50 vs 3.53 m at 1:100) |
-| Dynamic Fill (flood-fill areas) | Complete | ✅ | Click inside a room → area off the walls in ~150 ms; doorways close from the scale, room labels, the vector layer, or the sheet's own door width (uncalibrated scans) |
+| Dynamic Fill (flood-fill areas) | Complete | ✅ | Click inside a room → area off the walls in ~150 ms; doorways close from the scale, room labels, the vector layer, or the sheet's own door width (uncalibrated scans); accuracy evidence is published in `evals/` |
 | Formulas & custom columns | Complete | ✅ | Safe formula columns (value/count vars) in totals + every export + MCP; waste, rates |
 
 ## Auto-count & symbol search
@@ -54,8 +54,8 @@ pdf2takeoff runs in any modern browser on any OS.
 |---|---|---|---|
 | Click-to-teach auto-count | — (nearest: VisualSearch) | ⭐ | ~100 ms local CV; no model download, nothing uploaded |
 | Symbol search | Complete (VisualSearch) | ⭐ | Covered by Scan — and it counts, not just finds |
-| ML symbol detection | — | 🔜 | In-browser ONNX; Kaggle training notebook ready |
-| Whole-set symbol schedules | — | ✅ | `scan --all-pages` / MCP `all_pages`: per-page schedule in one call (CV today, classes when the model lands) |
+| ML symbol detection | — | ✅ | v1 shipped: in-browser ONNX detector (five classes: downlight, GPO, switch, smoke alarm, diffuser) with automatic fallback to CV; v2 retrain next |
+| Whole-set symbol schedules | — | ✅ | `scan --all-pages` / MCP `all_pages`: per-page schedule in one call (CV tier; detector classes once the ONNX tier runs headless) |
 
 ## Markups, list & export
 
@@ -110,10 +110,10 @@ pdf2takeoff runs in any modern browser on any OS.
 | Feature | Bluebeam tier | pdf2takeoff | Notes |
 |---|---|---|---|
 | Private, no-upload AI | — | ⭐ | Nothing uploads — ever; Bluebeam's Max AI is cloud-connected |
-| Agent API (MCP) | Max (AU$979) | 🔜 | Headless H3 — free, local, open source |
-| Cross-platform CLI & scripting | Complete (Windows scripting) | 🔜 | Headless H2 — Node CLI, runs anywhere |
+| Agent API (MCP) | Max (AU$979) | ⭐ | Shipped: twelve local stdio tools (open, render, read_text, scale, measure, scan, compare, markups, status, export, save) — free, local, open source |
+| Cross-platform CLI & scripting | Complete (Windows scripting) | ✅ | Shipped: Node CLI (`info`, `scan`, `compare`, `export`, `annotate`, `run`, `set`, `mcp`) — runs anywhere, no network calls |
 | Takeoff-as-code in CI | — | ✅ | Committed `takeoff.yaml` + `run` regenerate quantities per revision; CI-smoked |
-| Cloud AI drawing review | Max (Smart Review) | ➖ | Data-loop first; revisit once the model ships |
+| Cloud AI drawing review | Max (Smart Review) | ➖ | Local-first by design; privacy-first AI is the differentiator (see below) |
 
 ## Platform & integrations
 
@@ -130,9 +130,9 @@ pdf2takeoff runs in any modern browser on any OS.
 
 | | Count |
 |---|---|
-| ✅ Shipped today | 31 |
-| ⭐ Shipped and goes further | 7 |
-| 🔜 Planned | 5 |
+| ✅ Shipped today | 33 |
+| ⭐ Shipped and goes further | 8 |
+| 🔜 Planned | 2 |
 | ➖ Deliberately not built | 11 |
 
 ## Where we go further (summary)
@@ -143,7 +143,7 @@ pdf2takeoff runs in any modern browser on any OS.
    and collaboration features are cloud-connected.
 3. **Price & platform** — free, no account, any OS with a browser.
 4. **Open source** — Apache-2.0; fork it, embed it, self-host it.
-5. **Agent-native (roadmap)** — CLI + MCP + takeoff-as-code. Bluebeam puts MCP
+5. **Agent-native** — CLI + MCP + takeoff-as-code, shipped. Bluebeam puts MCP
    behind its AU$979 Max tier; our engine exposes it free.
 
 ## Why we don't build these

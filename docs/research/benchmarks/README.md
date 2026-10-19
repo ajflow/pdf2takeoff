@@ -85,9 +85,10 @@ Twelve work packages landed on `enhance/benchmark-sweep` after the survey. Headl
 | Dataset-P&ID sheet 134 | classes counted exactly | 1 of 30 | 11 of 30 |
 | AECV-Bench 120 plans | five-field mean exact match | 0.078 (no OCR) | 0.295 (best VLM 0.543) |
 | AECV-Bench | bedroom / toilet exact match | 0 / 0 | 0.708 / 0.500 |
-| ScaledDrawingBench raster half | overall accuracy | 16.5% | 23.0% |
-| ScaledDrawingBench raster half | count exact | 0% | 30.1% |
-| ScaledDrawingBench raster half | scale / area accuracy | 34.4% / 26.4% | 30.1% / 21.7% (dipped with OCR noise on re-rendered pixels; not an engine regression — see the detail note) |
+| ScaledDrawingBench raster half | overall accuracy | 16.5% | 37.3% |
+| ScaledDrawingBench raster half | count exact | 0% | 43.4% |
+| ScaledDrawingBench raster half | scale accuracy | 30.1% | 49.5% (23.0% at branch intake; the product OCR pipeline + note repair round lifted it) |
+| ScaledDrawingBench raster half | area accuracy | 26.4% | 40.4% (dipped to 21.7% at intake before the OCR round; see the detail note) |
 | ScaledDrawingBench vector half | overall accuracy | 99.8% | 99.8% |
 | FloorPlanCAD synthetic, size jitter 0.2 | exact-count rate | 22% | 83% |
 | Internal bench | fill cases | 11 of 12 | 12 of 12 |

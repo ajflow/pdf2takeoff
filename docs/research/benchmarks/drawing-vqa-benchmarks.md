@@ -516,3 +516,39 @@ The raster half was rerun on the integration branch after the image-render fix (
 | all | 16.5% | 23.0% |
 
 Hallucinations stayed at 0 of 55. Reading: the count gain is the new matcher; counts went from none exact to 30 percent exact on anti-aliased, degraded renders. Everything else is gated by raster scale reading, which succeeds on 36 of 93 answerable sheets, and the solver abstains downstream without a scale (333 of 968 questions answered). By notation, ratio notes read at 56.7 percent accuracy while imperial, engineer and dimension-only notations sit under 10 percent, so the next lever is OCR of imperial and engineer scale grammars plus scale bars on degraded rasters, then vertical text. The small drops on scale and area are within the noise of OCR on the same sheets and come from the engine render path producing slightly different pixels than the decoded JPEG; they are not regressions in the engine itself.
+
+## Status 2026-10-19, round 3: OCR repair and the product pipeline in the solver
+
+Round 2's own reading named the lever — scale reading gated everything downstream — and this round
+attacked it directly. The reference solver now OCRs through the product pipeline (windowed reads,
+the small-print 3-4x pass, Sauvola cleaning) instead of a single-pass stand-in, and the scale-note
+grammar repairs what degraded scans do to the note: letter-for-digit slips (`2O'` for `20'`), the
+fraction slash dropped (`14" =1'0"` for `1/4" = 1'-0"`, which used to answer 1:0.86), whole notes
+fused into one token (`"=10` for `1" = 10'`), and keyword'd bare fractions whose `= 1'-0"` half is
+too small to survive. Every imperial and engineer vote is gated to the printed standards, so damage
+that cannot be repaired abstains instead of answering wrong, and a surviving `SCALE:` keyword now
+triggers a 4x single-line re-read of the strip beside, left of and below it. The graphic scale bar
+is read from a least-squares fit over three or more consistent ticks, which a stray dimension
+number can no longer fake. Full tables in bench/scaled-drawing-bench/results/pdf2takeoff-stabilized.md.
+
+| Type | Accuracy round 2 | Accuracy round 3 |
+|---|---|---|
+| scale | 30.1% | 49.5% |
+| length | 17.7% | 23.7% |
+| area | 21.7% | 40.4% |
+| perimeter | 24.7% | 43.0% |
+| count (exact) | 30.1% | 43.4% |
+| dimension_read | 10.8% | 22.6% |
+| compare (set F1) | 36.5% | 66.7% |
+| all | 23.0% | 37.3% |
+
+Overall (both halves): 58.4% to 68.7%; the vector half is unchanged at 99.8%. Hallucinations stayed
+at 0 of 55 and MAPE over answered raster questions fell from 38.7 to 12.9 percent — the wrong-answer
+suppression of the standard gate as much as the new reads. By notation on the 93 answerable raster
+sheets: ratio 17/21, bar 16/19, imperial 4/19 to 9/19 with zero wrong answers,
+engineer still 2/22 (the fused-note repair came last and most engineer notes on the worst recipes
+are illegible at any pass), dimension-only 0/12. What remains, in order: a dimension-string reader
+for the dimension-only notation (the printed values are destroyed with the title-block print on the
+worst recipes, so this needs the dimension text re-read along the sheet edges, not just the title
+block), the engineer notes on photocopy/blur recipes, and count accuracy on degraded symbol classes
+(MAPE 18.8 percent over answered counts).

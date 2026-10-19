@@ -23,6 +23,10 @@ usable by anyone, including to beat us):
 - **AECV-Bench** (external, public): 0.295 five-field exact match with a
   deterministic engine and **no vision model**; bedroom/toilet counts at
   0.708/0.500 from a label dictionary + OCR alone
+- **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519
+  — more than double any frontier VLM** on the identical sheets (0.18–0.29),
+  area precision 0.943, object F1 0.031 at the frontier-VLM range; a
+  click-free deterministic engine, no GPU, ~23 s per sheet
 - ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model —
   in-browser, nothing uploaded
 - A correctness gate on every push: ten behavioural checks + the takeoff

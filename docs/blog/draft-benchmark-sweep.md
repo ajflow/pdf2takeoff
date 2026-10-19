@@ -112,4 +112,17 @@ run ledger, CI gates, the improvement log — lives in
 The benchmark is free to reuse. If your engine beats ours on it, that number
 is yours and we'll say so.
 
+We also ran someone else's. AEC-Geometric-Bench (KamaiEnterprises, MIT)
+releases fifteen construction sheets with ground truth and a scorer, and
+publishes six systems on them — a purpose-built production pipeline and five
+frontier vision-language models. We pointed our click-free deterministic
+engine at it: no model, no clicks, no training against their data, ~23
+seconds a sheet on a laptop CPU. Walls: **0.519 pixel F1 — more than double
+every frontier VLM** on the identical sheets (they score 0.18–0.29). Areas:
+0.943 precision, second only to the production pipeline. Objects: 0.031 —
+statistically tied with the best VLM, and we say exactly why (our door
+classifier over-fires on real drawings; we don't attempt fixtures at all).
+That's the whole story of this post in one table: classical CV where it's
+strong, honest zeros where it isn't.
+
 A takeoff tool that shows its work. That's the pitch.

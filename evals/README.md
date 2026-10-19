@@ -20,6 +20,8 @@ an account, or our servers.
 | **ScaledDrawingBench** — hallucinations | **0 of 92** | questions that are unanswerable by design (NTS sheets): the engine abstained every time, never invented a number | scored as part of either half |
 | **AECV-Bench** (external, public) — five-field mean exact match | **0.295** | best published VLM 0.543; frontier VLMs 0.35–0.54 | harness in `scripts/aecv-bench.mjs`; notes in [docs/research/benchmarks/aecv-bench.md](../docs/research/benchmarks/aecv-bench.md) |
 | **AECV-Bench** — bedroom / toilet counts | **0.708 / 0.500** exact match | with a room-label dictionary + OCR and **no vision model at all**; published VLMs sit at 0.7–0.93 | same |
+| **AEC-Geometric-Bench** (external, released scorer) — wall pixel F1 | **0.519** | frontier VLMs 0.18–0.29 on the identical 15 sheets; Kamai's purpose-built pipeline 0.931 | `scripts/aec-geometric-bench.mjs --bench <clone>`; notes in [docs/research/benchmarks/aec-geometric-bench.md](../docs/research/benchmarks/aec-geometric-bench.md) |
+| **AEC-Geometric-Bench** — area pixel precision | **0.943** | when the engine claims a room it is one; recall 0.239 is the gap (Kamai 0.987) | same |
 | **ResPlan room areas** (external, CC BY 4.0) — 200 real plans | **94.1%** of rooms recovered, median area error **−1.8%** | run log in [docs/research/benchmarks/room-area-datasets.md](../docs/research/benchmarks/room-area-datasets.md); ledger line pending the next scheduled run | `npm run bench:rooms` (downloads ResPlan) |
 | **Internal takeoff bench** (in CI, every push) | **12/12** fill · **2/2** count · **9/9** scale | regression gate; a dropped case fails the build | `npm run bench` |
 | **Scan latency / size** | **~100 ms** CV tier · **1.6 s** cached in-browser ONNX scan · **76 MB** model | in-browser (WASM), nothing uploaded | open the app, press `S`, click |
@@ -93,6 +95,10 @@ The parts we are still bad at, so nobody has to find out the hard way:
 - **AECV-Bench doors/windows**: 0.117/0.092 exact match — needs the raster
   opening detector wired into the harness (the module exists; see
   `src/engine/openings.ts`).
+- **AEC-Geometric-Bench**: object F1 0.031 (frontier-VLM range; doors
+  over-fire on real drawings, fixtures not attempted — no click-free
+  detector), area recall 0.239 behind the VLMs' 0.55–0.80. The full reading
+  is in [docs/research/benchmarks/aec-geometric-bench.md](../docs/research/benchmarks/aec-geometric-bench.md).
 - The scope limits of the benchmark itself are stated in
   [bench/scaled-drawing-bench/README.md](../bench/scaled-drawing-bench/README.md):
   the generator draws inside our design assumptions, and CI enforces 100% on

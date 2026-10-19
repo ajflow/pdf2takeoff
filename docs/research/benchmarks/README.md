@@ -20,6 +20,7 @@ findings the survey turned up along the way.
 | 8 | ArchCAD-400k | Vector symbol spotting | Gated 40k slice on Hugging Face | CC BY-NC 4.0, code academic only | Not worth it before FloorPlanCAD | [floorplancad-archcad.md](floorplancad-archcad.md) |
 | 9 | DrawingVQA, LED-BENCH, MMArch, VDiff-Bench | Drawing QA, change detection | Private data or not yet released | Various | Blocked on the authors | [drawing-vqa-benchmarks.md](drawing-vqa-benchmarks.md) |
 | 10 | DELP/SkeySpot, SESYD, Roboflow sets, CubiCasa5K, MSD, RPLAN, MLSTRUCT-FP | Symbols and rooms | Request-only, blocked here, or missing the fields needed | Mostly non-commercial | Secondary | notes above |
+| added post-survey | AEC-Geometric-Bench (Kamai; 15 released sheets + scorer) | Walls, areas, 8-class objects; pixel and instance F1 vs a published six-system field | Yes, in the repo | MIT | **Done — first pass scored** (wall pixel F1 0.519, best non-Kamai system) | [aec-geometric-bench.md](aec-geometric-bench.md) |
 
 ## What the trials showed
 
@@ -85,6 +86,8 @@ Twelve work packages landed on `enhance/benchmark-sweep` after the survey. Headl
 | Dataset-P&ID sheet 134 | classes counted exactly | 1 of 30 | 11 of 30 |
 | AECV-Bench 120 plans | five-field mean exact match | 0.078 (no OCR) | 0.295 (best VLM 0.543) |
 | AECV-Bench | bedroom / toilet exact match | 0 / 0 | 0.708 / 0.500 |
+| AEC-Geometric-Bench 15 sheets | wall pixel F1 | — (first run) | 0.519 (frontier VLMs 0.18-0.29; Kamai 0.931) |
+| AEC-Geometric-Bench 15 sheets | area pixel precision / instance F1 | — (first run) | 0.943 / 0.087 |
 | ScaledDrawingBench raster half | overall accuracy | 16.5% | 37.3% |
 | ScaledDrawingBench raster half | count exact | 0% | 43.4% |
 | ScaledDrawingBench raster half | scale accuracy | 30.1% | 49.5% (23.0% at branch intake; the product OCR pipeline + note repair round lifted it) |

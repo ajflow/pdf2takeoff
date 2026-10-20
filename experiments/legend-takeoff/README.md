@@ -119,3 +119,14 @@ Trade content lives in `trades.mjs`; regenerate original static pages with `node
 Drawing controls: **Move / pan**, middle-button drag or hold Space while dragging; Ctrl/Command + wheel or a two-finger gesture to zoom around a point; numeric zoom from 5–800%; **Fit page** (0), **Fit width** (F), **Zoom to legend**, and **Zoom to selection**. +/- zoom, H selects pan and Escape returns to inspection. Editing a text field keeps its normal keystrokes. On touchscreens, use Move / pan or Inspect hits for two-finger zoom. Plain scrolling still moves the drawing. Zooming preserves the selected evidence hit.
 
 Checks use a controller/DOM harness with real PDF rendering and exercise anchored zoom, drag scroll, fit calculations, selection retention, text-field keyboard protection and trade-presets retention. Browser/visual QA remains paused at the user's request.
+
+
+General builders: `trades/general-builders.html` opens the workspace with editable door-set, window-unit and joinery-unit presets. Counts can be reviewed alongside other trades without clearing existing results. Repeated details may need manual additions; specifications and drawing schedules still need review. Floor/wall measurements, structural quantities and complete building estimates are outside this counting workflow.
+
+
+## Application reliability update
+
+The real-PDF controller now prepares a replacement PDF’s first rendered page before switching documents, preserving the active drawing, quantities and rates when parsing or rendering fails. Page navigation failures return to the previous page. File reads and sample fetches hold the busy state; a failed sample does not switch trades. Zoom and fit redraws preserve draft equipment inputs. Rescans retain manual confirmations/rejections and their original IDs when the detector finds a nearby match, rather than replacing the human-reviewed item. Controller regression checks cover these cases.
+
+
+Presenter materials: [main talk track](demo-talk-track.md) contains a rehearsable three-minute script, sample setup, failure language, judge answers and a thirty-second version. [Public demo guide](demo-guide.html) links to that script and the real workspace. The script distinguishes live on-device processing from synthetic fixture evidence and uses fictional rates only.

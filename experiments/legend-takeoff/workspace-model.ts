@@ -12,7 +12,7 @@ export function replaceScan(entry:SymbolEntry,hits:ScanHit[],hash:string,page:nu
  const old=new Map(entry.hits.filter(h=>!h.manual).map(h=>[h.id,h]));
  const kept:ScanHit[]=[];
  for(const p of [...hits].filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)).sort((a,b)=>a.x-b.x||a.y-b.y))if(!kept.some(q=>Math.hypot(p.x-q.x,p.y-q.y)<=3))kept.push(p);
- const scanned:EvidenceHit[]=kept.map(p=>{const id=hitId(hash,page,entry.code,p);return {...p,id,code:entry.code,page,method:entry.provider??'unknown',decision:old.get(id)?.decision??'supported',manual:false};});
- const manual=entry.hits.filter(h=>h.manual&&!kept.some(p=>Math.hypot(p.x-h.x,p.y-h.y)<=3));
+ const manual=entry.hits.filter(h=>h.manual);
+ const scanned:EvidenceHit[]=kept.filter(p=>!manual.some(h=>Math.hypot(p.x-h.x,p.y-h.y)<=3)).map(p=>{const id=hitId(hash,page,entry.code,p);return {...p,id,code:entry.code,page,method:entry.provider??'unknown',decision:old.get(id)?.decision??'supported',manual:false};});
  entry.hits=[...scanned,...manual];entry.assessed=true;
 }

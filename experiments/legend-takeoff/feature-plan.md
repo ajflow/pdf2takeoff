@@ -104,3 +104,5 @@ This copy was written for Legend. It describes a proposed feature and is present
 - 2026-10-20: Added a real-PDF workspace with live on-device scanning, manual review/additions, per-page isolation and pricing. History/save-reopen features remain proposed; the fixture replay remains a separate demo.
 
 - 2026-10-20: Added trade-specific entry pages and editable presets for electrical, plumbing, HVAC, fire and security/data, plus pointer-anchored zoom, pan and fit controls. These additions use the same scanner and do not add trade-trained detection or length/area measurements.
+
+- 2026-10-20: Added General Builders entry page/presets and hardened the real-PDF controller against failed file/page loads, duplicate manual/scanner records, draft loss during zoom and overlapping sample loads. These are application changes; no broader detection accuracy is claimed.

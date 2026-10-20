@@ -47,18 +47,88 @@ function svgRect(b:Bounds,temporary=false){const corners=[view({x:b.x0,y:b.y0}),
 function drawOverlay(){if(!viewport)return;const hits=includedHits(sheet());overlay.innerHTML=sheet().exclusions.map(b=>svgRect(b)).join('')+(preview?svgRect(preview,true):'')+sheet().entries.filter(e=>e.exemplar).map(e=>{const p=view(e.exemplar!);return `<path d="M${p.x-9},${p.y}h18M${p.x},${p.y-9}v18" stroke="#217d6e" stroke-width="2"/>`;}).join('')+hits.map((h,i)=>{const p=view(h),colour=h.decision==='rejected'?'#b0523f':h.decision==='unresolved'?'#c98b22':h.manual||h.decision==='confirmed'?'#24846b':'#247aa2';return `<g><circle data-hit="${escape(h.id)}" cx="${p.x}" cy="${p.y}" r="${selected===h.id?12:10}" fill="${colour}20" stroke="${colour}" stroke-width="${selected===h.id?2.5:1.3}" ${h.decision==='rejected'?'stroke-dasharray="3 2"':''}/><text x="${p.x+11}" y="${p.y-10}" fill="${colour}" font-size="9" pointer-events="none">${i+1}</text></g>`;}).join('');}
 function money(cents:number){return new Intl.NumberFormat('en-AU',{style:'currency',currency:$<HTMLSelectElement>('currency').value}).format(cents/100);}
 function updatePricing(){const estimate=priceQuantities(quantities(sheet()),rates);$('price-lines').innerHTML=estimate.lines.map(l=>`<div><span>${escape(l.code)} · ${l.quantity??'unassessed'}</span><span>${l.totalCents===null?'Not priced':money(l.totalCents)}</span></div>`).join('');$('price-total').textContent=`${estimate.complete?'Draft subtotal':'Partial priced subtotal'}: ${money(estimate.pricedSubtotalCents)}`;$('price-note').textContent=estimate.complete?'Current page supported quantities priced. Check evidence and scope before using this draft.':'Incomplete: some types need rates or assessment, or have unresolved items. These gaps are excluded from the subtotal.';}
-function update(){const e=entry(),hits=includedHits(sheet());input('code').value=e.code;input('description').value=e.description;const r=rates[currentCode];input('material').value=r?.material??'';input('labour').value=r?.labour??'';input('rate-source').value=r?.source??'';$<HTMLSelectElement>('type-select').innerHTML=sheet().entries.map(t=>`<option value="${escape(t.code)}" ${t.code===currentCode?'selected':''}>${escape(t.code)}</option>`).join('');$('exemplar-note').textContent=e.exemplar?`Example: (${e.exemplar.x.toFixed(1)}, ${e.exemplar.y.toFixed(1)}) PDF points · page ${pageNum}`:'No example selected. Mark the legend, then choose Pick example.';$('quantities').innerHTML=quantities(sheet()).map(q=>`<tr><td><button data-code="${escape(q.code)}">${escape(q.code)}</button></td><td>${q.supported??'Not assessed'}</td><td>${q.unresolved??'Unknown'}</td></tr>`).join('');$('quantities').querySelectorAll<HTMLButtonElement>('[data-code]').forEach(b=>b.onclick=()=>{currentCode=b.dataset.code!;selected=null;update();});$('method-note').textContent=`${e.provider?'Method: '+e.provider+' · ':''}${e.note}${e.truncated?' · INCOMPLETE: provider truncated results.':''} Current page only.`;
+function update(syncInputs=true){const e=entry(),hits=includedHits(sheet());if(syncInputs){input('code').value=e.code;input('description').value=e.description;const r=rates[currentCode];input('material').value=r?.material??'';input('labour').value=r?.labour??'';input('rate-source').value=r?.source??'';}$<HTMLSelectElement>('type-select').innerHTML=sheet().entries.map(t=>`<option value="${escape(t.code)}" ${t.code===currentCode?'selected':''}>${escape(t.code)}</option>`).join('');$('exemplar-note').textContent=e.exemplar?`Example: (${e.exemplar.x.toFixed(1)}, ${e.exemplar.y.toFixed(1)}) PDF points · page ${pageNum}`:'No example selected. Mark the legend, then choose Pick example.';$('quantities').innerHTML=quantities(sheet()).map(q=>`<tr><td><button data-code="${escape(q.code)}">${escape(q.code)}</button></td><td>${q.supported??'Not assessed'}</td><td>${q.unresolved??'Unknown'}</td></tr>`).join('');$('quantities').querySelectorAll<HTMLButtonElement>('[data-code]').forEach(b=>b.onclick=()=>{currentCode=b.dataset.code!;selected=null;update();});$('method-note').textContent=`${e.provider?'Method: '+e.provider+' · ':''}${e.note}${e.truncated?' · INCOMPLETE: provider truncated results.':''} Current page only.`;
  const hit=hits.find(h=>h.id===selected);$('hit-detail').innerHTML=hit?`<strong>${escape(hit.code)} · hit ${hits.indexOf(hit)+1}</strong><br>Page ${hit.page} · (${hit.x.toFixed(1)}, ${hit.y.toFixed(1)}) PDF pt<br>${escape(hit.method)} · ${escape(hit.decision)}<br><span class="fine">${escape(hit.id.slice(-70))}</span>`:'Select a numbered hit to inspect or correct it.';for(const id of ['confirm','flag','reject'])button(id).disabled=!hit||busy;$('hit-list').innerHTML=hits.map((h,i)=>`<button data-id="${escape(h.id)}">${i+1} · ${escape(h.code)} · ${escape(h.decision)}</button>`).join('');$('hit-list').querySelectorAll<HTMLButtonElement>('[data-id]').forEach(b=>b.onclick=()=>selectHit(b.dataset.id!));drawOverlay();updatePricing();syncControls();}
 function selectHit(id:string){selected=id;const hit=includedHits(sheet()).find(h=>h.id===id);if(hit)currentCode=hit.code;update();}
-async function paint(fit=false){if(!doc)return;setBusy(true);const seq=++sequence;try{page=await doc.getPage(pageNum);viewport=page.getViewport({scale:1});if(fit){fitMode=fitMode??'page';zoom=fitScale({x:viewport.width,y:viewport.height},{x:scrollArea.clientWidth,y:scrollArea.clientHeight||600},fitMode);}const vp=page.getViewport({scale:zoom});const ratio=Math.min(window.devicePixelRatio||1,2);const renderScale=Math.min(zoom*ratio,Math.sqrt(25_000_000/(viewport.width*viewport.height)));const rv=page.getViewport({scale:renderScale});canvas.width=Math.floor(rv.width);canvas.height=Math.floor(rv.height);const wrap=$('page-wrap');wrap.hidden=false;wrap.style.width=vp.width+'px';wrap.style.height=vp.height+'px';overlay.setAttribute('viewBox',`0 0 ${viewport.width} ${viewport.height}`);const ctx=canvas.getContext('2d')!;await page.render({canvas,canvasContext:ctx,viewport:rv}).promise;if(seq!==sequence)return;$('empty').hidden=true;input('page-number').value=String(pageNum);input('page-number').max=String(doc.numPages);$('page-total').textContent='/ '+doc.numPages;input('zoom-percent').value=String(Math.round(zoom*100));entry();update();}catch(error){page=null;viewport=null;$('page-wrap').hidden=true;throw error;}finally{setBusy(false);}}
-async function openFile(data:Uint8Array,name:string){if(busy)return;setBusy(true);say('Opening PDF on this device…');let candidate:PDFDocumentProxy|null=null;let installed=false;try{candidate=await pdfjs.getDocument({data:data.slice(),useSystemFonts:true,cMapUrl:'/pdf-resources/cmaps/',cMapPacked:true,standardFontDataUrl:'/pdf-resources/standard_fonts/',wasmUrl:'/pdf-resources/wasm/'}).promise;await candidate.getPage(1);const digest=await crypto.subtle.digest('SHA-256',data.slice().buffer);const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');if(doc)await doc.destroy();doc=candidate;candidate=null;installed=true;bytes=data;documentHash=hash;fileName=name;pageNum=1;sheets={};rates={};currentCode=activeTrade.items[0].code;selected=null;panStart=null;pinch=null;touches.clear();fitMode='page';$('file-title').textContent=name;await paint(true);scrollArea.scrollTop=0;scrollArea.scrollLeft=0;setMode('exclude');say('Drawing open. Drag a rectangle around the legend to exclude its examples from installation counts.');}catch(error){if(candidate)await candidate.destroy();if(installed){await doc?.destroy();doc=null;page=null;viewport=null;bytes=null;documentHash='';sheets={};rates={};$('page-wrap').hidden=true;$('empty').hidden=false;$('file-title').textContent='No drawing open';$('quantities').innerHTML='<tr><td colspan="3">No drawing assessed.</td></tr>';$('price-total').textContent='Partial priced subtotal: —';}say('Could not open PDF: '+errorMessage(error)+'. Try an unencrypted PDF.',true);}finally{setBusy(false);input('pdf-input').value='';input('empty-input').value='';}}
+// Prepare rendering before changing the active document. A bad replacement
+// must not destroy the current PDF, quantities, exclusions or entered rates.
+async function renderBitmap(pdfPage:PDFPageProxy,level:number){
+ const base=pdfPage.getViewport({scale:1});
+ const ratio=Math.min(window.devicePixelRatio||1,2);
+ const scale=Math.min(level*ratio,Math.sqrt(25_000_000/(base.width*base.height)));
+ const renderViewport=pdfPage.getViewport({scale});
+ const bitmap=document.createElement('canvas');
+ bitmap.width=Math.max(1,Math.floor(renderViewport.width));bitmap.height=Math.max(1,Math.floor(renderViewport.height));
+ await pdfPage.render({canvas:bitmap,canvasContext:bitmap.getContext('2d')!,viewport:renderViewport}).promise;
+ return{bitmap,base};
+}
+function installBitmap(bitmap:HTMLCanvasElement,base:PageViewport,level:number){
+ canvas.width=bitmap.width;canvas.height=bitmap.height;
+ canvas.getContext('2d')!.drawImage(bitmap,0,0);
+ viewport=base;zoom=level;
+ const wrap=$('page-wrap');wrap.hidden=false;wrap.style.width=base.width*level+'px';wrap.style.height=base.height*level+'px';
+ overlay.setAttribute('viewBox',`0 0 ${base.width} ${base.height}`);
+ $('empty').hidden=true;input('page-number').value=String(pageNum);input('page-number').max=String(doc!.numPages);
+ $('page-total').textContent='/ '+doc!.numPages;input('zoom-percent').value=String(Math.round(zoom*100));
+}
+async function paint(fit=false,syncInputs=false){
+ if(!doc)return;setBusy(true);const seq=++sequence;
+ try{
+  const nextPage=await doc.getPage(pageNum),base=nextPage.getViewport({scale:1});
+  if(fit)fitMode=fitMode??'page';
+  const level=fit?fitScale({x:base.width,y:base.height},{x:scrollArea.clientWidth,y:scrollArea.clientHeight||600},fitMode!):zoom;
+  const rendered=await renderBitmap(nextPage,level);
+  if(seq!==sequence)return;
+  page=nextPage;installBitmap(rendered.bitmap,rendered.base,level);entry();update(syncInputs);
+ }finally{setBusy(false);}
+}
+async function openFile(data:Uint8Array,name:string,requestedTrade=activeTrade){
+ if(busy)return;setBusy(true);say('Opening PDF on this device…');
+ let candidate:PDFDocumentProxy|null=null;
+ let loadingTask:ReturnType<typeof pdfjs.getDocument>|null=null;
+ try{
+  loadingTask=pdfjs.getDocument({data:data.slice(),useSystemFonts:true,cMapUrl:'/pdf-resources/cmaps/',cMapPacked:true,standardFontDataUrl:'/pdf-resources/standard_fonts/',wasmUrl:'/pdf-resources/wasm/'});
+  candidate=await loadingTask.promise;
+  const first=await candidate.getPage(1),base=first.getViewport({scale:1});
+  const level=fitScale({x:base.width,y:base.height},{x:scrollArea.clientWidth,y:scrollArea.clientHeight||600},'page');
+  const prepared=await renderBitmap(first,level);
+  const digest=await crypto.subtle.digest('SHA-256',data.slice().buffer);
+  const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  const previous=doc;
+  doc=candidate;candidate=null;bytes=data;documentHash=hash;fileName=name;pageNum=1;page=first;
+  activeTrade=requestedTrade;sheets={};rates={};currentCode=activeTrade.items[0].code;selected=null;
+  panStart=null;pinch=null;touches.clear();fitMode='page';
+  applyTradeLabels();$('file-title').textContent=name;
+  installBitmap(prepared.bitmap,prepared.base,level);entry();update();
+  scrollArea.scrollTop=0;scrollArea.scrollLeft=0;setMode('exclude');
+  say('Drawing open. Drag a rectangle around the legend to exclude its examples from installation counts.');
+  if(previous)void previous.destroy().catch(error=>console.warn('Previous PDF cleanup:',error));
+ }catch(error){
+  if(candidate)await candidate.destroy().catch(()=>{});else await loadingTask?.destroy?.().catch(()=>{});
+  say('Could not open PDF: '+errorMessage(error)+'. The current drawing and work have been retained.',true);
+ }finally{setBusy(false);input('pdf-input').value='';input('empty-input').value='';}
+}
 function errorMessage(error:unknown){return error instanceof Error?error.message:String(error);}
 async function raster(scale:number):Promise<RasterPage>{const p=page!,vp=p.getViewport({scale});if(vp.width*vp.height>25_000_000)throw Error('Raster fallback exceeds the 25-megapixel limit on this sheet. Try a smaller digital PDF or count manually');const c=document.createElement('canvas');c.width=Math.max(1,Math.floor(vp.width));c.height=Math.max(1,Math.floor(vp.height));const ctx=c.getContext('2d',{willReadFrequently:true})!;await p.render({canvas:c,canvasContext:ctx,viewport:vp}).promise;return{width:c.width,height:c.height,data:ctx.getImageData(0,0,c.width,c.height).data,toPdf:(x,y)=>{const [px,py]=vp.convertToPdfPoint(x,y);return{x:px,y:py};},toRaster:(x,y)=>{const [px,py]=vp.convertToViewportPoint(x,y);return{x:px,y:py};}};}
 async function scan(){if(!doc||!page||busy||!entry().exemplar)return;const e=entry();setBusy(true);say('Scanning this page with your selected example…');await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));try{const result=await scanForSimilar(pageNum,e.exemplar!,{detector:async()=>null,renderRaster:async(_n,scale)=>raster(scale),vector:async()=>{const layers=await doc!.getOptionalContentConfig();return vectorize(await page!.getOperatorList(),pdfjs.OPS,{isVisible:g=>layers.isVisible(g as never)});},warn:message=>console.warn('Legend:',message)});if('error'in result)throw Error(result.error);e.provider=result.provider;e.note=result.note??'Scan completed';e.truncated=!!result.truncated;replaceScan(e,result.hits,documentHash,pageNum);let conflicts=0;for(const h of e.hits){if(sheet().exclusions.some(b=>contains(h,b)))continue;for(const other of includedHits(sheet()).filter(q=>q.code!==e.code&&q.decision!=='rejected')){if(Math.hypot(h.x-other.x,h.y-other.y)<=3){h.decision='unresolved';other.decision='unresolved';conflicts++;}}}setMode('review');update();const count=quantities(sheet()).find(q=>q.code===e.code)!.supported;say(`${e.code}: ${count} supported detections · ${result.provider}. Legend regions excluded.${conflicts?' Overlapping types flagged uncertain.':''}${e.truncated?' Results were truncated; this is an incomplete count.':''} ${count===0?'No installed matches were found. This does not establish that the drawing contains no equipment. Try another example or add missed items manually.':'Review matches and check for missed items.'}`,count===0);}catch(error){say('Scan failed: '+errorMessage(error)+'. Previous results, if any, are retained; no new quantity was added.',true);}finally{setBusy(false);update();}}
 function download(name:string,data:BlobPart,type:string){const url=URL.createObjectURL(new Blob([data],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function snapshot(){return{schemaVersion:1,kind:'real-pdf-takeoff',source:{fileName,sha256:documentHash},page:pageNum,coordinateFrame:'pdf-points-bottom-left',createdAt:new Date().toISOString(),cloudCalls:0,currency:$<HTMLSelectElement>('currency').value,scope:'current-page-supported-quantities',trade:activeTrade.id,exclusions:['unresolved hits','unassessed quantities','tax','markup','cabling','accessories','other job costs'],sheet:sheet(),displayHits:includedHits(sheet()).map((h,i)=>({...h,number:i+1})),quantities:quantities(sheet()),rates,pricing:priceQuantities(quantities(sheet()),rates)};}
-for(const id of ['pdf-input','empty-input'])input(id).onchange=async()=>{const f=input(id).files?.[0];if(!f)return;try{await openFile(new Uint8Array(await f.arrayBuffer()),f.name);}catch(error){say(errorMessage(error),true);}};
-button('sample').onclick=async()=>{if(busy)return;try{activeTrade=getTrade('electrical');applyTradeLabels();const r=await fetch('output/dev-clean/drawing.pdf');if(!r.ok)throw Error('Sample not available');await openFile(new Uint8Array(await r.arrayBuffer()),'sample-electrical.pdf');}catch(error){say(errorMessage(error),true);}};
+for(const id of ['pdf-input','empty-input'])input(id).onchange=async()=>{
+ const file=input(id).files?.[0];if(!file||busy)return;
+ setBusy(true);say('Reading PDF on this device…');
+ try{const data=new Uint8Array(await file.arrayBuffer());setBusy(false);await openFile(data,file.name);}
+ catch(error){say('Could not read file: '+errorMessage(error)+'. Current work is retained.',true);}
+ finally{setBusy(false);input(id).value='';}
+};
+button('sample').onclick=async()=>{
+ if(busy)return;setBusy(true);say('Loading the electrical sample…');
+ try{
+  const response=await fetch('output/dev-clean/drawing.pdf');if(!response.ok)throw Error('Sample not available');
+  const data=new Uint8Array(await response.arrayBuffer());setBusy(false);
+  await openFile(data,'sample-electrical.pdf',getTrade('electrical'));
+ }catch(error){say('Could not load sample: '+errorMessage(error)+'. Current work is retained.',true);}
+ finally{setBusy(false);}
+};
 for(const m of ['pan','review','exclude','example','manual'])button('mode-'+m).onclick=()=>{if(!busy)setMode(m);};
 button('undo-exclusion').onclick=()=>{sheet().exclusions.pop();update();say('Last exclusion removed. Quantities recalculated; inspect any newly included legend hits.');};
 overlay.addEventListener('pointerdown',(event:PointerEvent)=>{if((busy&&!zooming)||!viewport||!doc)return;
@@ -81,7 +151,15 @@ $<HTMLSelectElement>('type-select').onchange=()=>{currentCode=$<HTMLSelectElemen
 input('description').onchange=()=>{if(input('code').value.trim()===currentCode)entry().description=input('description').value.trim();};
 button('scan').onclick=scan;
 for(const [id,decision] of [['confirm','confirmed'],['flag','unresolved'],['reject','rejected']] as const)button(id).onclick=()=>{const h=sheet().entries.flatMap(e=>e.hits).find(h=>h.id===selected);if(!h)return;h.decision=decision;update();say('Review decision recorded. Current-page quantities and prices recalculated.');};
-async function changePage(number:number){if(!doc||busy)return;if(!Number.isInteger(number)||number<1||number>doc.numPages){input('page-number').value=String(pageNum);return;}pageNum=number;selected=null;panStart=null;pinch=null;touches.clear();setMode('review');try{await paint(true);scrollArea.scrollTop=0;scrollArea.scrollLeft=0;}catch(error){say('Could not render page: '+errorMessage(error),true);return;}say('Page '+pageNum+'. Each page needs its own legend exclusions and example; results are not transferred across pages.');}
+async function changePage(number:number){
+ if(!doc||busy)return;
+ if(!Number.isInteger(number)||number<1||number>doc.numPages){input('page-number').value=String(pageNum);return;}
+ const previous=pageNum,previousSelection=selected;
+ pageNum=number;selected=null;panStart=null;pinch=null;touches.clear();setMode('review');
+ try{await paint(true,true);scrollArea.scrollTop=0;scrollArea.scrollLeft=0;}
+ catch(error){pageNum=previous;selected=previousSelection;input('page-number').value=String(previous);update();say('Could not render page: '+errorMessage(error)+'. The previous page remains open.',true);return;}
+ say('Page '+pageNum+'. Each page needs its own legend exclusions and example; results are not transferred across pages.');
+}
 button('prev').onclick=()=>void changePage(pageNum-1);button('next').onclick=()=>void changePage(pageNum+1);input('page-number').onchange=()=>void changePage(Number(input('page-number').value));
 function screenCentre():XY {const box=scrollArea.getBoundingClientRect();return{x:box.left+scrollArea.clientWidth/2,y:box.top+(scrollArea.clientHeight||600)/2};}
 async function requestZoom(target:number,screen=screenCentre(),anchor?:XY):Promise<void>{

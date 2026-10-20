@@ -4,6 +4,7 @@ import { trades } from './trades.mjs';
 const root=fileURLToPath(new URL('.',import.meta.url));
 const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const symbols={
+ builders:'<path d="M-11 11V-11H11V11M-8 11V-8H8V11M-8 11V-5a16 16 0 0 1 16 16Z"/>',
  electrical:'<circle r="11"/><path d="m-7-7 14 14m0-14L-7 7"/>',
  plumbing:'<path d="M-11-8 0 0-11 8ZM11-8 0 0 11 8Z"/>',
  hvac:'<rect x="-12" y="-10" width="24" height="20"/><path d="M-8-6H8M-8 0H8M-8 6H8"/>',

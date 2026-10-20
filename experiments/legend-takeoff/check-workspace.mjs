@@ -75,7 +75,9 @@ await run('scan()');assert.equal(run('entry().hits.find(h=>h.id===selected).deci
 run('selected=includedHits(sheet())[1].id');const selectedBefore=run('selected');
 const screen={x:500,y:300};context.screen=screen;
 const anchor=run('pageAnchor(screen,overlay.getBoundingClientRect(),{x:viewport.width,y:viewport.height})');context.savedAnchor=anchor;
+elements.get('code').value='DRAFT-CODE';elements.get('description').value='Unsubmitted description';
 await run('requestZoom(2,screen)');
+assert.equal(elements.get('code').value,'DRAFT-CODE');assert.equal(elements.get('description').value,'Unsubmitted description');
 const screenAfter=run('({x:overlay.getBoundingClientRect().left+savedAnchor.x*zoom,y:overlay.getBoundingClientRect().top+savedAnchor.y*zoom})');
 assert.ok(Math.hypot(screenAfter.x-screen.x,screenAfter.y-screen.y)<1e-6);
 assert.equal(run('selected'),selectedBefore);
@@ -128,10 +130,42 @@ await run('changePage(1)');assert.equal(run('quantities(sheet())[0].supported'),
 const truncated={code:'X',description:'',exemplar:null,assessed:true,provider:'vector',note:'',truncated:true,hits:[]};
 assert.equal(model.quantities({entries:[truncated],exclusions:[]})[0].unresolved,null);
 assert.equal(priceQuantities(model.quantities({entries:[truncated],exclusions:[]}),{X:{material:'1',labour:'0'}}).complete,false);
+// Failed replacement PDFs keep the active document and every saved-in-memory quantity/rate.
+const beforeDocument=run('doc'),beforeState=run('JSON.stringify({hash:documentHash,sheets,rates,fileName,pageNum})');
+const actualLoader=pdfjs.getDocument;let failedCandidateDestroyed=false;
+const existingPage=run('page');
+pdfjs.getDocument=()=>({promise:Promise.resolve({getPage:async()=>({getViewport:options=>existingPage.getViewport(options),render:()=>({promise:Promise.reject(Error('Injected PDF render failure'))})}),destroy:async()=>{failedCandidateDestroyed=true;}})});
+await run('openFile(testBytes,"bad-render.pdf")');
+assert.equal(run('doc'),beforeDocument);assert.equal(run('JSON.stringify({hash:documentHash,sheets,rates,fileName,pageNum})'),beforeState);
+assert.equal(failedCandidateDestroyed,true);assert.ok(elements.get('status').textContent.includes('retained'));
+pdfjs.getDocument=actualLoader;
+// A failed page navigation keeps the previous page and evidence selection.
+const realGetPage=beforeDocument.getPage.bind(beforeDocument);beforeDocument.getPage=async n=>{if(n===2)throw Error('Injected page failure');return realGetPage(n);};
+await run('changePage(2)');assert.equal(run('pageNum'),1);assert.equal(run('doc'),beforeDocument);
+beforeDocument.getPage=realGetPage;
+// Loading sample bytes holds the busy state; failed fetches do not switch trade/source.
+const beforeSample=run('activeTrade.id');let finishFetch;
+context.fetch=()=>new Promise(resolve=>{finishFetch=resolve;});
+const loadingSample=elements.get('sample').onclick();assert.equal(run('busy'),true);assert.equal(elements.get('pdf-input').disabled,true);
+finishFetch({ok:false});await loadingSample;assert.equal(run('activeTrade.id'),beforeSample);assert.equal(run('busy'),false);assert.equal(run('doc'),beforeDocument);
+// A scanner finding a previously manual item must retain its identity and human decision.
+for(const decision of ['confirmed','rejected']){
+ const point={x:123,y:234},id=model.hitId('source',1,'MAN',point);
+ const e={code:'MAN',description:'',exemplar:point,assessed:true,provider:'vector',note:'',truncated:false,hits:[{...point,id,code:'MAN',page:1,method:'manual',manual:true,decision}]};
+ model.replaceScan(e,[{x:123.5,y:234.2}],'source',1);
+ assert.equal(e.hits.length,1);assert.equal(e.hits[0].id,id);assert.equal(e.hits[0].manual,true);assert.equal(e.hits[0].decision,decision);
+}
+console.log('PASS: failed-file/page recovery, serialized sample loading, draft-input retention and manual-review preservation');
 // Trade selection adds editable items without discarding existing evidence.
 elements.get('trade-select').value='plumbing';elements.get('trade-select').onchange();
 assert.equal(run('currentCode'),'WC');assert.equal(run('snapshot().trade'),'plumbing');assert.ok(run('sheet().entries.some(e=>e.code==="DL1"&&e.assessed)'));
 assert.equal(run('entry().assessed'),false);assert.equal(run('entry().description'),'Toilet fixture');
+// General builder presets are available without erasing other trade results.
+elements.get('trade-select').value='general-builders';elements.get('trade-select').onchange();
+assert.equal(run('currentCode'),'D01');assert.equal(run('snapshot().trade'),'general-builders');
+assert.equal(run('entry().description'),'Door set');
+assert.ok(run('sheet().entries.some(e=>e.code==="DL1"&&e.assessed)'));
+assert.ok(run('sheet().entries.some(e=>e.code==="W01")'));
 console.log('PASS: navigation anchors, panning, fit modes, selection retention, keyboard text-input protection and trade presets');
 console.log('PASS: real PDF open/render/scan, exclusions, stable reruns, review-to-price, rotated crop coordinates, annotated export, page isolation and truncation coverage');
 await run('doc.destroy()');

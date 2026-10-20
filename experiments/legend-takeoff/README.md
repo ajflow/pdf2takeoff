@@ -151,6 +151,8 @@ sample and a temporary two-page copy whose second page is cropped and rotated
 90 degrees. No customer drawings were used. Desktop layout and a 390 × 844
 viewport override were checked; the override was reset afterwards.
 
+![Chrome QA of the synthetic sample with five reviewed items and fictional AUD 260 pricing](qa/desktop-priced.jpg)
+
 | Scenario | Observed result |
 | --- | --- |
 | Guided sample → scan → review → rates | Three downlights and two sockets; all five confirmed. Fictional rates of 40 + 20 and 25 + 15 produce AUD 260. CSV values match. |

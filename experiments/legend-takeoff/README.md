@@ -65,7 +65,7 @@ Initial checkout: `e0d57e3a463297b1580f72bf647f3dfe7bbf3083`. The report also re
 
 - `npm ci`: completed.
 - `npm run bench`: passes, no regressions; one declared pre-existing diagonal room gap.
-- `npm run build`: existing `scripts/check-scaled-bench.mjs` fails its generator determinism check against committed `questions.jsonl`, before full app typechecking/bundling. This occurred on the untouched checkout before any experiment files were written. Engine checks through scanning/openings passed. The experiment does not modify this check or room code.
+- Initial `npm run build` (before the reliability fixes below): `scripts/check-scaled-bench.mjs` failed its generator determinism check against committed `questions.jsonl`, before full app typechecking/bundling. This occurred on the untouched checkout before any experiment files were written. Engine checks through scanning/openings passed. The later compatibility fix preserves this check and the committed questions; room code and scorers remain unchanged.
 - Runner protocol checks cover one-to-one scoring, augmenting-path matching, deduplication and PDF/raster round trips.
 - All six annotated PDFs were rendered and visually checked.
 
@@ -73,7 +73,7 @@ Next: obtain tracking-issue acknowledgement, independent human labels and permis
 
 `tracking-issue.md` is prepared locally. The initial experiment was pushed to the private `chid/pdf2takeoff-legend-takeoff` repository; subsequent landing, pricing and research edits are local until pushed. No tracking issue or PR has been created. Record AJ's acknowledgement in the issue before upstream integration. Do not merge or deploy as part of this experiment.
 
-Additional verification: standalone `npx tsc --noEmit` and `npx vite build` both pass, isolating the combined build failure to the pre-existing engine benchmark check. A second experiment run preserved hit IDs and counts exactly. Chrome review UI was checked: selecting a hit reveals provenance; flagging it uncertain decreases supported and increases unresolved totals; reloading restores original results. Test review changes were discarded.
+Initial additional verification: standalone `npx tsc --noEmit` and `npx vite build` both pass, isolating the combined build failure to the pre-existing engine benchmark check. A second experiment run preserved hit IDs and counts exactly. Chrome review UI was checked: selecting a hit reveals provenance; flagging it uncertain decreases supported and increases unresolved totals; reloading restores original results. Test review changes were discarded.
 
 
 ## Landing page and pricing worksheet
@@ -82,12 +82,12 @@ The local server opens the Legend landing page at `/`. Its four-step interactive
 
 Pricing uses entered material and labour rates per installed unit, decimal amounts to two places, and integer cents for arithmetic. Empty or invalid rates stay unpriced; explicit zero is allowed. Supported quantities are priced; unresolved detections are excluded and unassessed types have no line price. Currency labels amounts without conversion. Rate source notes, original evidence and separate review decisions are included in the JSON price draft; CSV provides the priced lines. Fictional sample rates are labelled as assumptions. Subtotals exclude tax, markup, cabling, accessories and other job costs. Rates and review decisions stay in the browser tab until exported.
 
-Run `node experiments/legend-takeoff/check-pricing.mjs` for arithmetic and missing-data checks. Browser automation is paused at the user's request; the landing page has static, script syntax and HTTP checks only, with visual QA outstanding.
+Run `node experiments/legend-takeoff/check-pricing.mjs` for arithmetic and missing-data checks. The landing page has static, script syntax and HTTP checks only, with visual QA outstanding. The local workspace browser checks are recorded below.
 
 
 ## Reference research and planned history
 
-[Local feature plan](feature-plan.md) records the 2026-10-20 EasyPDFTakeoff homepage review, independent commentary and a prioritized history roadmap. [Asset provenance](assets/README.md) documents the original history illustration and external references. The landing page labels history as planned; saving/reopening, activity logs, snapshot comparison and rate versioning are not implemented. No third-party visual assets or marketing copy are reused.
+[Local feature plan](feature-plan.md) records the 2026-10-20 EasyPDFTakeoff homepage review, independent commentary and a prioritized history roadmap. [Asset provenance](assets/README.md) documents the original history illustration and external references. The landing page labels history as planned. Local project save/reopen is now available in the real workspace; activity logs, snapshot comparison and rate versioning remain planned. No third-party visual assets or marketing copy are reused.
 
 
 ## Real PDF workspace
@@ -100,14 +100,14 @@ Open `/workspace.html` to use an actual PDF. The drawing stays on-device. The br
 4. Choose **Find matching symbols**. Review hits; confirm, flag or reject them. Use **Add missed item** for manually confirmed installations.
 5. Enter material/labour rates and a source note. Export current-page evidence JSON, quantity/price CSV and an annotated PDF copy.
 
-Each page has its own examples, exclusions and scans; navigating pages does not reuse coordinates from another page. Re-scanning a type replaces its detections, retains decisions for stable IDs, and avoids duplicate manual additions. Nearby conflicting classifications are flagged uncertain. A truncated scan cannot be treated as complete pricing coverage. Missing assessments/rates stay distinct from zero.
+Each page has its own examples, exclusions and scans; navigating pages does not reuse coordinates from another page. Re-scanning a type replaces its detections, retains decisions for stable IDs, and avoids duplicate manual additions. Nearby conflicting classifications are flagged uncertain separately from human review decisions; rejecting a competing classification clears the derived conflict. Re-scanning a rejected classification preserves the resolved decisions. A truncated scan cannot be treated as complete pricing coverage. Missing assessments/rates stay distinct from zero.
 
-The JSON export contains original source SHA-256, page/frame, raw hits and excluded regions, display numbering, decisions and rate assumptions. The annotated PDF preserves the source document, marks only this page, omits rejected hits and retains display numbers. Rates are shared by equipment code within the open document. Manual decisions are current state, not an immutable activity history. Save before closing; reopening a project bundle remains planned.
+The JSON export contains original source SHA-256, page/frame, raw hits and excluded regions, display numbering, decisions and rate assumptions. The annotated PDF preserves the source document, marks only this page, omits rejected hits and retains display numbers. Rates are shared by equipment code within the open document. Manual decisions are current state, not an immutable activity history. Use **Save project** before closing to retain every page. To reopen, open the original PDF and choose **Load project**. The SHA-256 must match; the project does not contain the PDF. Evidence exports remain current-page reports and are not project files.
 
 Development: `node experiments/legend-takeoff/serve.mjs` (Vite, port 5174).
 Production: `npx vite build --config experiments/legend-takeoff/vite.config.mjs`; merge `.build/` into the static site's `dist/`. Vendor PDF rendering resources are copied from the installed pdfjs package at config load; generated directories are ignored by Git.
 
-Validation: `node experiments/legend-takeoff/check-workspace.mjs` uses real PDF parsing/rendering/scanning inside a small DOM harness. It covers exclusions, stable rescan IDs, review-to-price, rotated crop transforms, image-only fallback, annotation export and page isolation. The resampled image-only fixture exposes a known CV miss: only the legend exemplar matches and installation recall is zero. The UI warns that no matches does not establish no equipment. This test is not browser or visual QA; browser automation remains paused.
+Validation: `node experiments/legend-takeoff/check-workspace.mjs` uses real PDF parsing/rendering/scanning inside a small DOM harness. It covers exclusions, stable rescan IDs, review-to-price, rotated crop transforms, image-only fallback, annotation export and page isolation. The resampled image-only fixture exposes a known CV miss: only the legend exemplar matches and installation recall is zero. The UI warns that no supported count does not establish no equipment. This test is not browser or visual QA; separate Chrome checks are recorded below.
 
 
 ## Trade pages and navigation
@@ -118,7 +118,7 @@ Trade content lives in `trades.mjs`; regenerate original static pages with `node
 
 Drawing controls: **Move / pan**, middle-button drag or hold Space while dragging; Ctrl/Command + wheel or a two-finger gesture to zoom around a point; numeric zoom from 5–800%; **Fit page** (0), **Fit width** (F), **Zoom to legend**, and **Zoom to selection**. +/- zoom, H selects pan and Escape returns to inspection. Editing a text field keeps its normal keystrokes. On touchscreens, use Move / pan or Inspect hits for two-finger zoom. Plain scrolling still moves the drawing. Zooming preserves the selected evidence hit.
 
-Checks use a controller/DOM harness with real PDF rendering and exercise anchored zoom, drag scroll, fit calculations, selection retention, text-field keyboard protection and trade-presets retention. Browser/visual QA remains paused at the user's request.
+Checks use a controller/DOM harness with real PDF rendering and exercise anchored zoom, drag scroll, fit calculations, selection retention, text-field keyboard protection and trade-presets retention. Chrome checks additionally exercised typed zoom, pointer panning, fit, example selection and text-field shortcut protection.
 
 
 General builders: `trades/general-builders.html` opens the workspace with editable door-set, window-unit and joinery-unit presets. Counts can be reviewed alongside other trades without clearing existing results. Repeated details may need manual additions; specifications and drawing schedules still need review. Floor/wall measurements, structural quantities and complete building estimates are outside this counting workflow.
@@ -130,3 +130,52 @@ The real-PDF controller now prepares a replacement PDF’s first rendered page b
 
 
 Presenter materials: [main talk track](demo-talk-track.md) contains a rehearsable three-minute script, sample setup, failure language, judge answers and a thirty-second version. [Public demo guide](demo-guide.html) links to that script and the real workspace. The script distinguishes live on-device processing from synthetic fixture evidence and uses fictional rates only.
+
+
+## Priority reliability fixes (local)
+
+- Counts, prices and annotated exports exclude hits outside the PDF's visible page bounds, including rotated crops. Raw scan hits remain in the evidence.
+- Changing an exemplar marks the previous scan stale. Its original exemplar and raw hits are retained, pricing becomes unassessed, and annotated export requires a fresh scan. A failed rescan retains that stale state.
+- **Exclude this type from scope** removes unused presets from the current page's pricing coverage without treating them as zero. Evidence and rates remain available when the type is included again. JSON and CSV explicitly identify out-of-scope lines.
+- Opening a replacement PDF or loading a project asks before discarding unsaved work. Failed parsing, source verification or rendering retains the active work.
+- **Save project** downloads a version 1 JSON file with every visited page, selected page/type, original scan evidence, current decisions, exclusions, scope, currency, shared rates and draft equipment inputs. **Load project** validates the schema and original PDF hash, rebuilds crop bounds from that PDF, and recomputes quantities and prices. Unknown versions and invalid files are rejected without changing the original file. This is explicit file saving, not autosave or an immutable activity history.
+- Save validates the same schema and 20 MB byte limit as load before downloading or clearing the unsaved state. Invalid data and export errors retain the current work and show an error.
+- CI runs Legend's focused checks and production build as a separate job. The historical root-build determinism failure was traced to native random-comparator sorting; the benchmark now uses a fixed ordering that reproduces the committed sample without regenerating its questions or changing scorers.
+
+Controller regression checks cover these cases with real PDFs. These changes are local until separately published; HOSTING.md records the deployed version.
+
+## Local browser QA — 2026-10-20
+
+Tested `/workspace.html` in Chrome on macOS, using the synthetic electrical
+sample and a temporary two-page copy whose second page is cropped and rotated
+90 degrees. No customer drawings were used. Desktop layout and a 390 × 844
+viewport override were checked; the override was reset afterwards.
+
+| Scenario | Observed result |
+| --- | --- |
+| Guided sample → scan → review → rates | Three downlights and two sockets; all five confirmed. Fictional rates of 40 + 20 and 25 + 15 produce AUD 260. CSV values match. |
+| Onboarding review and remaining types | Review now focuses the visible Confirm button after zooming. Completing a reviewed, priced type now leads to the next unfinished included type. |
+| Confirm, flag, reject and rescan | Quantities follow decisions. Conflicting types retain the original confirmations; rejecting the duplicates and rescanning restores the three confirmed downlights. |
+| Scope and changed example | Excluding an unused type removes its pricing gap; inclusion restores it. A changed example shows “Rescan required,” removes its price, and blocks annotated export until rescanned. |
+| Save, load and export | Project JSON, CSV and annotated PDF download. Loading the saved sample project restores all five confirmations, rates and the AUD 260 draft. Unsupported project versions retain the open work. |
+| Invalid save and recovery | A 101-character pasted numeric rate passes the browser's input validation but exceeds the project schema limit. Save now rejects it and retains all three detections. Correcting the rate downloads a project accepted by the loader; the unsaved-warning behavior also passes regression checks. |
+| Native reload protection | Chrome's native reload displayed the unsaved-changes warning; after cancellation the three detections remained. The automation reload command bypassed this prompt, so it is not a valid substitute for the native check. |
+| Native PDF replacement cancellation | Selected the temporary two-page PDF through the macOS file picker, then clicked Cancel in Chrome's discard confirmation. The original one-page sample, three downlights, one confirmed hit, unsaved material/labour rates of 99 + 20, rate-source note and AUD 357 subtotal remained. |
+| Native project loading cancellation | Selected the matching saved sample project through the macOS file picker, then clicked Cancel in Chrome's discard confirmation. The workspace reported “Project loading cancelled. Current work retained.” The same drawing, counts, review decision, unsaved rates, note and AUD 357 subtotal remained. |
+| Manual PDF setup | Native file picker, legend drag, example click and scan produce three downlights on page one. |
+| Rotated crop and multiple pages | Page two retains four raw scanner matches but displays/counts zero because all are excluded or outside its crop. Returning to page one retains its three detections. Saved project contains both pages. |
+| Navigation and narrow layout | Typed numeric zoom, pointer panning and fit work. Typing shortcut characters in Description leaves zoom unchanged. Narrow layout has no horizontal page overflow; review controls are reachable. |
+
+The zero-count message was corrected so rejected or uncertain matches are not
+described as absent detections. Focused regression checks cover the new guide
+transitions; `node scripts/legend.mjs build` passes after these changes.
+
+Limits: this is Chrome QA on synthetic PDFs, not field-accuracy validation.
+The narrow check is viewport emulation, not a physical touchscreen or Safari/
+Firefox test. On narrow screens, the drawing and review controls require
+separate scrolling. Wrong-PDF rejection and injected loading failures remain
+covered by the controller harness. The extension's direct file upload API was
+unavailable; native macOS file pickers and Chrome Cancel buttons were used for
+the completed replacement-cancellation checks. Console errors
+observed in the fresh QA tab came from another Chrome extension, not the
+workspace.

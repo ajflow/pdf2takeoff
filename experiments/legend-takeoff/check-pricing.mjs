@@ -16,4 +16,8 @@ assert.equal(missing.lines[0].totalCents,null);
 assert.equal(missing.complete,false);
 assert.equal(priceQuantities(quantities,{}).lines[0].status,'rate-required');
 assert.equal(priceQuantities([{...quantities[0],supported:0}],{DL1:{material:'0',labour:'0'}}).lines[0].totalCents,0);
+const scope=priceQuantities([quantities[0],{code:'UNUSED',status:'out-of-scope',supported:null,unresolved:null}],rates);
+assert.equal(scope.complete,true);assert.equal(scope.pricedSubtotalCents,18000);
+assert.equal(scope.lines[1].status,'out-of-scope');assert.equal(scope.lines[1].totalCents,null);
+assert.equal(priceQuantities([{code:'UNUSED',status:'out-of-scope',supported:null,unresolved:null}],rates).complete,false);
 console.log('PASS: pricing arithmetic, cents, missing rates, unknown quantities and unresolved exclusions');

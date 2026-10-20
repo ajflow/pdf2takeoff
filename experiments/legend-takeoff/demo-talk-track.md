@@ -117,7 +117,7 @@ If a PDF cannot open or a page fails:
 - **Are the trade pages separate detectors?** No. They provide editable starting labels and scope notes for the same underlying workflow.
 - **Can it price a whole building?** It prices supported item counts using entered rates. Length, area, volume, broader job costs and a complete estimate are outside this workspace.
 - **Do files leave the device?** The PDF is opened and processed in the browser; the app has no drawing-upload endpoint or cloud AI calls.
-- **Does it save projects for reopening?** Current-page JSON/CSV/PDF exports are available. Full project save/reopen and an activity timeline remain planned.
+- **Does it save projects for reopening?** The local workspace has Save project and Load project for all visited pages. Reopening requires the original PDF and a matching hash. Current-page JSON/CSV/PDF exports are also available. An activity timeline remains planned; verify which version is deployed before presenting.
 - **How accurate is it?** The pilot has six synthetic sheets with documented failures. We have not established broad accuracy on real drawings.
 
 ## Thirty-second version

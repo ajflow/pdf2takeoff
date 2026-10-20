@@ -28,15 +28,15 @@ Verified locally:
 |---|---|---|
 | Main app persistence | `src/app/persistence.ts` saves markups, calibrations and presets in IndexedDB | Latest-state persistence is not a chronological event history; the review demo does not use it |
 | Drawing comparison | `src/app/compare.ts`, `src/engine/compare.ts`, `src/engine/revdiff.ts` provide overlay and geometry/text comparison | No project revision timeline or automatic cross-revision symbol identity |
-| Experiment evidence | Fixture replay plus a real-PDF workspace with stable hit IDs, source hashes, per-page exclusions and current review decisions | Repeated edits are not retained as an event sequence; exports are current-page snapshots, not reopenable project bundles |
+| Experiment evidence | Fixture replay plus a real-PDF workspace with stable hit IDs, source hashes, per-page exclusions and current review decisions | Repeated edits are not retained as an event sequence; current-page exports coexist with versioned all-page project save/reopen; activity history is still planned |
 | Pricing | Entered rates, source notes and exports in current local changes | No persisted rate library, historical rate versions or saved estimate snapshots |
 | Main-app integration | Outside the standalone pilot | Coordinate shared interfaces and persistence changes through the tracking issue |
 
-## Prioritized proposals — not implemented
+## Prioritized work — implementation status below
 
-### P0: Save and reopen one local project
+### P0: Save and reopen one local project — implemented locally
 
-Add a versioned JSON project bundle containing original document hash/reference, selected page and coordinate frame, legend/exclusion regions, immutable scan results, review decisions, entered rate card, currency, pricing scope and export metadata. Do not bundle customer PDFs by default. Reopening asks the user to reselect the original PDF and verifies its full hash.
+The real workspace now saves a versioned JSON project bundle containing original document hash/reference, selected page and coordinate frame, legend/exclusion regions, latest raw scan results, current review decisions, entered rate card, currency, pricing scope and export metadata. Do not bundle customer PDFs by default. Reopening requires opening the original PDF, then choosing Load project; its full hash is verified. The initial project schema is version 1; unknown versions are rejected. No earlier project-bundle schema exists to migrate.
 
 Acceptance: close and reopen a saved bundle, recover the same supported/unresolved quantities and cent totals, and keep the original scan intact. Reject an unknown newer schema with an actionable message. Migrate supported older schemas without replacing the original file. Explicitly report missing source files or unavailable browser storage.
 
@@ -106,3 +106,5 @@ This copy was written for Legend. It describes a proposed feature and is present
 - 2026-10-20: Added trade-specific entry pages and editable presets for electrical, plumbing, HVAC, fire and security/data, plus pointer-anchored zoom, pan and fit controls. These additions use the same scanner and do not add trade-trained detection or length/area measurements.
 
 - 2026-10-20: Added General Builders entry page/presets and hardened the real-PDF controller against failed file/page loads, duplicate manual/scanner records, draft loss during zoom and overlapping sample loads. These are application changes; no broader detection accuracy is claimed.
+
+- 2026-10-20: Implemented local version 1 project save/reopen, unsaved-work protection, reversible page scope, crop-aware counts, preserved review decisions and stale-exemplar detection. Current-state restore is available; event history and named snapshots remain planned. No publication is implied.

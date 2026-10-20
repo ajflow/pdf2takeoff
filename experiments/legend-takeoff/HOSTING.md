@@ -2,15 +2,15 @@
 
 Public URL: https://legend-takeoff.foamyhake64.chatgpt.site
 
-Updated 2026-10-20 using Sites (version 2). Access: public (anyone with the URL). No third-party visitor invitations were sent.
+Updated 2026-10-20 using Sites (version 3). Access: public (anyone with the URL). No third-party visitor invitations were sent.
 
 Hosted source checkout: `/Users/charley/gits/legend-site`.
 Site identity is recorded there in `.openai/hosting.json`; reuse it for updates rather than creating a second site.
 
 - Project: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b`
-- Saved version: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b~appgver_2a93f88b8454819196146cdb7a901885`
-- Source commit: `6c04114f150b7893436d45b196eb0179fe151afa`
-- Deployment: `appgdep_6ad6dc6589ac81919200ba075ae13e7c` (succeeded)
+- Saved version: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b~appgver_18a56e5cb0c081918f44105129fb8e1f`
+- Source commit: `4b1dad0d91faff7bf0f64384e450081887b1ae32`
+- Deployment: `appgdep_6ad6e12cc99c81918d28a31b5b5b8d2c` (succeeded)
 
 This static site includes the landing page, original assets, feature-plan notes and synthetic fixture evidence. The `/workspace.html` route opens real PDFs and scans them on-device. The separate `/review.html` fixture demo uses saved scanner evidence. No user document is sent to a server. Review decisions and entered rates stay in each browser tab until exported. History features remain labelled planned.
 
@@ -19,3 +19,5 @@ Pre-publication checks passed for real PDF controller integration, strict TypeSc
 To update: synchronize intended experiment assets to the hosted checkout's `dist/`, retain the hosted-specific fixture/replay disclosures, then follow the Sites skill's source packaging and publication workflow. Credentials are never stored in this repository.
 
 Code checkpoint in the private GitHub repository: `32ed8f3`. New project history/save-reopen functionality remains planned; current-page evidence/CSV/PDF exports are available.
+
+Trade pages and improved pan/zoom controls were published in version 3, with source code checkpoint `a60a5b2`. All five trade URLs and their workspace links returned the expected published pages.

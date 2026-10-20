@@ -1,13 +1,10 @@
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+// Vite serves both the landing/demo and the real PDF workspace, including
+// the locally bundled PDF worker and same-origin font/decoder resources.
+import { createServer } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, extname, sep } from 'node:path';
-const root=dirname(fileURLToPath(import.meta.url));
-const types={'.html':'text/html','.json':'application/json','.png':'image/png','.pdf':'application/pdf','.csv':'text/csv'};
-const server=createServer(async(req,res)=>{
-  try{const url=new URL(req.url,'http://localhost');const file=resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/review.html':url.pathname));
-    if(!file.startsWith(root+sep)){res.writeHead(403);res.end();return;}
-    const body=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]??'text/plain','Cache-Control':'no-store'});res.end(body);
-  }catch{res.writeHead(404);res.end('Not found. Run the experiment first.');}
+const server=await createServer({
+  configFile:fileURLToPath(new URL('vite.config.mjs',import.meta.url)),
+  server:{host:'127.0.0.1',port:5174,strictPort:true},
 });
-server.listen(5174,'127.0.0.1',()=>console.log('Legend review: http://127.0.0.1:5174'));
+await server.listen();
+console.log('Legend: http://127.0.0.1:5174');

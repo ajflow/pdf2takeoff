@@ -108,3 +108,14 @@ Development: `node experiments/legend-takeoff/serve.mjs` (Vite, port 5174).
 Production: `npx vite build --config experiments/legend-takeoff/vite.config.mjs`; merge `.build/` into the static site's `dist/`. Vendor PDF rendering resources are copied from the installed pdfjs package at config load; generated directories are ignored by Git.
 
 Validation: `node experiments/legend-takeoff/check-workspace.mjs` uses real PDF parsing/rendering/scanning inside a small DOM harness. It covers exclusions, stable rescan IDs, review-to-price, rotated crop transforms, image-only fallback, annotation export and page isolation. The resampled image-only fixture exposes a known CV miss: only the legend exemplar matches and installation recall is zero. The UI warns that no matches does not establish no equipment. This test is not browser or visual QA; browser automation remains paused.
+
+
+## Trade pages and navigation
+
+Dedicated pages are available at `trades/electrical.html`, `trades/plumbing.html`, `trades/hvac.html`, `trades/fire.html` and `trades/data.html`. They link into the real workspace with a `?trade=` parameter and editable code/description presets. The same scanner runs for every trade; presets do not provide trained classification or establish technical specifications. The workspace is still item counting, not length/area measurement. Switching trades adds types without discarding existing results; remaining unassessed types keep pricing coverage incomplete. The sample button explicitly loads an electrical example and its presets.
+
+Trade content lives in `trades.mjs`; regenerate original static pages with `node experiments/legend-takeoff/make-trade-pages.mjs`. Their inline SVG diagrams are illustrations, not standard symbol libraries or measured scanner output.
+
+Drawing controls: **Move / pan**, middle-button drag or hold Space while dragging; Ctrl/Command + wheel or a two-finger gesture to zoom around a point; numeric zoom from 5–800%; **Fit page** (0), **Fit width** (F), **Zoom to legend**, and **Zoom to selection**. +/- zoom, H selects pan and Escape returns to inspection. Editing a text field keeps its normal keystrokes. On touchscreens, use Move / pan or Inspect hits for two-finger zoom. Plain scrolling still moves the drawing. Zooming preserves the selected evidence hit.
+
+Checks use a controller/DOM harness with real PDF rendering and exercise anchored zoom, drag scroll, fit calculations, selection retention, text-field keyboard protection and trade-presets retention. Browser/visual QA remains paused at the user's request.

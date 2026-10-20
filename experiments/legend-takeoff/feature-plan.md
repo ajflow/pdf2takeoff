@@ -102,3 +102,5 @@ This copy was written for Legend. It describes a proposed feature and is present
 - 2026-10-20: Keep implementation out of shared app/engine interfaces until scope is agreed through the issue. No new dependencies for research or landing assets.
 
 - 2026-10-20: Added a real-PDF workspace with live on-device scanning, manual review/additions, per-page isolation and pricing. History/save-reopen features remain proposed; the fixture replay remains a separate demo.
+
+- 2026-10-20: Added trade-specific entry pages and editable presets for electrical, plumbing, HVAC, fire and security/data, plus pointer-anchored zoom, pan and fit controls. These additions use the same scanner and do not add trade-trained detection or length/area measurements.

@@ -61,7 +61,7 @@ The parser rejected the ambiguous DL1 association. SO1 still falsely matched bot
 
 ## Validation and remaining work
 
-Initial checkout: `e0d57e3a463297b1580f72bf647f3dfe7bbf3083`. The report also records Node, commit and fixture-protocol hash. The implementation is currently uncommitted; the commit field identifies the engine baseline, not a committed experiment revision.
+Initial checkout: `e0d57e3a463297b1580f72bf647f3dfe7bbf3083`. The report also records Node, commit and fixture-protocol hash. The saved report identifies the engine baseline used for the initial run. The experiment implementation is versioned in Git; rerunning records the current checkout commit.
 
 - `npm ci`: completed.
 - `npm run bench`: passes, no regressions; one declared pre-existing diagonal room gap.

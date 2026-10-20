@@ -2,18 +2,20 @@
 
 Public URL: https://legend-takeoff.foamyhake64.chatgpt.site
 
-Published 2026-10-20 using Sites. Access: public (anyone with the URL). No third-party visitor invitations were sent.
+Updated 2026-10-20 using Sites (version 2). Access: public (anyone with the URL). No third-party visitor invitations were sent.
 
 Hosted source checkout: `/Users/charley/gits/legend-site`.
 Site identity is recorded there in `.openai/hosting.json`; reuse it for updates rather than creating a second site.
 
 - Project: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b`
-- Saved version: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b~appgver_746a37d1c228819186e1256d29f09075`
-- Source commit: `a98ab17d0eda632c2bc63454248f5ed6cccda28d`
-- Deployment: `appgdep_6ad6d6dad66881918697f82152f4037f` (succeeded)
+- Saved version: `appgprj_6ad6d696941c8191aaa6f8f739d7d48b~appgver_2a93f88b8454819196146cdb7a901885`
+- Source commit: `6c04114f150b7893436d45b196eb0179fe151afa`
+- Deployment: `appgdep_6ad6dc6589ac81919200ba075ae13e7c` (succeeded)
 
-This static site includes the landing page, original assets, feature-plan notes and synthetic fixture evidence. The demo uses saved scanner results; arbitrary PDF uploads and live scanning are not implemented in the hosted version. Review decisions and entered rates stay in each browser tab until exported. History features remain labelled planned.
+This static site includes the landing page, original assets, feature-plan notes and synthetic fixture evidence. The `/workspace.html` route opens real PDFs and scans them on-device. The separate `/review.html` fixture demo uses saved scanner evidence. No user document is sent to a server. Review decisions and entered rates stay in each browser tab until exported. History features remain labelled planned.
 
-Pre-publication checks passed for pricing arithmetic, script syntax and local asset links. The native Sites result verified successful publication. Browser automation and visual QA remained paused at the user's request.
+Pre-publication checks passed for real PDF controller integration, strict TypeScript, pricing arithmetic, production build, asset links and existing takeoff benchmarks. The raster fallback has a documented miss on an image-only fixture; digital PDFs remain the primary workflow. The native Sites result verified successful publication. Browser automation and visual QA remained paused at the user's request.
 
 To update: synchronize intended experiment assets to the hosted checkout's `dist/`, retain the hosted-specific fixture/replay disclosures, then follow the Sites skill's source packaging and publication workflow. Credentials are never stored in this repository.
+
+Code checkpoint in the private GitHub repository: `32ed8f3`. New project history/save-reopen functionality remains planned; current-page evidence/CSV/PDF exports are available.

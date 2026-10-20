@@ -12,7 +12,7 @@ node experiments/legend-takeoff/run.mjs
 node experiments/legend-takeoff/serve.mjs
 ```
 
-Open http://127.0.0.1:5174 for the landing page, then choose **Try the working demo** (or go directly to http://127.0.0.1:5174/review.html). Stop the server with Ctrl-C. This serves only the experiment folder on loopback. The runner regenerates six original PDFs and six annotated copies under `output/`, plus evidence JSON, positioned legend JSON, drawing PNGs, `quantities.csv` and `report.json`.
+Open http://127.0.0.1:5174 for the landing page, then choose **Open your drawing** (or go directly to http://127.0.0.1:5174/workspace.html; saved fixtures remain at /review.html). Stop the server with Ctrl-C. This serves only the experiment folder on loopback. The runner regenerates six original PDFs and six annotated copies under `output/`, plus evidence JSON, positioned legend JSON, drawing PNGs, `quantities.csv` and `report.json`.
 
 No credentials needed. No network calls in the runner. AI review is **not implemented or replayed**; its comparison rows are explicitly not assessed. Live AI review requires a separately declared call/spend budget and a server-side environment key before implementation.
 

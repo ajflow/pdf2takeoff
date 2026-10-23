@@ -1,7 +1,6 @@
 // Quantity serialization: markups → matrix → CSV / clipboard / Excel.
 // Everything here is pure data transformation; hosts add file delivery.
 
-import * as XLSX from 'xlsx';
 import type { Calibration, Markup, MarkupType } from './types.ts';
 import type { DisplayUnit } from './units.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
@@ -130,7 +129,9 @@ export function toDelimited(matrix: Matrix, sep: string): string {
 }
 
 /** One-sheet workbook ("Takeoff") as xlsx bytes. */
-export function xlsxBytes(matrix: Matrix): Uint8Array {
+export async function xlsxBytes(matrix: Matrix): Promise<Uint8Array> {
+  // lazy: loading xlsx costs about 53 ms, and most runs never export
+  const XLSX = await import('xlsx');
   const ws = XLSX.utils.aoa_to_sheet(matrix);
   ws['!cols'] = [{ wch: 24 }, { wch: 8 }, { wch: 6 }, { wch: 12 }, { wch: 8 }];
   const wb = XLSX.utils.book_new();

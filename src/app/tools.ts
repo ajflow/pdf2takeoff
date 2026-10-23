@@ -15,6 +15,7 @@ import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextIt
 import { scaleVotesFromWords, checkAgainstSheet, doorWidthCheck } from '../engine/scale';
 import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill';
 import { renderRaster } from './raster';
+import type { RasterPage } from '../engine/ports';
 import { scanDeps } from './adapters';
 import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
 
@@ -285,14 +286,22 @@ function onDoubleClick(e: MouseEvent): void {
   }
 }
 
+// The last page raster the fill used. The fill caches its page-wide state on
+// the raster (dynamicfill), so reusing it for the next fill on the same page
+// skips that work too; a new document or page just misses the cache.
+let fillRaster: { doc: unknown; page: number; raster: RasterPage } | null = null;
+
 async function runFill(p: Pt): Promise<void> {
   hint('Filling…');
   const t0 = performance.now();
   try {
     // room labels, the scale at the click and vector doorway bridges let the
     // fill stop at doorways; page text and geometry are cached per page
-    const [raster, items, vec] = await Promise.all([
-      renderRaster(state.pageNum, 3),
+    const doc = getPdfDoc();
+    const cached = fillRaster && fillRaster.doc === doc && fillRaster.page === state.pageNum;
+    const raster = cached ? fillRaster!.raster : await renderRaster(state.pageNum, 3);
+    fillRaster = { doc, page: state.pageNum, raster };
+    const [items, vec] = await Promise.all([
       getPageTextItems(state.pageNum).catch(() => []),
       getPageVector(state.pageNum).catch(() => null),
     ]);

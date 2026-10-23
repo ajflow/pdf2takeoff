@@ -339,7 +339,7 @@ async function cmdExport(
 
   if (format === 'xlsx') {
     if (!out) throw new Error('--format xlsx requires -o <file.xlsx>');
-    writeFileSync(out, xlsxBytes(matrix));
+    writeFileSync(out, await xlsxBytes(matrix));
     process.stderr.write(`wrote ${out} (${markups.length} markups)\n`);
     return;
   }
@@ -459,7 +459,7 @@ async function cmdRun(specPath: string, prevPath: string | undefined): Promise<u
 
   for (const e of spec.exports) {
     if (e.format === 'csv') writeFileSync(e.out, '\ufeff' + toDelimited(matrix, ','));
-    else if (e.format === 'xlsx') writeFileSync(e.out, xlsxBytes(matrix));
+    else if (e.format === 'xlsx') writeFileSync(e.out, await xlsxBytes(matrix));
     else if (e.format === 'annotated-pdf') {
       writeFileSync(e.out, await buildAnnotatedPdf({ bytes, markups, calibrations, displayUnit: unit }));
     } else if (e.format === 'summary') {

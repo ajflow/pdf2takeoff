@@ -28,6 +28,7 @@ import { findScaleRatio } from '../engine/ocr.ts';
 import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill.ts';
 import { countItems, COUNT_PRESETS, presetById, proposalMarkups } from '../engine/inventory.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
+import type { RasterPage } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
@@ -40,6 +41,8 @@ interface OpenDoc {
   doc: PDFDocumentProxy;
   calibrations: Map<number, Calibration>;
   markups: Markup[];
+  /** Last page raster the fill used: dynamicfill caches page-wide state on it, so refills on the page skip that work. */
+  fillRaster?: { page: number; raster: RasterPage };
 }
 
 const docs = new Map<string, OpenDoc>();
@@ -344,7 +347,10 @@ export async function runMcpServer(): Promise<void> {
     async ({ id, page, at, label, ocr }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
-      const raster = await renderRasterNode(d.doc, page, RASTER_SCALE);
+      // a page renders identically every time, so the last fill raster is
+      // reused for the next fill on the same page (see OpenDoc.fillRaster)
+      const raster = d.fillRaster?.page === page ? d.fillRaster.raster : await renderRasterNode(d.doc, page, RASTER_SCALE);
+      d.fillRaster = { page, raster };
       const cal = d.calibrations.get(page);
       // text-layer labels and word boxes, vector doorway bridges, the scale, OCR boxes on request
       const hints = await fillHintsFor(d.doc, page, raster, { metersPerPt: cal?.metersPerPt, ocr });
@@ -737,7 +743,7 @@ export async function runMcpServer(): Promise<void> {
         columns,
       });
       if (format === 'xlsx') {
-        writeFileSync(path, xlsxBytes(matrix));
+        writeFileSync(path, await xlsxBytes(matrix));
       } else {
         writeFileSync(path, '\ufeff' + toDelimited(matrix, format === 'csv' ? ',' : '\t'));
       }

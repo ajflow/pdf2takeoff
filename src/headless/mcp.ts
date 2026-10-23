@@ -27,11 +27,12 @@ import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { METERS_PER_PT, toMeters, metersPerPtForRatio } from '../engine/units.ts';
 import { findScaleRatio } from '../engine/ocr.ts';
 import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill.ts';
+import { countItems, COUNT_PRESETS, itemLabel, presetById } from '../engine/inventory.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import type { Calibration, Markup } from '../engine/types.ts';
+import type { Calibration, ItemAttrs, Markup } from '../engine/types.ts';
 
 interface OpenDoc {
   id: string;
@@ -84,6 +85,7 @@ function markupRows(d: OpenDoc) {
       page: m.page,
       status: m.status ?? null,
       value: value === null ? null : round(value, 4),
+      ...(m.item ? { item: m.item } : {}),
       unit:
         m.type === 'count'
           ? 'each'
@@ -526,6 +528,137 @@ export async function runMcpServer(): Promise<void> {
           ...(result.note ? { note: result.note } : {}),
           ...('truncated' in result && result.truncated ? { truncated: true } : {}),
         },
+      });
+    },
+  );
+
+  server.registerTool(
+    'propose_items',
+    {
+      description:
+        'Add AI- or detector-proposed doors, Windows and spaces as flagged count markups (status "check") for a human to confirm or delete. Give one item per physical object, at its centre in PDF points (origin bottom-left). Quantities are then counted from the items by count_items under a counting preset, so report counts from count_items, never your own tally. replace: true first removes this page\'s unconfirmed proposals (item markups with status "check"), keeping confirmed ones, so a re-run does not duplicate.',
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).default(1),
+        source: z.enum(['model', 'vector', 'cv', 'ocr', 'user']).default('model'),
+        replace: z.boolean().default(false),
+        preset: z.string().default('aecv'),
+        items: z
+          .array(
+            z.object({
+              kind: z.enum(['Door', 'Window', 'Space']),
+              at: ptTuple.describe('item centre, PDF points'),
+              doorType: z.enum(['swing', 'double_swing', 'sliding', 'pocket', 'bifold', 'garage', 'french_glazed', 'other']).optional(),
+              leaves: z.number().int().min(1).max(4).optional(),
+              closet: z.boolean().optional(),
+              glazingType: z.enum(['unit', 'sliding_glass_door', 'french_door', 'glazed_opening', 'other']).optional(),
+              group: z.string().optional(),
+              spaceKind: z.enum(['room', 'open_plan_zone', 'hallway', 'closet', 'storage_utility', 'wet', 'stair', 'outdoor', 'garage', 'other']).optional(),
+              roomLabel: z.string().optional(),
+              enclosed: z.boolean().optional(),
+              bedroom: z.boolean().optional(),
+              wetKind: z.enum(['none', 'wc', 'bathroom', 'shower', 'sauna', 'washroom', 'lavatory']).optional(),
+              label: z.string().optional(),
+              agreement: z.object({ runs: z.number().int().min(1), of: z.number().int().min(1) }).optional(),
+            }),
+          )
+          .min(1)
+          .max(500),
+      },
+    },
+    async ({ id, page, source, replace, preset, items }) => {
+      const d = getDoc(id);
+      if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
+      const presetDef = presetById(preset);
+      if (!presetDef) throw new Error(`unknown counting preset "${preset}" — available: ${COUNT_PRESETS.map((p) => p.id).join(', ')}`);
+      const vp = (await d.doc.getPage(page)).getViewport({ scale: 1 });
+      // collect every violation so one round trip reports them all
+      const bad: string[] = [];
+      items.forEach((it, i) => {
+        if (it.at[0] < 0 || it.at[0] > vp.width || it.at[1] < 0 || it.at[1] > vp.height) {
+          bad.push(`items[${i}]: at [${it.at[0]}, ${it.at[1]}] is outside the page (${Math.round(vp.width)}x${Math.round(vp.height)} pt)`);
+        }
+        if (it.agreement && it.agreement.runs > it.agreement.of) {
+          bad.push(`items[${i}]: agreement.runs ${it.agreement.runs} > agreement.of ${it.agreement.of}`);
+        }
+        if (it.kind !== 'Door' && (it.doorType !== undefined || it.leaves !== undefined || it.closet !== undefined)) {
+          bad.push(`items[${i}]: doorType/leaves/closet belong on a Door, not a ${it.kind}`);
+        }
+        if (it.kind !== 'Window' && (it.glazingType !== undefined || it.group !== undefined)) {
+          bad.push(`items[${i}]: glazingType/group belong on a Window, not a ${it.kind}`);
+        }
+        if (
+          it.kind !== 'Space' &&
+          (it.spaceKind !== undefined || it.roomLabel !== undefined || it.enclosed !== undefined || it.bedroom !== undefined || it.wetKind !== undefined)
+        ) {
+          bad.push(`items[${i}]: spaceKind/roomLabel/enclosed/bedroom/wetKind belong on a Space, not a ${it.kind}`);
+        }
+      });
+      if (bad.length) throw new Error(`propose_items rejected: ${bad.join('; ')}`);
+      let removed = 0;
+      if (replace) {
+        const before = d.markups.length;
+        d.markups = d.markups.filter((m) => !(m.page === page && m.item && m.status === 'check'));
+        removed = before - d.markups.length;
+      }
+      const created: Markup[] = items.map((it) => {
+        const { kind, at, label, agreement, ...flags } = it;
+        const attrs: ItemAttrs = { kind, source, ...flags, ...(agreement ? { agreement } : {}) };
+        const markup: Markup = {
+          id: nextId('mcp'),
+          page,
+          type: 'count',
+          label: label ?? itemLabel(attrs),
+          points: [{ x: at[0], y: at[1] }],
+          createdAt: Date.now(),
+          status: 'check',
+          item: attrs,
+        };
+        return markup;
+      });
+      d.markups.push(...created);
+      const result = countItems(d.markups.filter((m) => m.page === page), presetDef);
+      return text({
+        added: created.length,
+        removed,
+        page,
+        preset,
+        counts: result.counts,
+        unconfirmed: result.unconfirmed,
+        markupIds: created.map((m) => m.id),
+      });
+    },
+  );
+
+  server.registerTool(
+    'count_items',
+    {
+      description: `Count doors, Windows, spaces, bedrooms and toilets from the item markups (proposed and confirmed) under a counting preset. Switching preset recounts the same items with no new detection; every excluded, merged or grouped item comes back with its reason when include_decisions is true. Presets: ${COUNT_PRESETS.map((p) => `${p.id} (${p.description})`).join('; ')}`,
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).optional().describe('omit for every page'),
+        preset: z.string().default('aecv'),
+        include_decisions: z.boolean().default(false),
+      },
+    },
+    async ({ id, page, preset, include_decisions }) => {
+      const d = getDoc(id);
+      const presetDef = presetById(preset);
+      if (!presetDef) throw new Error(`unknown counting preset "${preset}" — available: ${COUNT_PRESETS.map((p) => p.id).join(', ')}`);
+      const pageMarkups = page === undefined ? d.markups : d.markups.filter((m) => m.page === page);
+      const result = countItems(pageMarkups, presetDef);
+      const items = pageMarkups.filter((m) => m.type === 'count' && m.item).length;
+      // items that add nothing to any field: excluded, merged away or grouped away
+      const contributing = new Set(result.decisions.filter((dec) => dec.counted > 0).map((dec) => dec.id));
+      return text({
+        preset,
+        page: page ?? 'all',
+        counts: result.counts,
+        unconfirmed: result.unconfirmed,
+        items,
+        excluded: items - contributing.size,
+        ...(include_decisions ? { decisions: result.decisions } : {}),
+        provenance: { method: `deterministic count of item markups under preset ${preset}` },
       });
     },
   );

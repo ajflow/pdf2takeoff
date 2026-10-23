@@ -5,6 +5,33 @@ export type Pt = { x: number; y: number };
 
 export type MarkupType = 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note';
 
+export type ItemKind = 'Door' | 'Window' | 'Space';
+export type DoorType = 'swing' | 'double_swing' | 'sliding' | 'pocket' | 'bifold' | 'garage' | 'french_glazed' | 'other';
+export type GlazingType = 'unit' | 'sliding_glass_door' | 'french_door' | 'glazed_opening' | 'other';
+export type SpaceKind = 'room' | 'open_plan_zone' | 'hallway' | 'closet' | 'storage_utility' | 'wet' | 'stair' | 'outdoor' | 'garage' | 'other';
+export type WetKind = 'none' | 'wc' | 'bathroom' | 'shower' | 'sauna' | 'washroom' | 'lavatory';
+export type ItemSource = 'model' | 'vector' | 'cv' | 'ocr' | 'user';
+
+export interface ItemAttrs {
+  kind: ItemKind;
+  source: ItemSource;
+  /** Door: construction type, leaf count (double = 2) and whether it serves a closet or wardrobe. */
+  doorType?: DoorType;
+  leaves?: number;
+  closet?: boolean;
+  /** Window: glazing type; units sharing a group id on the same page form one Window group. */
+  glazingType?: GlazingType;
+  group?: string;
+  /** Space: kind, printed room name, whether walls enclose it, bedroom by its label, wet-room type. */
+  spaceKind?: SpaceKind;
+  roomLabel?: string;
+  enclosed?: boolean;
+  bedroom?: boolean;
+  wetKind?: WetKind;
+  /** Self-consistency: how many independent runs proposed this item, out of how many. */
+  agreement?: { runs: number; of: number };
+}
+
 export interface Markup {
   id: string;
   page: number; // 1-based
@@ -18,6 +45,8 @@ export interface Markup {
   status?: 'check' | 'confirmed';
   /** Layer name; absent = the default layer. */
   layer?: string;
+  /** Count markups only: set when this markup is a proposed or confirmed door, Window or space (see inventory.ts). */
+  item?: ItemAttrs;
 }
 
 export interface Calibration {

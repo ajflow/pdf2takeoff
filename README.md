@@ -121,14 +121,20 @@ writes the binarised OCR crops to a folder for debugging.
 
 ## Agent API (MCP)
 
-`pdf2takeoff mcp` starts a local MCP server on stdio with thirteen tools —
+`pdf2takeoff mcp` starts a local MCP server on stdio with fifteen tools —
 `open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
 `read_text` (the sanctioned way to read printed scales/dimensions/labels —
 exact, positioned, never off the rendered image), `set_scale`, `measure`,
-`fill_area`, `scan_symbol`, `compare_revisions`, `list_markups`,
-`set_status`, `delete_markup`, `export`, `save_annotated` — so an AI agent
-can run a whole takeoff and hand the marked-up PDF to a human for review.
-Local process, local files, nothing uploaded.
+`fill_area`, `scan_symbol`, `propose_items`, `count_items`,
+`compare_revisions`, `list_markups`, `set_status`, `delete_markup`,
+`export`, `save_annotated` — so an AI agent can run a whole takeoff and hand
+the marked-up PDF to a human for review. Local process, local files, nothing
+uploaded.
+
+Proposed doors, Windows and spaces land as flagged count markups a human can
+confirm or delete, and `count_items` derives every quantity from those items
+under a counting preset (`aecv`, `schedule`) — switching the counting
+convention recounts instantly, with no new detection pass.
 
 Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 

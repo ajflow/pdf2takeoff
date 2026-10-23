@@ -83,8 +83,9 @@ Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`pu
 ## Headless CLI (agents & scripts)
 
 The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, and
-no network calls except one: the first `ocr` run on a scan downloads a ~3 MB
-language pack (cached; see `PDF2TAKEOFF_TESSDATA` below):
+no network calls except two: the first `ocr` run on a scan downloads a ~3 MB
+language pack (cached; see `PDF2TAKEOFF_TESSDATA` below), and `ai-count`
+sends the page you choose to the AI provider you choose:
 
 ```bash
 npm run cli -- info drawing.pdf                      # pages, sizes, annotation counts
@@ -98,6 +99,32 @@ npm run cli -- run takeoff.yaml --prev run-a.json   # regenerate + diff quantiti
 npm run cli -- set tender/ -o current-issue.pdf     # slip-sheet: newest per sheet, sorted
 npm run cli -- ocr scan.pdf --page 1 [--region x,y,w,h]  # scanned sheet: OCR words, scale note, room labels by class
 ```
+
+### AI count (bring your own model)
+
+One command asks a vision model to inventory a sheet:
+
+```bash
+export OPENROUTER_API_KEY=...   # or set it in your shell profile
+npm run cli -- ai-count drawing.pdf --model google/gemini-3.5-flash
+```
+
+An [OpenRouter](https://openrouter.ai) key gets you any vision model with one
+account; OpenAI, Google Gemini and Z.ai keys work directly (`--provider
+openai|gemini|zai`). Prefer nothing to leave the machine? `--provider ollama`
+or `lmstudio` talks to a local server, and any other OpenAI-compatible
+endpoint works through `--base-url`. Keys come from environment variables
+only (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
+`ZAI_API_KEY`, or `PDF2TAKEOFF_AI_KEY` for any provider) — never command
+lines or files.
+
+What comes back is the model's proposals as flagged count markups (the same
+review flow as scan proposals) plus quantities counted under a preset
+(`--preset aecv` or `schedule`): switching the preset recounts instantly,
+with no new model call. `--items` lists every proposal as JSON; `-o
+marked.pdf` writes them into the PDF, types included, so a human can confirm
+or delete each one and a later run replaces only the unconfirmed ones. Accuracy depends entirely on the model you point it at — review the
+flags before trusting a number.
 
 `run` is takeoff-as-code: the spec names the scale, one click-point per
 symbol type (a `class:` field is reserved for when the ONNX detector runs

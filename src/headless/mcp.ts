@@ -15,10 +15,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { createCanvas } from '@napi-rs/canvas';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor } from './ops.ts';
+import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor } from './ops.ts';
 import { terminateOcr } from './ocr-node.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
@@ -27,12 +26,12 @@ import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { METERS_PER_PT, toMeters, metersPerPtForRatio } from '../engine/units.ts';
 import { findScaleRatio } from '../engine/ocr.ts';
 import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dynamicfill.ts';
-import { countItems, COUNT_PRESETS, itemLabel, presetById } from '../engine/inventory.ts';
+import { countItems, COUNT_PRESETS, presetById, proposalMarkups } from '../engine/inventory.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import type { Calibration, ItemAttrs, Markup } from '../engine/types.ts';
+import type { Calibration, Markup } from '../engine/types.ts';
 
 interface OpenDoc {
   id: string;
@@ -161,14 +160,8 @@ export async function runMcpServer(): Promise<void> {
     async ({ id, page, scale }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
-      const raster = await renderRasterNode(d.doc, page, scale);
+      const { png, widthPx, heightPx } = await renderPagePng(d.doc, page, scale);
       const vp = (await d.doc.getPage(page)).getViewport({ scale: 1 });
-      const cnv = createCanvas(raster.width, raster.height);
-      const ctx = cnv.getContext('2d');
-      const img = ctx.createImageData(raster.width, raster.height);
-      img.data.set(raster.data);
-      ctx.putImageData(img, 0, 0);
-      const png = cnv.toBuffer('image/png');
       return {
         content: [
           { type: 'image' as const, data: png.toString('base64'), mimeType: 'image/png' },
@@ -176,8 +169,8 @@ export async function runMcpServer(): Promise<void> {
             type: 'text' as const,
             text: JSON.stringify({
               page,
-              widthPx: raster.width,
-              heightPx: raster.height,
+              widthPx,
+              heightPx,
               widthPt: Math.round(vp.width),
               heightPt: Math.round(vp.height),
               scale,
@@ -601,21 +594,7 @@ export async function runMcpServer(): Promise<void> {
         d.markups = d.markups.filter((m) => !(m.page === page && m.item && m.status === 'check'));
         removed = before - d.markups.length;
       }
-      const created: Markup[] = items.map((it) => {
-        const { kind, at, label, agreement, ...flags } = it;
-        const attrs: ItemAttrs = { kind, source, ...flags, ...(agreement ? { agreement } : {}) };
-        const markup: Markup = {
-          id: nextId('mcp'),
-          page,
-          type: 'count',
-          label: label ?? itemLabel(attrs),
-          points: [{ x: at[0], y: at[1] }],
-          createdAt: Date.now(),
-          status: 'check',
-          item: attrs,
-        };
-        return markup;
-      });
+      const created: Markup[] = proposalMarkups(items, page, source, () => nextId('mcp'));
       d.markups.push(...created);
       const result = countItems(d.markups.filter((m) => m.page === page), presetDef);
       return text({

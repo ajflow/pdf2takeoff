@@ -35,6 +35,18 @@ export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
   return markups;
 }
 
+/** One page as a PNG buffer — the render_page MCP tool and ai-count share
+ *  this path, so an agent and the CLI see exactly the same sheet image. */
+export async function renderPagePng(doc: PDFDocumentProxy, page: number, scale: number): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
+  const raster = await renderRasterNode(doc, page, scale);
+  const cnv = createCanvas(raster.width, raster.height);
+  const ctx = cnv.getContext('2d');
+  const img = ctx.createImageData(raster.width, raster.height);
+  img.data.set(raster.data);
+  ctx.putImageData(img, 0, 0);
+  return { png: cnv.toBuffer('image/png'), widthPx: raster.width, heightPx: raster.height };
+}
+
 /** The page's vector geometry from its drawing operators. */
 export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
   // hidden CAD layers are skipped, as the renderer skips them

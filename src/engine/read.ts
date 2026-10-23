@@ -5,6 +5,7 @@
 
 import type { Markup } from './types.ts';
 import { ANNOTATION_AUTHOR } from './annotate.ts';
+import { parseItemTag } from './inventory.ts';
 import { toMeters, type Unit } from './units.ts';
 
 /** A renderer's annotation object, accessed structurally. */
@@ -70,9 +71,13 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
     const contentsRaw = strOf(a.contentsObj) ?? (typeof a.contents === 'string' ? a.contents : '');
     const layerMatch = contentsRaw.match(/\[layer:([^\]]+)\]\s*$/);
     const statusMatch = contentsRaw.match(/\[(check|confirmed)\](?:\s*\[layer:[^\]]+\])?\s*$/);
-    const contents = (statusMatch || layerMatch)
+    const tagged = (statusMatch || layerMatch)
       ? contentsRaw.slice(0, (statusMatch ?? layerMatch)!.index!).trimEnd()
       : contentsRaw;
+    // inventory item attributes (inventory.ts) sit just before the status and layer tags
+    const itemMatch = tagged.match(/\s*\[item:([^\]]*)\]$/);
+    const item = itemMatch ? parseItemTag(itemMatch[1]) : undefined;
+    const contents = itemMatch ? tagged.slice(0, itemMatch.index).trimEnd() : tagged;
 
     const toPt = (x: number, y: number): { x: number; y: number } => ({ x, y });
     let points: { x: number; y: number }[] = [];
@@ -150,6 +155,7 @@ export function parseMarkups(annots: AnnotationLike[], page: number, startIndex:
       ...(depth !== undefined ? { depth } : {}),
       ...(statusMatch ? { status: statusMatch[1] as 'check' | 'confirmed' } : {}),
       ...(layerMatch ? { layer: layerMatch[1] } : {}),
+      ...(item && type === 'count' ? { item } : {}),
     });
   }
   return found;

@@ -143,6 +143,8 @@ export class DitherLayer {
   private observer: IntersectionObserver;
 
   private lastDraw = 0;
+  private best = new Float32Array(0);
+  private pick = new Uint8Array(0);
   /** `canvas`: draw into an existing canvas (placed by the page) instead of appending one; `fps` caps ambient layers. */
   constructor(
     readonly host: HTMLElement,
@@ -222,8 +224,13 @@ export class DitherLayer {
     const step = this.cell; // CSS px per cell
     const cols = Math.ceil(w / step);
     const rows = Math.ceil(h / step);
-    const best = new Float32Array(cols * rows);
-    const pick = new Uint8Array(cols * rows);
+    // reused between frames (a new pair every frame churns the collector)
+    if (this.best.length !== cols * rows) {
+      this.best = new Float32Array(cols * rows);
+      this.pick = new Uint8Array(cols * rows);
+    } else this.best.fill(0);
+    const best = this.best;
+    const pick = this.pick;
     const colours: string[] = [];
     let ux0 = cols;
     let uy0 = rows;

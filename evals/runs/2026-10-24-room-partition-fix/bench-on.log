@@ -1,0 +1,23 @@
+sheet_02: sha256 7b09ac1712bea416…, fill raster 2525×1644 at 3 px/pt, manifest 2339×1523 at 2.7783 px/pt
+arm on: 23 rooms (0 partition children) from 442 seeds in 393 s; {"seeds":442,"covered":51,"errors":{"that region is not bounded by lines on all sides":354,"you clicked on a line":10},"candidates":23,"duplicates":0,"small":4,"partitioned":0,"unresolved":2,"parentsReplaced":0}
+{
+  "sheet": "sheet_02",
+  "submitted_rings": 23,
+  "valid_rings_as_submitted": 23,
+  "scored_area_instances": 23,
+  "gt_area_instances": 22,
+  "area_instance": {
+    "tp": 9,
+    "fp": 14,
+    "fn": 13,
+    "precision": 0.391304347826087,
+    "recall": 0.4090909090909091,
+    "f1": 0.4
+  },
+  "area_pixel": {
+    "precision": 0.8770030750159132,
+    "recall": 0.9464283210936233,
+    "f1": 0.9103940511852358
+  }
+}
+

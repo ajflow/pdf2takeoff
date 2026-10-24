@@ -1,0 +1,19 @@
+{
+ "split": "test",
+ "plans": 1000,
+ "predicted": 1000,
+ "bridgeGapPx": 24,
+ "roomsMode": "spaces",
+ "seconds": 315.154,
+ "totals": {
+  "zeroWall": 0,
+  "walls": 21207,
+  "rooms": 3640,
+  "doors": 382,
+  "windows": 427,
+  "gtWalls": 31022,
+  "gtRooms": 5618,
+  "gtOpenings": 14445
+ },
+ "failures": []
+}

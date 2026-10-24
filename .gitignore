@@ -13,6 +13,10 @@ training/synthetic/
 bench/scaled-drawing-bench/v*/
 bench/scaled-drawing-bench/.cache/
 
+# ResPlan-FP benchmark: fpvec-lab clone, HF data download and venv (see
+# bench/resplan-fp/README.md); data is CC BY 4.0 and never committed
+bench/resplan-fp/.cache/
+
 # trained detector artifacts — drop into public/models/ to ship (see its README)
 # model binaries live on the model-v1 branch (raw.githubusercontent, CORS-enabled)
 # public/models/symbols.json IS committed (manifest)

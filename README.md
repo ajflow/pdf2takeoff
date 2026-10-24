@@ -1,41 +1,73 @@
-# pdf2takeoff
+# pdf2takeoff: free, open-source construction takeoff software
 
-**PDF in, quantities out: free and open source.**
+**PDF in, quantities out.**
 
-pdf2takeoff turns construction PDF drawings into measured quantities. Calibrate the scale from any printed dimension, measure lengths, areas and counts, export the markups list to CSV for Excel, and save the markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat.
+pdf2takeoff is free, open-source (Apache-2.0) construction takeoff software that measures and counts PDF drawings, scans and DXF files in your browser at [pdf2takeoff.com](https://pdf2takeoff.com), without uploading them, plus a headless Node CLI and an MCP server for AI agents built on the same engine.
 
-Everything runs in your browser. **Drawings are never uploaded**; rendering and measurement happen on your machine, so it's safe for confidential tender documents and keeps working offline once the page is loaded.
+**Try it**
 
-- Price: free, no account, no file limits, no paid tier
-- Licence: Apache-2.0 — to our knowledge the **only permissively licensed takeoff engine** in a field of AGPL competitors, so you can embed and bundle it
-- Privacy: 100% client-side, zero telemetry
+- **In the browser**: open [pdf2takeoff.com](https://pdf2takeoff.com). No account, no install; open a drawing or try the sample sheet.
+- **From the command line** (Node 22.13+, runs straight from GitHub): `npx github:ajflow/pdf2takeoff info drawing.pdf`
+- **As an MCP server for AI agents** (Claude Code): `claude mcp add pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp`
 
-## Benchmarks & evals — the numbers, the method, the failures
+## What is pdf2takeoff?
+
+pdf2takeoff is quantity takeoff software for estimators, quantity surveyors, builders and trades. Open a drawing, set its scale, and measure lengths, areas, perimeters, volumes, angles and counts. Totals group by label and export to CSV or Excel. Markups save back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat, so a takeoff moves between pdf2takeoff and the tools a team already uses.
+
+It is free: no account, no file limits and no paid tier. Processing is local: drawings are never uploaded, there is no telemetry, and the app keeps working offline once the page has loaded, so it suits confidential tender documents. It is made by [Flowtivity](https://flowtivity.ai) on the Gold Coast, Australia.
+
+## Key features
+
+- **Opens the files you're sent**: PDFs, including scanned PDFs (CCITT fax, JBIG2 and JPEG 2000 images); PNG, JPEG, TIFF (multi-page, Group 4 scans included), WebP, GIF, BMP, AVIF and SVG images; pasted screenshots; and several files at once as one set.
+- **CAD drawings (DXF)**: an ASCII DXF opens as a vector page with its scale already set from the file's units, and Scan counts its blocks exactly. For DWG, export a DXF or PDF first.
+- **Scale you can check**: pick a preset, click a known dimension, or let OCR read the title-block scale or a printed dimension off the sheet. A scale chip shows whether the current scale can be trusted.
+- **Measure**: length, area, perimeter, volume, angle and count. Dynamic Fill reads a room's area off the walls with one click inside it.
+- **Scan (auto-count symbols)**: click one symbol and every match on the page is counted in about 100 ms by local computer vision, with an optional in-browser ONNX detector for cluttered sheets. Results arrive review-first (Keep all, Review, Undo), and doubtful hits stay flagged for a person to check.
+- **Bluebeam and Acrobat round-trip**: save markups into the PDF as standard annotations; reopen the file and the takeoff comes back.
+- **Export and organise**: CSV, Excel (.xlsx) and a printable quantity report; custom formula columns (waste factors, rates), statuses and layers.
+- **Revision compare**: overlay two revisions of a sheet to see what was added and what was removed.
+- **A focused workspace**: light and dark themes, a ⌘K command bar, a quantities panel with live totals, and live sessions that share a takeoff between browser tabs.
+- **For AI agents and scripts**: a headless Node CLI and an MCP server with 15 tools, so Claude, Cursor, Codex and other MCP clients can run a takeoff locally and hand back a marked-up PDF for a person to review. Optional AI counting from the CLI uses your own model key (OpenRouter, OpenAI, Gemini or a local model) and sends only the page you choose to the provider you choose; every AI item arrives flagged for confirmation.
+
+## Is it an alternative to Bluebeam Revu or PlanSwift?
+
+For PDF takeoff, yes: pdf2takeoff is a free, open-source alternative to paid takeoff tools such as Bluebeam Revu, PlanSwift and On-Screen Takeoff. It does not match every feature of those products. The feature-by-feature position against Bluebeam Revu, including what we deliberately won't build, is in [docs/feature-comparison.md](docs/feature-comparison.md).
+
+The licence is Apache-2.0. To our knowledge pdf2takeoff is the only permissively licensed takeoff engine in a field of AGPL competitors, so you can embed and bundle it.
+
+## How accurate is it? Benchmarks and evals
 
 We publish what the engine scores, how every number was produced, and what
-it is still bad at — including a benchmark we built and gave away (CC BY 4.0,
+it is still bad at, including a benchmark we built and gave away (CC BY 4.0,
 usable by anyone, including to beat us):
 
 - **ScaledDrawingBench v0.1** (ours, deterministic, seeded): **99.8%** on
-  born-digital sheets, **37.3%** on degraded scans (up from 23.0% — the
-  improvement log is part of the disclosure), **0 hallucinations** on 92
-  unanswerable-by-design questions
+  born-digital (CAD-exported) sheets, **37.3%** on degraded scans (up from
+  23.0%; the improvement log is part of the disclosure), **0 hallucinations**
+  on 92 unanswerable-by-design questions
+  ([benchmark](bench/scaled-drawing-bench/README.md))
 - **AECV-Bench** (external, public): 0.295 five-field exact match with a
   deterministic engine and **no vision model**; bedroom/toilet counts at
   0.708/0.500 from a label dictionary + OCR alone. With the opt-in AI count
   on GPT-6.1 Sol: **0.585**, against 0.572 for the same model on the
   benchmark's own prompt and 0.543 for the best published model, so most of
   that gain is the model ([details](docs/research/benchmarks/aecv-bench.md))
-- **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519
-  — about 1.8× the best frontier VLM** on the identical sheets (0.18–0.29),
+- **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519,
+  about 1.8× the best frontier VLM** on the identical sheets (0.18 to 0.29),
   area precision 0.943, object F1 0.031 at the frontier-VLM range; a
   click-free deterministic engine, no GPU, ~23 s per sheet
-- ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model —
+  ([details](docs/research/benchmarks/aec-geometric-bench.md))
+- **ResPlan-FP** (external, public, 1,000-plan test split): wall F1 **0.635**
+  (tolerance 0.05) from the deterministic engine with no model, no GPU and no
+  clicks. A fine-tuned wall model scores 0.968 and Gemini 3.1 Pro 0.811 on a
+  200-plan subset, so this is a published gap, not a lead
+  ([details](docs/research/benchmarks/resplan-fp.md))
+- ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model:
   in-browser, nothing uploaded
 - A correctness gate on every push: ten behavioural checks + the takeoff
   bench + MCP smoke + PDF round-trip in CI
 
-Everything regenerates from this repo with one command per table — see
+Everything regenerates from this repo with one command per table; see
 [evals/README.md](evals/README.md).
 
 > Phase plan: the [Roadmap](#roadmap) below. Feature-by-feature position against Bluebeam Revu, and what we deliberately won't build: [docs/feature-comparison.md](docs/feature-comparison.md). Hosting cost model: [docs/hosting-cost-controls.md](docs/hosting-cost-controls.md). Licensing rationale: [Why open source?](#why-open-source).
@@ -179,7 +211,7 @@ under a counting preset (`aecv`, `schedule`) — switching the counting
 convention recounts instantly, with no new detection pass.
 
 Register it with any MCP client (ZCode, Claude Desktop, Cursor), straight
-from npm:
+from GitHub:
 
 ```json
 {

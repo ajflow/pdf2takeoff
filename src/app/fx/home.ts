@@ -1,22 +1,424 @@
-// The homepage's moments of wonder, drawn with the shared dither layer:
-// the living point on the hero's Flow Line, the drop zone that answers a
-// dragged file, the floor-plan vignette playing a takeoff as it scrolls in,
-// the How it works steps lighting in turn, and a drifting wave at the close.
-// Purely decorative (canvases are aria-hidden, every word stays in the HTML);
-// loaded after the page is idle; nothing runs under prefers-reduced-motion.
+// The homepage's moments of wonder, drawn with the shared dither layer, one
+// print-and-dither language from top to bottom: Flowtivity ribbons drifting
+// behind the hero with ripples where the pointer moves; the living point on
+// the hero's Flow Line; the drop zone that answers a dragged file; halftone
+// seams wherever the page changes colour; a dithered scroll line under the
+// header; the floor-plan vignette playing a takeoff; the steps and the AI
+// flow lighting in turn (amber where a person decides); icons assembling,
+// cards answering the pointer, code printing, benchmark bars filling to their
+// real numbers, FAQ rows sweeping open, buttons shimmering; and a wave at
+// the close. Purely decorative (canvases are aria-hidden, every word stays in
+// the HTML); loaded after the page is idle; layers run only on screen and
+// sleep when quiet; nothing runs under prefers-reduced-motion.
 
-import { DitherLayer, breath, pointBounds, ease, band, token, reducedMotion, type LivingPoint, type Box } from './dither';
+import { DitherLayer, chromeMoment, breath, pointBounds, ease, band, token, reducedMotion, type LivingPoint, type Box } from './dither';
+
+const MINT = '#71e7de';
+const TEAL = '#139c94';
+const DEEP = '#0b5d61';
+const AMBER = '#f5c18a';
+const AMBER_INK = '#9a5218';
+const RIBBON = '#09837e';
+
+/** Run once when the element is mostly on screen. */
+function onView(el: Element, fn: () => void, threshold = 0.4): void {
+  const io = new IntersectionObserver(
+    ([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      fn();
+    },
+    { threshold },
+  );
+  io.observe(el);
+}
+
+/** A canvas layer placed as the first child of `host`, behind its content. */
+function behind(host: HTMLElement, cell: number, fps = 60): DitherLayer {
+  const c = document.createElement('canvas');
+  c.className = 'fx-dither fx-behind';
+  c.setAttribute('aria-hidden', 'true');
+  host.prepend(c);
+  return new DitherLayer(host, cell, c, fps);
+}
+
+/** The living point following the pointer over an element. */
+function cursorPoint(host: HTMLElement, layer: DitherLayer, colour: string, amp = 0.28, radius = 54): void {
+  const p: LivingPoint = { x: 0, y: 0, R: radius, amp: 0, seed: Math.random() * 6, speed: 0.9 };
+  let tx = 0;
+  let ty = 0;
+  let tAmp = 0;
+  layer.set('cursor', {
+    colour,
+    update() {
+      p.x += (tx - p.x) * 0.12;
+      p.y += (ty - p.y) * 0.12;
+      p.amp += (tAmp - p.amp) * 0.07;
+    },
+    bounds: () => pointBounds(p),
+    field: (x, y, now) => breath(x, y, p, now),
+  });
+  host.addEventListener('pointermove', (e) => {
+    const r = host.getBoundingClientRect();
+    tx = e.clientX - r.left;
+    ty = e.clientY - r.top;
+    if (tAmp === 0) [p.x, p.y] = [tx, ty];
+    tAmp = amp;
+    layer.wake();
+  });
+  host.addEventListener('pointerleave', () => {
+    tAmp = 0;
+    layer.wake();
+  });
+}
 
 let started = false;
 
 export function initHome(): void {
   if (started || reducedMotion()) return;
   started = true;
+  heroRibbons();
+  headline();
   flowLine();
   dropZone();
+  seams();
+  scrollLine();
   vignette();
   steps();
+  aiFlow();
+  features();
+  codePrint();
+  benchBars();
+  faq();
+  buttons();
   closingWave();
+}
+
+// --- hero: Flowtivity ribbons behind, ripples where the pointer moves ---------
+
+function heroRibbons(): void {
+  const hero = document.getElementById('dropzone');
+  if (!hero) return;
+  const layer = behind(hero, 4, 30);
+  const W = () => hero.clientWidth;
+  const H = () => hero.clientHeight;
+  // ribbons rise from bottom left to top right; the headline's corner stays clear
+  const smooth = (a: number) => (a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a));
+  // and they fade out above the proof strip's words at the foot of the hero
+  const proof = hero.querySelector<HTMLElement>('.proof');
+  let proofTop = Infinity;
+  const measure = () => {
+    proofTop = proof ? proof.getBoundingClientRect().top - hero.getBoundingClientRect().top : Infinity;
+  };
+  measure();
+  addEventListener('resize', measure);
+  // on a phone the text runs the full width: the ribbons keep to the band under it
+  const clear = (x: number, y: number) => {
+    const foot = 1 - smooth((y - (proofTop - 40)) / 36);
+    if (foot <= 0) return 0;
+    const below = smooth((y / H() - 0.74) / 0.2);
+    return foot * (W() < 700 ? below : Math.max(smooth((x / W() - 0.36) / 0.34), below));
+  };
+  const ribbon = (i: number, colour: string, amp: number, thick: number, speed: number, lift: number) =>
+    layer.set(`ribbon${i}`, {
+      colour,
+      field(x, y, now) {
+        const m = clear(x, y);
+        if (m <= 0) return 0;
+        const w = W();
+        const h = H();
+        const t = now * 0.0001 * speed;
+        const mid = h * (0.98 - lift - 0.62 * (x / w)) + h * 0.05 * Math.sin(x / (w * 0.28) + t * 6 + i) + h * 0.015 * Math.sin(x / (w * 0.12) - t * 9 + i * 2);
+        const th = h * thick * (0.8 + 0.2 * Math.sin(x / (w * 0.37) - t * 4 + i * 3));
+        return amp * m * band(y, mid, th);
+      },
+    });
+  ribbon(0, DEEP, 0.62, 0.11, 0.7, 0);
+  ribbon(1, TEAL, 0.5, 0.07, 1, 0.06);
+  ribbon(2, MINT, 0.34, 0.035, 1.3, 0.11);
+
+  const ripples: { x: number; y: number; t0: number }[] = [];
+  let last = 0;
+  hero.addEventListener('pointermove', (e) => {
+    const now = performance.now();
+    if (now - last < 140) return;
+    last = now;
+    const r = hero.getBoundingClientRect();
+    ripples.push({ x: e.clientX - r.left, y: e.clientY - r.top, t0: now });
+    if (ripples.length > 6) ripples.shift();
+    layer.wake();
+  });
+  layer.set('ripples', {
+    colour: MINT,
+    update(now) {
+      while (ripples.length && now - ripples[0].t0 > 1500) ripples.shift();
+    },
+    bounds(now) {
+      if (!ripples.length) return null;
+      let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const rp of ripples) {
+        const r = (now - rp.t0) * 0.16 + 14;
+        [x0, y0, x1, y1] = [Math.min(x0, rp.x - r), Math.min(y0, rp.y - r), Math.max(x1, rp.x + r), Math.max(y1, rp.y + r)];
+      }
+      return [x0, y0, x1, y1];
+    },
+    field(x, y, now) {
+      let v = 0;
+      for (const rp of ripples) {
+        const a = now - rp.t0;
+        const d = Math.hypot(x - rp.x, y - rp.y);
+        v = Math.max(v, band(d, a * 0.16, 7) * (1 - a / 1500) * 0.55);
+      }
+      return v;
+    },
+  });
+}
+
+/** The headline's accent shimmers once as the page settles. */
+function headline(): void {
+  const accent = document.querySelector<HTMLElement>('#hero-title .accent');
+  if (!accent) return;
+  setTimeout(() => void chromeMoment(accent, 1100, MINT, (x, _y, w, _h, t) => band(x / w, ease(t) * 1.4 - 0.2, 0.09) * 0.8, 3), 900);
+}
+
+// --- halftone seams wherever the page changes colour ------------------------------
+
+function seams(): void {
+  const sections = [document.getElementById('dropzone'), ...document.querySelectorAll<HTMLElement>('#seo > section')].filter(Boolean) as HTMLElement[];
+  const bg = (el: HTMLElement) => getComputedStyle(el).backgroundColor;
+  for (let i = 1; i < sections.length; i++) {
+    const above = bg(sections[i - 1]);
+    const below = bg(sections[i]);
+    if (above === below || above === 'rgba(0, 0, 0, 0)') continue;
+    const seam = document.createElement('div');
+    seam.className = 'fx-seam';
+    seam.setAttribute('aria-hidden', 'true');
+    sections[i].prepend(seam);
+    const layer = new DitherLayer(seam, 4, undefined, 24);
+    const phase = i * 1.7;
+    layer.set('edge', {
+      colour: above,
+      field(x, y, now) {
+        const h = seam.clientHeight;
+        const t = now * 0.0003;
+        // the colour above dissolves into the one below along a slow wave
+        const edge = h * (0.46 + 0.14 * Math.sin(x / 210 + t + phase) + 0.06 * Math.sin(x / 73 - t * 1.6 + phase));
+        return Math.min(1, Math.max(0, 1 - (y - edge) / (h * 0.36)));
+      },
+    });
+  }
+}
+
+// --- a dithered scroll line under the header ----------------------------------------
+
+function scrollLine(): void {
+  const header = document.getElementById('siteHeader');
+  if (!header) return;
+  const line = document.createElement('div');
+  line.className = 'fx-scroll';
+  line.setAttribute('aria-hidden', 'true');
+  header.append(line);
+  const layer = new DitherLayer(line, 2);
+  let progress = 0;
+  layer.set('progress', {
+    colour: MINT,
+    still: true,
+    bounds: () => (progress > 0.002 ? [0, 0, line.clientWidth * progress + 12, line.clientHeight] : null),
+    field(x) {
+      const head = line.clientWidth * progress;
+      if (x > head + 10) return 0;
+      // a halftone trail that thickens towards the head
+      return x > head ? band(x, head, 5) : 0.25 + 0.75 * (x / Math.max(1, head)) ** 2;
+    },
+  });
+  const update = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progress = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
+    layer.wake();
+  };
+  addEventListener('scroll', update, { passive: true });
+  addEventListener('resize', update);
+  update();
+}
+
+// --- AI and accuracy: the point walks the flow, amber where a person decides ---------
+
+function aiFlow(): void {
+  const section = document.getElementById('ai');
+  const list = section?.querySelector<HTMLElement>('.flow-list');
+  const dots = [...(list?.querySelectorAll<HTMLElement>('.dot') ?? [])];
+  if (!section || !list || dots.length < 2) return;
+  const layer = behind(section, 3);
+  cursorPoint(section, layer, MINT, 0.16, 60);
+  const at = (el: HTMLElement): [number, number] => {
+    const s = section.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return [r.left - s.left + r.width / 2, r.top - s.top + r.height / 2];
+  };
+  const figures = [...section.querySelectorAll<HTMLElement>('.figure .num')];
+  onView(list, async () => {
+    figures.forEach((f, i) => setTimeout(() => void chromeMoment(f, 900, MINT, (x, _y, w, _h, t) => band(x / w, ease(t) * 1.4 - 0.2, 0.12) * 0.85, 3), 200 + i * 350));
+    for (let i = 0; i < dots.length; i++) {
+      const flagged = i >= dots.length - 2; // "arrives flagged" and "you confirm"
+      const colour = flagged ? AMBER : MINT;
+      const [cx, cy] = at(dots[i]);
+      if (i > 0) {
+        const [px, py] = at(dots[i - 1]);
+        await layer.play(
+          520,
+          colour,
+          (x, y, t) => {
+            const hx = px + (cx - px) * ease(t);
+            const hy = py + (cy - py) * ease(t);
+            return Math.max(Math.exp(-((Math.hypot(x - hx, y - hy) / 9) ** 2)), band(x, cx, 3) * (y > py && y < hy ? 0.45 : 0));
+          },
+          () => [Math.min(px, cx) - 20, Math.min(py, cy) - 20, Math.max(px, cx) + 20, Math.max(py, cy) + 20] as Box,
+        );
+      }
+      dots[i].classList.add('lit');
+      void layer.play(
+        600,
+        colour,
+        (x, y, t) => band(Math.hypot(x - cx, y - cy), 18 + ease(t) * 26, 6) * (1 - t),
+        () => [cx - 60, cy - 60, cx + 60, cy + 60] as Box,
+      );
+    }
+    // the last step is a person's: it keeps breathing in amber
+    const p: LivingPoint = { x: 0, y: 0, R: 26, amp: 0.5, seed: 2.2, speed: 0.7 };
+    layer.set('person', {
+      colour: AMBER,
+      update() {
+        [p.x, p.y] = at(dots[dots.length - 1]);
+      },
+      bounds: () => pointBounds(p),
+      field: (x, y, now) => breath(x, y, p, now),
+    });
+  });
+}
+
+// --- features: icons assemble, cards answer the pointer -------------------------------
+
+function features(): void {
+  const cards = [...document.querySelectorAll<HTMLElement>('#seo .features .feature')];
+  if (!cards.length) return;
+  for (const card of cards) {
+    const layer = behind(card, 3);
+    cursorPoint(card, layer, RIBBON, 0.13, 40);
+  }
+  onView(
+    cards[0].parentElement!,
+    () =>
+      cards.forEach((card, i) => {
+        const icon = card.querySelector<SVGElement>('svg');
+        if (!icon) return;
+        icon.style.opacity = '0';
+        setTimeout(() => {
+          const cr = card.getBoundingClientRect();
+          const ir = icon.getBoundingClientRect();
+          const [ix, iy, iw, ih] = [ir.left - cr.left, ir.top - cr.top, ir.width, ir.height];
+          icon.style.transition = 'opacity .5s ease .25s';
+          icon.style.opacity = '';
+          void chromeMoment(card, 750, RIBBON, (x, y, _w, _h, t) => {
+            if (x < ix - 6 || x > ix + iw + 6 || y < iy - 6 || y > iy + ih + 6) return 0;
+            return 1.05 - ease(t) * 1.2 + 0.2 * Math.sin(x * 0.9 + y * 1.3) * (1 - t);
+          });
+        }, i * 110);
+      }),
+    0.25,
+  );
+}
+
+// --- agents: a print head runs along the code ---------------------------------------------
+
+function codePrint(): void {
+  const blocks = [...document.querySelectorAll<HTMLElement>('#agents .code')];
+  blocks.forEach((b, i) =>
+    onView(b, () => setTimeout(() => void chromeMoment(b, 1200, MINT, (x, y, w, h, t) => {
+      // line by line, like a printer: the head sweeps each 1.7em row in turn
+      const rowH = parseFloat(getComputedStyle(b).lineHeight) || 24;
+      const rows = Math.max(1, Math.round(h / rowH));
+      const row = Math.floor(y / rowH);
+      const local = t * rows - row;
+      if (local < 0 || local > 1) return 0;
+      return band(x / w, ease(local) * 1.2 - 0.1, 0.05) * 0.85;
+    }, 2), i * 300), 0.6),
+  );
+}
+
+// --- benchmarks: halftone bars fill to the real numbers ---------------------------------------
+
+function benchBars(): void {
+  const rows = [...document.querySelectorAll<HTMLTableRowElement>('#benchmarks table.bench tbody tr')];
+  const value = (text: string | undefined): { v: number; pct: boolean } | null => {
+    const m = /(\d+(?:\.\d+)?)\s*(%)?/.exec(text ?? '');
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    return m[2] ? { v: n / 100, pct: true } : n <= 1 ? { v: n, pct: false } : null;
+  };
+  for (const row of rows) {
+    const ours = value(row.cells[2]?.querySelector('b')?.textContent ?? undefined);
+    if (!ours) continue;
+    const theirs = value(row.cells[3]?.querySelector('b')?.textContent ?? undefined);
+    const compare = theirs && theirs.pct === ours.pct ? theirs.v : null;
+    const bar = document.createElement('span');
+    bar.className = 'fx-bar';
+    bar.setAttribute('aria-hidden', 'true');
+    row.cells[2].querySelector('b')!.after(bar);
+    const layer = new DitherLayer(bar, 2);
+    let fill = 0;
+    layer.set('track', {
+      colour: RIBBON,
+      still: true,
+      field(x) {
+        const w = bar.clientWidth;
+        const head = w * ours.v * fill;
+        if (x <= head) return x > head - 5 ? 1 : 0.62; // a solid head on a halftone body
+        return 0.07;
+      },
+    });
+    if (compare !== null) {
+      layer.set('compare', {
+        colour: AMBER_INK,
+        still: true,
+        bounds: () => [bar.clientWidth * compare - 2, 0, bar.clientWidth * compare + 2, bar.clientHeight],
+        field: (x) => (Math.abs(x - bar.clientWidth * compare) <= 1.5 ? 1 : 0),
+      });
+    }
+    onView(row, () => {
+      const t0 = performance.now();
+      const grow = (now: number) => {
+        fill = ease(Math.min(1, (now - t0) / 1100));
+        layer.wake();
+        if (fill < 1) requestAnimationFrame(grow);
+      };
+      requestAnimationFrame(grow);
+    }, 0.6);
+  }
+}
+
+// --- FAQ: a row sweeps as it opens ------------------------------------------------------------------
+
+function faq(): void {
+  for (const d of document.querySelectorAll<HTMLDetailsElement>('#faq details')) {
+    d.addEventListener('toggle', () => {
+      const summary = d.querySelector<HTMLElement>('summary');
+      if (d.open && summary) void chromeMoment(summary, 620, RIBBON, (x, _y, w, _h, t) => band(x / w, ease(t) * 1.3 - 0.15, 0.08) * 0.7, 2);
+    });
+  }
+}
+
+// --- buttons shimmer when the pointer arrives ---------------------------------------------------------
+
+function buttons(): void {
+  const busy = new WeakSet<HTMLElement>();
+  for (const b of document.querySelectorAll<HTMLElement>('body.landing .btn-primary, body.landing .btn-outline')) {
+    b.addEventListener('pointerenter', () => {
+      if (busy.has(b)) return;
+      busy.add(b);
+      const colour = b.classList.contains('btn-primary') ? '#0a192f' : MINT;
+      void chromeMoment(b, 560, colour, (x, _y, w, _h, t) => band(x / w, ease(t) * 1.4 - 0.2, 0.07) * 0.55, 2).then(() => setTimeout(() => busy.delete(b), 400));
+    });
+  }
 }
 
 /** Map an SVG's viewBox units to its host's CSS pixels (the SVG scales uniformly). */
@@ -475,7 +877,8 @@ function steps(): void {
 function closingWave(): void {
   const section = document.querySelector<HTMLElement>('#seo .closing');
   if (!section) return;
-  const layer = new DitherLayer(section, 4);
+  const layer = new DitherLayer(section, 4, undefined, 30);
+  cursorPoint(section, layer, MINT, 0.24, 64);
   const mint = token('--fs-mint');
   layer.set('wave', {
     colour: mint,

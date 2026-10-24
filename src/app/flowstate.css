@@ -365,6 +365,14 @@ body.landing #workspace {
   background: transparent;
 }
 
+/* the hero sizes to its content: the app's phone rule caps #workspace at
+   64dvh, which on the landing page let the next section slide under the
+   hero (hiding the drop card's foot, the proof strip and the Flow Line) */
+body.landing #workspace {
+  height: auto;
+  flex: none;
+}
+
 body.landing #scrollContainer,
 body.landing .topbar,
 body.landing .rail,
@@ -1396,8 +1404,8 @@ body.landing #seo section.closing {
 }
 
 /* behind the words in the drop zone and the closing section */
-.drop-zone > :not(.fx-dither),
-.closing > :not(.fx-dither) {
+.drop-zone > :not(.fx-dither, .fx-seam, .fx-moment),
+.closing > :not(.fx-dither, .fx-seam, .fx-moment) {
   position: relative;
   z-index: 1;
 }
@@ -1408,6 +1416,79 @@ body.landing #seo section.closing {
 
 .step.lit::before {
   background: var(--fs-ribbon-700);
+}
+
+/* layers behind a block's content: the hero's ribbons, the AI flow, cards */
+.fx-behind {
+  z-index: 0;
+}
+
+body.landing #dropzone,
+body.landing #seo > section,
+#ai,
+.feature {
+  position: relative;
+}
+
+/* (never the effect layers themselves: they stay absolutely placed) */
+body.landing #dropzone > :not(.fx-behind, .fx-seam, .fx-moment),
+#ai > :not(.fx-behind, .fx-seam, .fx-moment),
+.feature > :not(.fx-behind, .fx-seam, .fx-moment) {
+  position: relative;
+  z-index: 1;
+}
+
+/* halftone seams where the page changes colour */
+.fx-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -20px;
+  height: 40px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* the dithered scroll line along the header's bottom edge */
+.fx-scroll {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 3px;
+  pointer-events: none;
+}
+
+/* the AI flow's steps light as the point reaches them */
+.flow-list .dot {
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.flow-list .dot.lit {
+  background: rgb(var(--fs-mint-rgb) / 0.14);
+}
+
+.flow-list .dot.person.lit {
+  background: rgb(var(--fs-human-light-rgb) / 0.16);
+}
+
+/* benchmark bars: a halftone fill to the real number */
+.fx-bar {
+  position: relative;
+  display: block;
+  width: min(180px, 100%);
+  height: 8px;
+  margin: 6px 0 4px;
+}
+
+#hero-title .accent {
+  display: inline-block;
+}
+
+body.landing :is(.btn-primary, .btn-outline) {
+  overflow: hidden;
 }
 
 /* no animation is required: honour the reduced-motion preference */

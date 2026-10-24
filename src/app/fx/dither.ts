@@ -27,6 +27,8 @@ export type Box = [number, number, number, number];
 
 export interface Paint {
   colour: string;
+  /** Time-independent: drawn once, then the layer sleeps until wake() (a scroll, a resize). */
+  still?: boolean;
   /** Once per frame, before any cell is evaluated (easing, following the pointer). */
   update?(now: number): void;
   /** Where the paint can be non-zero this frame; null draws nothing. Omitted: the whole layer. */
@@ -140,11 +142,13 @@ export class DitherLayer {
   private raf = 0;
   private observer: IntersectionObserver;
 
-  /** `canvas`: draw into an existing canvas (placed by the page) instead of appending one. */
+  private lastDraw = 0;
+  /** `canvas`: draw into an existing canvas (placed by the page) instead of appending one; `fps` caps ambient layers. */
   constructor(
     readonly host: HTMLElement,
     private cell = 3,
     canvas?: HTMLCanvasElement,
+    private fps = 60,
   ) {
     if (canvas) this.canvas = canvas;
     else {
@@ -200,6 +204,12 @@ export class DitherLayer {
 
   private frame = (now: number): void => {
     this.raf = 0;
+    // ambient layers skip frames to stay cheap (moments always run at full rate)
+    if (this.fps < 60 && !this.moments.size && now - this.lastDraw < 1000 / this.fps - 2) {
+      this.raf = requestAnimationFrame(this.frame);
+      return;
+    }
+    this.lastDraw = now;
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -246,10 +256,12 @@ export class DitherLayer {
       uy1 = Math.max(uy1, j1);
     };
 
+    let moving = false;
     for (const p of this.paints.values()) {
       p.update?.(now);
       const box = p.bounds ? p.bounds(now) : undefined;
       if (box === null) continue;
+      if (!p.still) moving = true;
       paint((x, y) => p.field(x, y, now), box, p.colour);
     }
     const ended: Moment[] = [];
@@ -278,7 +290,7 @@ export class DitherLayer {
       this.moments.delete(m);
       m.done?.();
     }
-    // keep going while anything drew or is still playing; quiet paints wait for wake()
-    if (ux1 >= 0 || this.moments.size) this.kick();
+    // keep going while anything moving drew or a moment plays; quiet and still paints wait for wake()
+    if ((ux1 >= 0 && moving) || this.moments.size) this.kick();
   };
 }

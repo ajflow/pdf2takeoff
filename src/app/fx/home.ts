@@ -14,7 +14,6 @@
 import { DitherLayer, chromeMoment, breath, pointBounds, ease, band, token, reducedMotion, type LivingPoint, type Box } from './dither';
 
 const MINT = '#71e7de';
-const TEAL = '#139c94';
 const DEEP = '#0b5d61';
 const AMBER = '#f5c18a';
 const AMBER_INK = '#9a5218';
@@ -95,69 +94,110 @@ export function initHome(): void {
 }
 
 // --- hero: Flowtivity ribbons behind, ripples where the pointer moves ---------
+//
+// Cheap by construction: a ribbon's centre line and thickness depend only on
+// x, so they are computed once per column per frame and each cell costs one
+// lookup and at most one exp. The ribbons drift for the first few seconds and
+// while the pointer is over the hero, then settle into a still frame (no CPU
+// at all) until the pointer comes back.
 
 function heroRibbons(): void {
   const hero = document.getElementById('dropzone');
   if (!hero) return;
-  const layer = behind(hero, 4, 30);
-  const W = () => hero.clientWidth;
-  const H = () => hero.clientHeight;
-  // ribbons rise from bottom left to top right; the headline's corner stays clear
+  const CELL = 5;
+  const layer = behind(hero, CELL, 24);
   const smooth = (a: number) => (a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a));
-  // and they fade out above the proof strip's words at the foot of the hero
   const proof = hero.querySelector<HTMLElement>('.proof');
+  let w = 0;
+  let h = 0;
   let proofTop = Infinity;
-  const measure = () => {
-    proofTop = proof ? proof.getBoundingClientRect().top - hero.getBoundingClientRect().top : Infinity;
+  // a virtual clock that only runs while the ribbons are drifting
+  let clock = 0;
+  let last = 0;
+  let awakeUntil = performance.now() + 6000;
+  const ribbons = [
+    { colour: DEEP, amp: 0.44, thick: 0.1, speed: 0.7, lift: 0, phase: 0 },
+    { colour: MINT, amp: 0.26, thick: 0.04, speed: 1.2, lift: 0.09, phase: 2 },
+  ].map((r) => ({ ...r, mid: new Float32Array(0), th: new Float32Array(0) }));
+  let maskX = new Float32Array(0);
+  let rowMask = new Float32Array(0);
+  const paints: { still: boolean }[] = [];
+
+  const frame = (now: number) => {
+    const moving = now < awakeUntil;
+    if (moving) clock += Math.min(64, now - (last || now));
+    last = now;
+    for (const p of paints) p.still = !moving;
+    const nw = hero.clientWidth;
+    const nh = hero.clientHeight;
+    const cols = Math.ceil(nw / CELL) + 1;
+    const rows = Math.ceil(nh / CELL) + 1;
+    if (nw !== w || nh !== h || maskX.length !== cols) {
+      [w, h] = [nw, nh];
+      proofTop = proof ? proof.getBoundingClientRect().top - hero.getBoundingClientRect().top : Infinity;
+      maskX = new Float32Array(cols);
+      for (let c = 0; c < cols; c++) maskX[c] = w < 700 ? 0 : smooth(((c + 0.5) * CELL / w - 0.36) / 0.34);
+      // per row: under the text on a phone, and never over the proof strip's words
+      rowMask = new Float32Array(rows * 2);
+      for (let r = 0; r < rows; r++) {
+        const y = (r + 0.5) * CELL;
+        rowMask[r * 2] = 1 - smooth((y - (proofTop - 40)) / 36);
+        rowMask[r * 2 + 1] = smooth((y / h - 0.74) / 0.2);
+      }
+      for (const r of ribbons) [r.mid, r.th] = [new Float32Array(cols), new Float32Array(cols)];
+    }
+    const t = clock * 0.0001;
+    for (const r of ribbons) {
+      for (let c = 0; c < cols; c++) {
+        const x = (c + 0.5) * CELL;
+        r.mid[c] = h * (0.98 - r.lift - 0.62 * (x / w)) + h * 0.05 * Math.sin(x / (w * 0.28) + t * 6 * r.speed + r.phase) + h * 0.015 * Math.sin(x / (w * 0.12) - t * 9 * r.speed + r.phase * 2);
+        r.th[c] = h * r.thick * (0.8 + 0.2 * Math.sin(x / (w * 0.37) - t * 4 * r.speed + r.phase * 3));
+      }
+    }
   };
-  measure();
-  addEventListener('resize', measure);
-  // on a phone the text runs the full width: the ribbons keep to the band under it
-  const clear = (x: number, y: number) => {
-    const foot = 1 - smooth((y - (proofTop - 40)) / 36);
-    if (foot <= 0) return 0;
-    const below = smooth((y / H() - 0.74) / 0.2);
-    return foot * (W() < 700 ? below : Math.max(smooth((x / W() - 0.36) / 0.34), below));
-  };
-  const ribbon = (i: number, colour: string, amp: number, thick: number, speed: number, lift: number) =>
-    layer.set(`ribbon${i}`, {
-      colour,
-      field(x, y, now) {
-        const m = clear(x, y);
+  ribbons.forEach((r, i) => {
+    const paint = {
+      colour: r.colour,
+      still: false,
+      update: i === 0 ? frame : undefined,
+      field(x: number, y: number) {
+        const c = (x / CELL) | 0;
+        const row = (y / CELL) | 0;
+        const foot = rowMask[row * 2];
+        if (!(foot > 0)) return 0;
+        const m = foot * Math.max(maskX[c], rowMask[row * 2 + 1]);
         if (m <= 0) return 0;
-        const w = W();
-        const h = H();
-        const t = now * 0.0001 * speed;
-        const mid = h * (0.98 - lift - 0.62 * (x / w)) + h * 0.05 * Math.sin(x / (w * 0.28) + t * 6 + i) + h * 0.015 * Math.sin(x / (w * 0.12) - t * 9 + i * 2);
-        const th = h * thick * (0.8 + 0.2 * Math.sin(x / (w * 0.37) - t * 4 + i * 3));
-        return amp * m * band(y, mid, th);
+        const d = (y - r.mid[c]) / r.th[c];
+        return d > 2.6 || d < -2.6 ? 0 : r.amp * m * Math.exp(-d * d);
       },
-    });
-  ribbon(0, DEEP, 0.62, 0.11, 0.7, 0);
-  ribbon(1, TEAL, 0.5, 0.07, 1, 0.06);
-  ribbon(2, MINT, 0.34, 0.035, 1.3, 0.11);
+    };
+    paints.push(paint);
+    layer.set(`ribbon${i}`, paint);
+  });
 
   const ripples: { x: number; y: number; t0: number }[] = [];
-  let last = 0;
+  let lastRipple = 0;
   hero.addEventListener('pointermove', (e) => {
     const now = performance.now();
-    if (now - last < 140) return;
-    last = now;
-    const r = hero.getBoundingClientRect();
-    ripples.push({ x: e.clientX - r.left, y: e.clientY - r.top, t0: now });
-    if (ripples.length > 6) ripples.shift();
+    awakeUntil = now + 3000; // drift while someone is here
+    if (now - lastRipple > 160) {
+      lastRipple = now;
+      const r = hero.getBoundingClientRect();
+      ripples.push({ x: e.clientX - r.left, y: e.clientY - r.top, t0: now });
+      if (ripples.length > 5) ripples.shift();
+    }
     layer.wake();
   });
   layer.set('ripples', {
     colour: MINT,
     update(now) {
-      while (ripples.length && now - ripples[0].t0 > 1500) ripples.shift();
+      while (ripples.length && now - ripples[0].t0 > 1400) ripples.shift();
     },
     bounds(now) {
       if (!ripples.length) return null;
       let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
       for (const rp of ripples) {
-        const r = (now - rp.t0) * 0.16 + 14;
+        const r = (now - rp.t0) * 0.16 + 12;
         [x0, y0, x1, y1] = [Math.min(x0, rp.x - r), Math.min(y0, rp.y - r), Math.max(x1, rp.x + r), Math.max(y1, rp.y + r)];
       }
       return [x0, y0, x1, y1];
@@ -166,8 +206,9 @@ function heroRibbons(): void {
       let v = 0;
       for (const rp of ripples) {
         const a = now - rp.t0;
-        const d = Math.hypot(x - rp.x, y - rp.y);
-        v = Math.max(v, band(d, a * 0.16, 7) * (1 - a / 1500) * 0.55);
+        const d = Math.hypot(x - rp.x, y - rp.y) - a * 0.16;
+        if (d > 14 || d < -14) continue;
+        v = Math.max(v, Math.exp(-((d / 6) ** 2)) * (1 - a / 1400) * 0.5);
       }
       return v;
     },

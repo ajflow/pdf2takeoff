@@ -22,7 +22,10 @@ usable by anyone, including to beat us):
   unanswerable-by-design questions
 - **AECV-Bench** (external, public): 0.295 five-field exact match with a
   deterministic engine and **no vision model**; bedroom/toilet counts at
-  0.708/0.500 from a label dictionary + OCR alone
+  0.708/0.500 from a label dictionary + OCR alone. With the opt-in AI count
+  on GPT-6.1 Sol: **0.585**, against 0.572 for the same model on the
+  benchmark's own prompt and 0.543 for the best published model, so most of
+  that gain is the model ([details](docs/research/benchmarks/aecv-bench.md))
 - **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519
   — about 1.8× the best frontier VLM** on the identical sheets (0.18–0.29),
   area precision 0.943, object F1 0.031 at the frontier-VLM range; a

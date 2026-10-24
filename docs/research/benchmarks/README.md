@@ -86,6 +86,7 @@ Twelve work packages landed on `enhance/benchmark-sweep` after the survey. Headl
 | Dataset-P&ID sheet 134 | classes counted exactly | 1 of 30 | 11 of 30 |
 | AECV-Bench 120 plans | five-field mean exact match | 0.078 (no OCR) | 0.295 (best VLM 0.543) |
 | AECV-Bench | bedroom / toilet exact match | 0 / 0 | 0.708 / 0.500 |
+| AECV-Bench, opt-in AI count (GPT-6.1 Sol) | five-field mean exact match | 0.572 (same model, benchmark prompt) | 0.585 (best published 0.543) |
 | AEC-Geometric-Bench 15 sheets | wall pixel F1 | — (first run) | 0.519 (frontier VLMs 0.18-0.29; Kamai 0.931) |
 | AEC-Geometric-Bench 15 sheets | area pixel precision / instance F1 | — (first run) | 0.943 / 0.087 |
 | ScaledDrawingBench raster half | overall accuracy | 16.5% | 37.3% |

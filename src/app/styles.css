@@ -133,6 +133,13 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 3px;
+  /* never wider than the bar: the responsive rules below drop the key hints
+     and then the labels, and if it still doesn't fit it scrolls rather than
+     widening the page */
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .btn {
@@ -312,7 +319,7 @@ select.btn {
 /* ---------- sidebar ---------- */
 
 #sidebar {
-  width: 320px;
+  width: clamp(320px, 24vw, 380px);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -398,13 +405,13 @@ table.markup-table th {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   text-align: left;
-  padding: 8px;
+  padding: 8px 5px;
   border-bottom: 1px solid var(--line);
   z-index: 2;
 }
 
 table.markup-table td {
-  padding: 5px 6px;
+  padding: 5px 5px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.07);
   vertical-align: middle;
 }
@@ -417,9 +424,14 @@ table.markup-table tr.selected td {
   background: var(--accent-soft);
 }
 
+/* every column but the label shrinks to its content; the label takes the rest */
+table.markup-table td:not(.cell-label):not(.empty) {
+  width: 1%;
+  white-space: nowrap;
+}
 td.cell-label input {
   width: 100%;
-  min-width: 60px;
+  min-width: 48px;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text);
@@ -508,7 +520,7 @@ td.empty {
 
 .side-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
 }
@@ -516,6 +528,7 @@ td.empty {
 .side-actions .btn {
   flex: 1;
   justify-content: center;
+  padding-inline: 8px;
   border: 1px solid var(--line-strong);
   background: var(--navy-2);
   color: var(--text);
@@ -821,6 +834,30 @@ td.empty {
    rules cannot reach the app. */
 
 /* ---------- responsive ---------- */
+
+/* beside the drawing the panel is narrow: type tags show just their icon (the
+   word is in the tooltip) so the label column keeps its room */
+@media (min-width: 861px) {
+  #sidebar .tag-word {
+    display: none;
+  }
+  #sidebar .tag {
+    padding: 2px 7px;
+  }
+}
+
+/* the tool row is about 1,330 px with labels and key hints: drop the hints on
+   laptops, then the labels (every tool keeps its title tooltip) */
+@media (max-width: 1380px) {
+  .toolgroup .btn .kbd {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .toolgroup .btn .label {
+    display: none;
+  }
+}
 
 @media (max-width: 860px) {
   #shell {
@@ -1240,6 +1277,13 @@ table.demo-results td.mono {
 .peer-chip .pg { opacity: 0.75; }
 
 /* --- custom columns editor --- */
+/* line the library, columns, layers and filter rows up with the headings */
+.library > .lib-add,
+.library > .preset-list,
+.columns-box,
+.list-tools {
+  padding-inline: 16px;
+}
 .columns-box {
   margin: 0 0 14px;
   font-size: 12px;

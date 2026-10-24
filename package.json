@@ -21,6 +21,7 @@
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
     "build:node": "tsc -p tsconfig.node.json",
     "prepack": "npm run build:node",
+    "prepare": "npm run build:node",
     "check:deploy": "node scripts/check-deploy.mjs",
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",

@@ -59,6 +59,7 @@ import type { Pt } from './types.ts';
 import type { RasterPage } from './ports.ts';
 import { estimateStrokeWidth } from './line-removal.ts';
 import { simpleRingError } from './polygon.ts';
+import { partitionRegion, trackGaps, type Gap, type GapTrack, type PartitionResult } from './partition.ts';
 
 /** A filled region larger than this share of the page counts as unbounded. */
 const MAX_FILL_FRACTION = 0.4;
@@ -83,9 +84,11 @@ const GAP_HALF = [0, 8, 16, 28, 44];
  * of the boundary. swings: a door swing arc was erased and chorded. doorPx /
  * doorSource: the doorway width (raster px, full gap) closed by default on
  * this fill, from the calibrated scale or from the sheet's own wall-end
- * gaps; absent when no doorway rule applied.
+ * gaps; absent when no doorway rule applied. partition: the bounded region
+ * spanned several rooms joined by door-cued openings and this is the room
+ * holding the click (partition.ts).
  */
-export type FillResult = { points: Pt[]; gapPx?: number; bridged?: boolean; swings?: boolean; doorPx?: number; doorSource?: 'scale' | 'sheet' } | { error: string };
+export type FillResult = { points: Pt[]; gapPx?: number; bridged?: boolean; swings?: boolean; doorPx?: number; doorSource?: 'scale' | 'sheet'; partition?: 'partitioned' } | { error: string };
 
 /** Widest doorway closed automatically once the page scale is known (m). */
 const DOOR_MAX_M = 1.0;
@@ -197,19 +200,6 @@ const MIN_DOOR_CHECK_PT = 14;
 export const DOOR_CHECK_MAX_PX = 40_000_000;
 
 /**
- * A bridgeable ink-free run along `pos` (row or column), from a up to b.
- * ends: both sides are wall ends (door jambs); false for a wall end facing
- * the side of another wall (a doorway hard against a corner, but also the
- * elbow of an L-shaped room), which closes but never votes for a width.
- */
-interface Gap {
-  pos: number;
-  a: number;
-  b: number;
-  ends: boolean;
-}
-
-/**
  * What the sheet says about its doors. doorPx: the door width (px) when at
  * least MIN_DOOR_SUPPORT doorways agree on one, else 0. widths: the doorway
  * widths worth trying as closing rungs, ascending: every distinct width
@@ -250,7 +240,7 @@ interface SheetDoors {
  * (a downlight's flat top edge looks like a short heavy wall end) are
  * isolated pieces, so they never anchor a closing.
  */
-function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number, pxPerPt: number): { thr: Uint8Array; doors: () => SheetDoors; doorsOn: (inkNow: Uint8Array) => SheetDoors } {
+function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number, pxPerPt: number): { thr: Uint8Array; doors: () => SheetDoors; doorsOn: (inkNow: Uint8Array) => SheetDoors; rowGaps: Gap[]; colGaps: Gap[] } {
   const minDoorPx = Math.floor(MIN_DOOR_PT * pxPerPt);
   const thr = new Uint8Array(w * h).fill(NEVER);
   // interior wall-end gaps (t < NEVER on an interior run means bridgeable),
@@ -412,6 +402,9 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
     doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)),
     // the same reading over a changed copy of the ink (dynamicFill's arc put-back)
     doorsOn: (inkNow) => sheetDoors(rowGaps, colGaps, inkNow, w, h, minDoorPx),
+    // the wall-end gaps themselves: the room partition's uncued-opening evidence
+    rowGaps,
+    colGaps,
   };
 }
 
@@ -436,18 +429,11 @@ function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, 
     }
     return limit;
   };
-  interface Track {
-    a: number;
-    b: number;
-    p0: number;
-    p1: number;
-  }
   // candidates that passed the clearance test: width, the first floor pixel
   // on each side, and the gap's own pixels (closed for the enclosure test)
-  const candidates: { L: number; sideA: number[]; sideB: number[]; rows: boolean; t: Track }[] = [];
+  const candidates: { L: number; sideA: number[]; sideB: number[]; rows: boolean; t: GapTrack }[] = [];
   const collect = (gaps: Gap[], rows: boolean) => {
-    gaps.sort((p, q) => p.pos - q.pos || p.a - q.a);
-    const finish = (t: Track) => {
+    trackGaps(gaps, (t: GapTrack) => {
       const L = t.b - t.a;
       if (L < minDoorPx || L > 2 * (NEVER - 1)) return; // not a door at any scale, or beyond every rung
       const need = Math.ceil(DOOR_CLEARANCE * L);
@@ -460,38 +446,7 @@ function sheetDoors(rowGaps: Gap[], colGaps: Gap[], ink: Uint8Array, w: number, 
       const sideA = rows ? [m, t.p0 - need] : [t.p0 - need, m];
       const sideB = rows ? [m, t.p1 + need] : [t.p1 + need, m];
       candidates.push({ L, sideA, sideB, rows, t });
-    };
-    let open: Track[] = [];
-    let lastPos = -2;
-    for (let i = 0; i < gaps.length; ) {
-      const pos = gaps[i].pos;
-      let j = i;
-      while (j < gaps.length && gaps[j].pos === pos) j++;
-      if (pos !== lastPos + 1) {
-        open.forEach(finish);
-        open = [];
-      }
-      const used = new Set<Track>();
-      const next: Track[] = [];
-      for (let k = i; k < j; k++) {
-        const g = gaps[k];
-        const t = open.find((o) => !used.has(o) && Math.abs(o.a - g.a) <= 2 && Math.abs(o.b - g.b) <= 2);
-        if (t) {
-          used.add(t);
-          t.a = g.a;
-          t.b = g.b;
-          t.p1 = pos;
-          next.push(t);
-        } else {
-          next.push({ a: g.a, b: g.b, p0: pos, p1: pos });
-        }
-      }
-      for (const o of open) if (!used.has(o)) finish(o);
-      open = next;
-      lastPos = pos;
-      i = j;
-    }
-    open.forEach(finish);
+    });
   };
   collect(rowGaps.filter((g) => g.ends), true);
   collect(colGaps.filter((g) => g.ends), false);
@@ -716,11 +671,104 @@ function fitCircle(px: number[], w: number, mx: number, my: number): { cx: numbe
   return r2 > 0 ? { cx, cy, r: Math.sqrt(r2) } : null;
 }
 
+/**
+ * Does the straight ink run through (x, y) cross a circle about (cx, cy)
+ * rather than follow it? The circle's tangent there is closer to one axis;
+ * the pixel's longer run (row or column, capped at STRAIGHT_RUN_PX each
+ * way) along the other axis means the line meets the circle square on.
+ */
+function crossesCircle(ink: Uint8Array, w: number, h: number, x: number, y: number, cx: number, cy: number): boolean {
+  const run = (dx: number, dy: number) => {
+    let n = 0;
+    for (let k = 1; k <= STRAIGHT_RUN_PX; k++) {
+      const px = x + dx * k;
+      const py = y + dy * k;
+      if (px < 0 || py < 0 || px >= w || py >= h || !ink[py * w + px]) break;
+      n++;
+    }
+    return n;
+  };
+  const hrun = run(1, 0) + run(-1, 0);
+  const vrun = run(0, 1) + run(0, -1);
+  // the tangent is perpendicular to the radius (x - cx, y - cy)
+  const tangentHorizontal = Math.abs(y - cy) >= Math.abs(x - cx);
+  return tangentHorizontal ? vrun > hrun : hrun > vrun;
+}
+
 function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPerPt: number, metersPerPt: number | undefined): Swing[] {
   const minR = metersPerPt ? (SWING_MIN_M / metersPerPt) * pxPerPt : SWING_MIN_PX;
   const maxR = metersPerPt ? (SWING_MAX_M / metersPerPt) * pxPerPt : SWING_MAX_PX;
   const arcs: Swing[] = [];
   const comp: number[] = [];
+  /**
+   * One piece of thin curvy ink read as a swing arc: fit, then once more on
+   * the inliers: a leaf drawn off-axis is curvy too and joins its arc into
+   * one piece, and the leaf is radial, so it falls far off the arc's circle
+   * and drops out of the refit. (A leaf opened much under 90 degrees is
+   * about as long as its arc and defeats the refit; such a door gets no
+   * chord and no partition cue.) Null when the piece is no door arc.
+   */
+  const fitPiece = (piece: number[]): { pts: number[]; ax: number; ay: number; R: number } | null => {
+    const n = piece.length;
+    if (n < 8) return null;
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const i of piece) {
+      const x = i % w;
+      const y = (i / w) | 0;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    const span = Math.max(x1 - x0, y1 - y0);
+    if (span < 0.5 * minR || span > 2.2 * maxR) return null;
+    const mx = (x0 + x1) / 2;
+    const my = (y0 + y1) / 2;
+    let pts = piece;
+    let fit = fitCircle(pts, w, mx, my);
+    if (!fit) return null;
+    const rms = (ps: number[], f: { cx: number; cy: number; r: number }) => {
+      let ss = 0;
+      for (const i of ps) {
+        const d = Math.hypot((i % w) - mx - f.cx, ((i / w) | 0) - my - f.cy) - f.r;
+        ss += d * d;
+      }
+      return Math.sqrt(ss / ps.length);
+    };
+    if (rms(pts, fit) > Math.max(1.5, 0.03 * fit.r)) {
+      const f = fit;
+      const inliers = piece.filter((i) => Math.abs(Math.hypot((i % w) - mx - f.cx, ((i / w) | 0) - my - f.cy) - f.r) <= Math.max(2, 0.05 * f.r));
+      if (inliers.length < Math.max(8, 0.5 * n)) return null;
+      const refit = fitCircle(inliers, w, mx, my);
+      if (!refit || rms(inliers, refit) > Math.max(1.5, 0.03 * refit.r)) return null;
+      fit = refit;
+      pts = inliers;
+    }
+    const { cx, cy, r: R } = fit;
+    if (R < minR || R > maxR) return null;
+    const ax = mx + cx;
+    const ay = my + cy;
+    const { spanDeg } = arcExtent(pts, w, ax, ay);
+    if (spanDeg < SWING_MIN_SPAN_DEG || spanDeg > SWING_MAX_SPAN_DEG) return null;
+    // the hinge: ink within a few px of the centre — the jamb corner (heavy)
+    // or the leaf's root / a thin-line wall end (thin, straight). Curvy ink
+    // alone (a furniture blob beside a curved wall) does not hinge a door:
+    // a real arc always pivots on line ink of its own, whatever the plan's
+    // pen weight
+    const hx = Math.round(ax);
+    const hy = Math.round(ay);
+    const tol = Math.max(3, Math.round(0.08 * R));
+    for (let y = Math.max(0, hy - tol); y <= Math.min(h - 1, hy + tol); y++) {
+      for (let x = Math.max(0, hx - tol); x <= Math.min(w - 1, hx + tol); x++) {
+        const j = y * w + x;
+        if (ink[j] && thin[j] !== THIN_CURVY) return { pts, ax, ay, R };
+      }
+    }
+    return null;
+  };
   for (let start = 0; start < thin.length; start++) {
     if (thin[start] !== THIN_CURVY) continue;
     comp.length = 0;
@@ -752,94 +800,84 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
         }
       }
     }
-    const n = comp.length;
-    const span = Math.max(x1 - x0, y1 - y0);
-    if (n < 8 || span < 0.5 * minR || span > 2.2 * maxR) continue;
-    const mx = (x0 + x1) / 2;
-    const my = (y0 + y1) / 2;
-    // fit, then once more on the inliers: a leaf drawn off-axis is curvy
-    // too and joins its arc into one piece, and the leaf is radial, so it
-    // falls far off the arc's circle and drops out of the refit
-    let pts = comp;
-    let fit = fitCircle(pts, w, mx, my);
-    if (!fit) continue;
-    const rms = (ps: number[], f: { cx: number; cy: number; r: number }) => {
-      let ss = 0;
-      for (const i of ps) {
-        const d = Math.hypot((i % w) - mx - f.cx, ((i / w) | 0) - my - f.cy) - f.r;
-        ss += d * d;
-      }
-      return Math.sqrt(ss / ps.length);
-    };
-    if (rms(pts, fit) > Math.max(1.5, 0.03 * fit.r)) {
-      const f = fit;
-      const inliers = pts.filter((i) => Math.abs(Math.hypot((i % w) - mx - f.cx, ((i / w) | 0) - my - f.cy) - f.r) <= Math.max(2, 0.05 * f.r));
-      if (inliers.length < Math.max(8, 0.5 * n)) continue;
-      fit = fitCircle(inliers, w, mx, my);
-      if (!fit || rms(inliers, fit) > Math.max(1.5, 0.03 * fit.r)) continue;
-      pts = inliers;
-      comp.length = 0;
-      comp.push(...pts);
-    }
-    const { cx, cy, r: R } = fit;
-    if (R < minR || R > maxR) continue;
-    const ax = mx + cx;
-    const ay = my + cy;
-    const { spanDeg } = arcExtent(comp, w, ax, ay);
-    if (spanDeg < SWING_MIN_SPAN_DEG || spanDeg > SWING_MAX_SPAN_DEG) continue;
-    // the hinge: ink within a few px of the centre — the jamb corner (heavy)
-    // or the leaf's root / a thin-line wall end (thin, straight). Curvy ink
-    // alone (a furniture blob beside a curved wall) does not hinge a door:
-    // a real arc always pivots on line ink of its own, whatever the plan's
-    // pen weight
-    const hx = Math.round(ax);
-    const hy = Math.round(ay);
-    const tol = Math.max(3, Math.round(0.08 * R));
-    let hinged = false;
-    for (let y = Math.max(0, hy - tol); y <= Math.min(h - 1, hy + tol) && !hinged; y++) {
-      for (let x = Math.max(0, hx - tol); x <= Math.min(w - 1, hx + tol); x++) {
-        const j = y * w + x;
-        if (ink[j] && thin[j] !== THIN_CURVY) {
-          hinged = true;
+    let found = [fitPiece(comp)];
+    if (!found[0] && comp.length >= 16) {
+      // a double door's two arcs meet at the middle of the opening and join
+      // into one piece that fits no single circle: split it at the middle of
+      // its longer side, then its shorter, and keep the split whose halves
+      // are both door arcs (deterministic, no sampling)
+      const longX = x1 - x0 >= y1 - y0;
+      for (const alongX of [longX, !longX]) {
+        const mid = alongX ? (x0 + x1) / 2 : (y0 + y1) / 2;
+        const lo = comp.filter((i) => (alongX ? i % w : (i / w) | 0) < mid);
+        const hi = comp.filter((i) => (alongX ? i % w : (i / w) | 0) >= mid);
+        const pair = [fitPiece(lo), fitPiece(hi)];
+        if (pair[0] && pair[1]) {
+          // the two arcs touch tangentially, so a straight cut hands the
+          // last degrees of one to the other: give each circle every pixel
+          // on it (the shared meeting pixels to both) and fit the two again
+          const off = (i: number, c: { ax: number; ay: number; R: number }) => Math.abs(Math.hypot((i % w) - c.ax, ((i / w) | 0) - c.ay) - c.R);
+          const on = (c: { ax: number; ay: number; R: number }) => (i: number) => off(i, c) <= Math.max(1.5, 0.03 * c.R);
+          const again = pair.map((c) => fitPiece(comp.filter(on(c!))));
+          found = again[0] && again[1] ? again : pair;
+          // and every pixel of the piece goes to the nearer arc, so the whole
+          // symbol is erased as a single arc's piece is (a thick stroke's
+          // outer pixels at the meeting point lie off both fitted circles)
+          const [p, q] = found as { pts: number[]; ax: number; ay: number; R: number }[];
+          const inP = new Set(p.pts);
+          const inQ = new Set(q.pts);
+          for (const i of comp) {
+            if (inP.has(i) || inQ.has(i)) continue;
+            (off(i, p) <= off(i, q) ? p.pts : q.pts).push(i);
+          }
           break;
         }
       }
     }
-    if (!hinged) continue;
-    // grow along the circle band through thin ink joined to the arc: its
-    // tangent ends, labelled straight. The leaf leaves the band at once
-    // (it is radial) and so does a wall line at the far jamb (the arc meets
-    // it square on), so neither is eaten.
-    const band = Math.max(1.5, 0.02 * R);
-    for (let q = 0; q < comp.length; q++) {
-      const i = comp[q];
-      const x = i % w;
-      const y = (i / w) | 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= h) continue;
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          if (nx < 0 || nx >= w) continue;
-          const j = ny * w + nx;
-          if (thin[j] && Math.abs(Math.hypot(nx - ax, ny - ay) - R) <= band) {
-            thin[j] = 0;
-            comp.push(j);
+    for (const fp of found) {
+      if (!fp) continue;
+      const { ax, ay, R } = fp;
+      const arcPx = fp.pts.slice();
+      // grow along the circle band through thin ink joined to the arc: its
+      // tangent ends, labelled straight. The leaf leaves the band at once
+      // (it is radial) and so does a wall line at the far jamb (the arc
+      // meets it square on), so neither is eaten.
+      const band = Math.max(1.5, 0.02 * R);
+      for (let q = 0; q < arcPx.length; q++) {
+        const i = arcPx[q];
+        const x = i % w;
+        const y = (i / w) | 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            const j = ny * w + nx;
+            if (thin[j] && Math.abs(Math.hypot(nx - ax, ny - ay) - R) <= band) {
+              // a straight thin pixel whose run crosses the circle is a wall
+              // the arc meets (a thin-line wall at the far jamb), not the
+              // arc's own tangent end: eating it would punch a hole in the
+              // wall that the fill then leaks through
+              if (thin[j] === THIN && crossesCircle(ink, w, h, nx, ny, ax, ay)) continue;
+              thin[j] = 0;
+              arcPx.push(j);
+            }
           }
         }
       }
+      const { a0, a1 } = arcExtent(arcPx, w, ax, ay);
+      arcs.push({
+        px: arcPx,
+        hx: ax,
+        hy: ay,
+        r: R,
+        ends: [
+          { x: ax + R * Math.cos(a0), y: ay + R * Math.sin(a0) },
+          { x: ax + R * Math.cos(a1), y: ay + R * Math.sin(a1) },
+        ],
+      });
     }
-    const { a0, a1 } = arcExtent(comp, w, ax, ay);
-    arcs.push({
-      px: comp.slice(),
-      hx: ax,
-      hy: ay,
-      r: R,
-      ends: [
-        { x: ax + R * Math.cos(a0), y: ay + R * Math.sin(a0) },
-        { x: ax + R * Math.cos(a1), y: ay + R * Math.sin(a1) },
-      ],
-    });
   }
   return arcs;
 }
@@ -984,6 +1022,11 @@ interface PageFill {
   thr: Uint8Array;
   doors: () => SheetDoors;
   doorsOn: (inkNow: Uint8Array) => SheetDoors;
+  /** Wall-end gaps of thr (the partition's uncued-opening evidence). */
+  rowGaps: Gap[];
+  colGaps: Gap[];
+  /** Ink pixels the swing-arc erase took out (the partition reads them as the drawing's ink). */
+  erased: Set<number> | null;
 }
 
 /**
@@ -1054,26 +1097,19 @@ function pageFill(raster: RasterPage, tolerance: number, hints: FillHints): Page
   const swingPx = arcs.length ? new Uint8Array(w * h) : null;
   for (const a of arcs) for (const i of a.px) ink[i] = 0;
   for (const a of arcs) for (const e of a.ends) drawBridge(ink, swingPx!, w, h, a.hx, a.hy, e.x, e.y, 0.85, 1.15);
-  const { thr, doors, doorsOn } = closingThresholds(ink, w, h, heavyPx, structPx, pxPerPt);
-  return { fingerprint: rasterFingerprint(raster), ink, bridgePx, swingPx, arcs, pxPerPt, thr, doors, doorsOn };
+  const { thr, doors, doorsOn, rowGaps, colGaps } = closingThresholds(ink, w, h, heavyPx, structPx, pxPerPt);
+  const erased = arcs.length ? new Set(arcs.flatMap((a) => a.px)) : null;
+  return { fingerprint: rasterFingerprint(raster), ink, bridgePx, swingPx, arcs, pxPerPt, thr, doors, doorsOn, rowGaps, colGaps, erased };
 }
 
 /** Per-raster cache of the page-wide state, keyed by the options that change it. */
 const fillCaches = new WeakMap<RasterPage, Map<string, PageFill>>();
 
-export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
-  const w = raster.width;
-  const h = raster.height;
-  const data = raster.data;
-  const s = raster.toRaster(seed.x, seed.y);
-  const sx = Math.round(s.x);
-  const sy = Math.round(s.y);
-  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { error: 'click inside the drawing' };
-  const lum = (i: number) => (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
-  if (lum(sy * w + sx) < tolerance) return { error: 'you clicked on a line — click inside the region' };
-
-  // the page-wide state is cached per raster and option set: a second fill
-  // on the same sheet (the next room, a retry) skips straight to the flood
+/**
+ * The page-wide state is cached per raster and option set: a second fill on
+ * the same sheet (the next room, a retry) skips straight to the flood.
+ */
+function cachedPageFill(raster: RasterPage, tolerance: number, hints: FillHints): PageFill {
   let byOpts = fillCaches.get(raster);
   if (!byOpts) {
     byOpts = new Map();
@@ -1085,10 +1121,109 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     pf = pageFill(raster, tolerance, hints);
     byOpts.set(key, pf);
   }
+  return pf;
+}
+
+/**
+ * The page-wide evidence the partition pass reads, as dynamicFill builds it
+ * (for checks and probes that feed partitionRegion a region of their own):
+ * the ink after the swing-arc erase and chord draw, the virtual pixels the
+ * engine drew (bridges, chords), the swing arcs, the wall-end gaps and the
+ * doorway width bounds.
+ */
+export function fillEvidence(raster: RasterPage, tolerance = 150, hints: FillHints = {}) {
+  const pf = cachedPageFill(raster, tolerance, hints);
+  return {
+    ink: pf.ink,
+    virtual: [pf.bridgePx, pf.swingPx],
+    erased: pf.erased,
+    arcs: pf.arcs,
+    rowGaps: pf.rowGaps,
+    colGaps: pf.colGaps,
+    pxPerPt: pf.pxPerPt,
+    ...partitionBounds(pf.pxPerPt, hints.metersPerPt),
+  };
+}
+
+/**
+ * The partition pass's size bounds, from the same constants the closing
+ * uses: the narrowest doorway (MIN_DOOR_PT), the widest (two swing radii, a
+ * double door) and the span of a structural ink piece (STRUCT_PT).
+ */
+function partitionBounds(pxPerPt: number, metersPerPt: number | undefined) {
+  return {
+    minDoorPx: Math.floor(MIN_DOOR_PT * pxPerPt),
+    maxDoorPx: metersPerPt ? ((2 * SWING_MAX_M) / metersPerPt) * pxPerPt : 2 * SWING_MAX_PX,
+    structPx: Math.round(STRUCT_PT * pxPerPt),
+  };
+}
+
+/**
+ * One room of a fill: its outline (PDF pt) and, when asked for, its pixels
+ * (sorted raster indices) so a caller can compare rooms exactly.
+ */
+export interface FillRoom {
+  points: Pt[];
+  px?: Int32Array;
+}
+
+/**
+ * dynamicFillRooms' result: every room the bounded region holds. A region
+ * the partition pass split at door-cued, wall-supported portals yields its
+ * children (they replace the region, never sit beside it); otherwise the
+ * region itself. seedRoom: the room holding the seed, -1 when the seed sat
+ * in a portal strip. partition: the pass's verdict on the region.
+ */
+export type FillRoomsResult =
+  | ({ rooms: FillRoom[]; seedRoom: number; partition: PartitionResult['status']; portals: number; reasons: string[] } & Omit<Extract<FillResult, { points: Pt[] }>, 'points' | 'partition'>)
+  | { error: string };
+
+/** Engine-internal switches (benchmarks and checks): the partition pass on or off. */
+export interface FillOptions {
+  partition?: boolean;
+}
+
+/**
+ * Click inside a bounded region and get the room there as a polygon. When
+ * the region spans several rooms joined by door-cued openings (see
+ * partition.ts), the room holding the click is returned.
+ */
+export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}, options: FillOptions = {}): FillResult {
+  const r = fillCore(raster, seed, tolerance, hints, options, false);
+  if ('error' in r) return r;
+  const { rooms, seedRoom, partition, portals: _portals, reasons: _reasons, ...flags } = r;
+  return { points: rooms[seedRoom].points, ...flags, ...(partition === 'partitioned' ? { partition } : {}) };
+}
+
+/**
+ * Every room of the region bounded around the seed, with their pixels: the
+ * automatic-extraction entry point (see autoRooms). Same ladder and
+ * partition as dynamicFill.
+ */
+export function dynamicFillRooms(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}, options: FillOptions = {}): FillRoomsResult {
+  return fillCore(raster, seed, tolerance, hints, options, true);
+}
+
+function fillCore(raster: RasterPage, seed: Pt, tolerance: number, hints: FillHints, options: FillOptions, all: boolean): FillRoomsResult {
+  const w = raster.width;
+  const h = raster.height;
+  const data = raster.data;
+  const s = raster.toRaster(seed.x, seed.y);
+  const sx = Math.round(s.x);
+  const sy = Math.round(s.y);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { error: 'click inside the drawing' };
+  const lum = (i: number) => (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
+  if (lum(sy * w + sx) < tolerance) return { error: 'you clicked on a line — click inside the region' };
+
+  const pf = cachedPageFill(raster, tolerance, hints);
   const { ink, bridgePx, swingPx, arcs, pxPerPt, thr: thr0, doors, doorsOn } = pf;
   let sheet = doors;
+  // the ink and wall-end gaps the final thresholds came from (the arc
+  // put-back below swaps both)
+  let inkNow = ink;
+  let gapsNow = { rows: pf.rowGaps, cols: pf.colGaps };
 
-  const unbounded = (): FillResult => ({
+  const unbounded = (): { error: string } => ({
     error: 'that region is not bounded by lines on all sides — draw around it with the Area tool instead',
   });
 
@@ -1280,7 +1415,10 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     // on a copy, so the cached ink stays pristine
     const inkBack = ink.slice();
     for (const a of arcs) for (const i of a.px) inkBack[i] = 1;
-    thr = closingThresholds(inkBack, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt), pxPerPt).thr;
+    const back = closingThresholds(inkBack, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt), pxPerPt);
+    thr = back.thr;
+    inkNow = inkBack;
+    gapsNow = { rows: back.rowGaps, cols: back.colGaps };
     best = climb(thr, null, ladderTo(thr, wideR), wideR);
     // the doorway reading below then sees the arcs too, as it did when the
     // put-back changed the ink in place
@@ -1311,13 +1449,6 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   const bridged = best.usedBridge;
   const swung = best.usedSwing;
 
-  // Outer boundary trace along pixel EDGES (crack following), clockwise from
-  // the top-left corner of the topmost-leftmost pixel. The vertices sit on
-  // the lattice of pixel corners, so the polygon is the exact outline of the
-  // filled pixels and its area is their count: the boundary runs along the
-  // face of the ink, not through the centres of the last free pixels, which
-  // would inset every wall by half a pixel and undercount the room by half
-  // its perimeter in pixels.
   let startIdx = -1;
   for (let i = 0; i < region.length; i++) {
     if (region[i]) {
@@ -1325,7 +1456,118 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
       break;
     }
   }
-  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && region[y * w + x] === 1;
+  const parent = outline(raster, (x, y) => x >= 0 && y >= 0 && x < w && y < h && region[y * w + x] === 1, startIdx % w, (startIdx / w) | 0, 4 * region.length + 4, count);
+  if ('error' in parent) return parent;
+  // the doorway rule in force on this fill: the calibrated scale's door
+  // rung, or — only without a scale, when a sheet-derived width won the
+  // guarded trial — the sheet's own
+  const doorRule = hints.metersPerPt
+    ? { doorPx: 2 * doorR, doorSource: 'scale' as const }
+    : sheetRung || best.viaCut
+      ? { doorPx: 2 * (sheetRung || best.rung), doorSource: 'sheet' as const }
+      : null;
+  const flags = { ...(gapR > 0 ? { gapPx: 2 * gapR } : {}), ...(bridged ? { bridged: true } : {}), ...(swung ? { swings: true } : {}), ...(doorRule ?? {}) };
+  const seedIdx = sy * w + sx;
+  /** the region's own pixels, sorted (rooms mode only) */
+  const regionPx = (): Int32Array => {
+    const out = new Int32Array(count);
+    let k = 0;
+    for (let y = parent.box.y0; y <= parent.box.y1; y++) for (let i = y * w + parent.box.x0, e = y * w + parent.box.x1; i <= e; i++) if (region[i]) out[k++] = i;
+    return out;
+  };
+  const whole = (status: PartitionResult['status'], portals: number, reasons: string[]): FillRoomsResult => ({
+    rooms: [{ points: parent.points, ...(all ? { px: regionPx() } : {}) }],
+    seedRoom: 0,
+    partition: status,
+    portals,
+    reasons,
+    ...flags,
+  });
+  if (options.partition === false) return whole('unchanged', 0, ['partition pass disabled']);
+
+  // Room partition (partition.ts): split the bounded region at door-cued,
+  // wall-supported portals into its rooms, or abstain. The children replace
+  // the region; a child that fails its own trace rolls the split back.
+  const part = partitionRegion({
+    w,
+    h,
+    region,
+    count,
+    box: parent.box,
+    ink: inkNow,
+    virtual: [bridgePx, swingPx],
+    erased: pf.erased,
+    rowGaps: gapsNow.rows,
+    colGaps: gapsNow.cols,
+    arcs,
+    ...partitionBounds(pxPerPt, hints.metersPerPt),
+  });
+  if (part.status !== 'partitioned') return whole(part.status, part.portals.length, part.reasons);
+  const has = (px: Int32Array, i: number) => {
+    let lo = 0;
+    let hi = px.length - 1;
+    while (lo <= hi) {
+      const m = (lo + hi) >> 1;
+      if (px[m] === i) return true;
+      if (px[m] < i) lo = m + 1;
+      else hi = m - 1;
+    }
+    return false;
+  };
+  const seedRoom = part.children.findIndex((px) => has(px, seedIdx));
+  const rooms: FillRoom[] = [];
+  for (let k = 0; k < part.children.length; k++) {
+    if (!all && k !== seedRoom) continue;
+    const px = part.children[k];
+    let x0 = w;
+    let x1 = -1;
+    for (const i of px) {
+      const x = i % w;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+    }
+    const y0 = (px[0] / w) | 0;
+    const y1 = (px[px.length - 1] / w) | 0;
+    const cw = x1 - x0 + 1;
+    const cm = new Uint8Array(cw * (y1 - y0 + 1));
+    for (const i of px) cm[(((i / w) | 0) - y0) * cw + (i % w) - x0] = 1;
+    const traced = outline(raster, (x, y) => x >= x0 && y >= y0 && x <= x1 && y <= y1 && cm[(y - y0) * cw + x - x0] === 1, px[0] % w, y0, 4 * cm.length + 4, px.length);
+    if ('error' in traced) return whole('unresolved', part.portals.length, [...part.reasons, `child trace failed: ${traced.error}`]);
+    rooms.push({ points: traced.points, ...(all ? { px } : {}) });
+  }
+  // a seed in a portal strip: the click keeps the merged region (nothing to
+  // pick); automatic callers still get every child
+  if (seedRoom < 0 && !all) return whole('partitioned', part.portals.length, [...part.reasons, 'seed in a portal strip']);
+  return {
+    rooms,
+    seedRoom: all ? seedRoom : 0,
+    partition: 'partitioned',
+    portals: part.portals.length,
+    reasons: part.reasons,
+    ...flags,
+  };
+}
+
+/**
+ * Outer boundary trace along pixel EDGES (crack following), clockwise from
+ * the top-left corner of the topmost-leftmost pixel (startX, startY). The
+ * vertices sit on the lattice of pixel corners, so the polygon is the exact
+ * outline of the filled pixels and its area is their count: the boundary
+ * runs along the face of the ink, not through the centres of the last free
+ * pixels, which would inset every wall by half a pixel and undercount the
+ * room by half its perimeter in pixels. The ring must close explicitly and
+ * be simple, and its area must agree with the pixel count; box is the
+ * outline's bounding box in pixels (inclusive).
+ */
+function outline(
+  raster: RasterPage,
+  at: (x: number, y: number) => boolean,
+  startX: number,
+  startY: number,
+  maxSteps: number,
+  count: number,
+): { points: Pt[]; box: { x0: number; y0: number; x1: number; y1: number } } | { error: string } {
+  const w = raster.width;
   // headings E, S, W, N; the region stays on the right of the heading
   const DX = [1, 0, -1, 0];
   const DY = [0, 1, 0, -1];
@@ -1335,19 +1577,21 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   const FRX = [0, -1, -1, 0];
   const FRY = [0, 0, -1, -1];
   const boundaryPts: { x: number; y: number }[] = [];
-  const startX = startIdx % w;
-  const startY = (startIdx / w) | 0;
   let cx = startX;
   let cy = startY;
   let dir = 0; // heading east along the top edge of the start pixel
   let perimeter = 0;
   let closed = false;
   const seen = new Set<number>();
+  let bx0 = cx;
+  let bx1 = cx;
+  let by0 = cy;
+  let by1 = cy;
   // the start corner is a true vertex: the trace leaves it eastward and,
   // with nothing above or left of the start pixel, returns to it heading
   // north, and no other pixel touches that corner
   boundaryPts.push({ x: cx, y: cy });
-  for (let guard = 0; guard <= 4 * region.length + 4; guard++) {
+  for (let guard = 0; guard <= maxSteps; guard++) {
     const vertex = cy * (w + 1) + cx;
     if (seen.has(vertex)) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
     seen.add(vertex);
@@ -1361,6 +1605,10 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     }
     cx += DX[dir];
     cy += DY[dir];
+    if (cx < bx0) bx0 = cx;
+    if (cx > bx1) bx1 = cx;
+    if (cy < by0) by0 = cy;
+    if (cy > by1) by1 = cy;
     perimeter++;
     if (cx === startX && cy === startY) {
       closed = true;
@@ -1379,19 +1627,12 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // ink islands inside the room, which count excludes), so its area is at
   // least count. Well under it means the trace cut across the region.
   const area = shoelace(simplified);
-  if (area < 0.8 * count || area > 5 * count) return unbounded();
+  if (area < 0.8 * count || area > 5 * count) return { error: 'that region is not bounded by lines on all sides — draw around it with the Area tool instead' };
 
   const points = simplified.map((p) => raster.toPdf(p.x, p.y));
   if (simpleRingError(points) !== null) return { error: 'that region has an invalid boundary — draw around it with the Area tool instead' };
-  // the doorway rule in force on this fill: the calibrated scale's door
-  // rung, or — only without a scale, when a sheet-derived width won the
-  // guarded trial — the sheet's own
-  const doorRule = hints.metersPerPt
-    ? { doorPx: 2 * doorR, doorSource: 'scale' as const }
-    : sheetRung || best.viaCut
-      ? { doorPx: 2 * (sheetRung || best.rung), doorSource: 'sheet' as const }
-      : null;
-  return { points, ...(gapR > 0 ? { gapPx: 2 * gapR } : {}), ...(bridged ? { bridged: true } : {}), ...(swung ? { swings: true } : {}), ...(doorRule ?? {}) };
+  // corner lattice -> pixels: the outline's corners span x0..x1+1
+  return { points, box: { x0: bx0, y0: by0, x1: bx1 - 1, y1: by1 - 1 } };
 }
 
 function shoelace(pts: { x: number; y: number }[]): number {

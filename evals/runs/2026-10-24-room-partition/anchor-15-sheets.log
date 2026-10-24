@@ -1,0 +1,36 @@
+sheet_01: 15 objects (0 windows), 4 areas, 293 wall rects, 45.3 s
+sheet_02: 12 objects (3 windows), 30 areas, 606 wall rects, 5.9 s
+sheet_03: 62 objects (11 windows), 45 areas, 1131 wall rects, 13.4 s
+sheet_04: 43 objects (27 windows), 31 areas, 1872 wall rects, 112.0 s
+sheet_05: 19 objects (6 windows), 7 areas, 901 wall rects, 47.5 s
+sheet_06: 1 objects (1 windows), 2 areas, 658 wall rects, 40.8 s
+sheet_07: 10 objects (6 windows), 3 areas, 208 wall rects, 132.8 s
+sheet_08: 0 objects (0 windows), 0 areas, 32 wall rects, 87.0 s
+sheet_09: 7 objects (1 windows), 1 areas, 882 wall rects, 120.8 s
+sheet_10: 4 objects (1 windows), 5 areas, 597 wall rects, 124.5 s
+sheet_11: 111 objects (7 windows), 113 areas, 1982 wall rects, 62.9 s
+sheet_12: 63 objects (1 windows), 66 areas, 809 wall rects, 57.8 s
+sheet_13: 1 objects (0 windows), 0 areas, 151 wall rects, 177.3 s
+sheet_14: 77 objects (11 windows), 77 areas, 912 wall rects, 142.5 s
+sheet_15: 46 objects (13 windows), 40 areas, 984 wall rects, 59.9 s
+
+1231 s total
+system on AEC-Geometric-Bench-15
+
+class                    TP     FP     FN       P       R      F1
+-----------------------------------------------------------------
+Single Swing Door         0    383    629   0.000   0.000   0.000
+Double Swing Door         0      0     49   0.000   0.000   0.000
+Window                   12     76    486   0.136   0.024   0.041
+Sink                      0      0    193   0.000   0.000   0.000
+Toilet                    0      0    105   0.000   0.000   0.000
+Bathtub                   0      0     76   0.000   0.000   0.000
+Shower                    0      0     26   0.000   0.000   0.000
+Cooktops                  0      0     56   0.000   0.000   0.000
+-----------------------------------------------------------------
+OBJECT MICRO             12    459   1620   0.025   0.007   0.011
+
+wall pixel                                  0.784   0.388   0.519
+area pixel                                  0.941   0.230   0.370
+area instance                               0.149   0.074   0.099
+

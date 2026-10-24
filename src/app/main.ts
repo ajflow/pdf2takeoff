@@ -1,6 +1,7 @@
 // Bootstrap: wire DOM, viewer, tools and table together.
 
 import './styles.css';
+import './flowstate.css';
 import { state, subscribe, emit } from './state';
 import { initViewer, loadPdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf } from './viewer';
 import { initTools, setTool, setStatusHint } from './tools';
@@ -113,8 +114,10 @@ fileInput.addEventListener('change', () => {
   fileInput.value = '';
 });
 
-$('openBtn').addEventListener('click', () => fileInput.click());
-$('openBtnHero').addEventListener('click', () => fileInput.click());
+// every "Open a drawing" button across the landing page and the app topbar
+for (const id of ['openBtn', 'openBtnHero', 'openBtnHeroMain', 'openBtnHeader', 'openBtnClose']) {
+  document.getElementById(id)?.addEventListener('click', () => fileInput.click());
+}
 
 async function openSample(): Promise<void> {
   const resp = await fetch('examples/sample-floor-plan.pdf');
@@ -123,8 +126,11 @@ async function openSample(): Promise<void> {
 }
 
 document.getElementById('sampleBtnHero')?.addEventListener('click', () => void openSample());
-document.getElementById('scrollCue')?.addEventListener('click', () => {
-  document.getElementById('seo')?.scrollIntoView({ behavior: 'smooth' });
+document.getElementById('sampleBtnClose')?.addEventListener('click', () => void openSample());
+document.getElementById('scrollCue')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById('how')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
 });
 
 // ?file=/path.pdf — open a same-origin drawing on load (deep links, tests).
@@ -149,29 +155,49 @@ void (async () => {
 
 // --- demo mode ---
 
-document.getElementById('demoBtnHero')?.addEventListener('click', () => void playDemo());
-document.getElementById('demoBtn')?.addEventListener('click', () => void playDemo());
+document.getElementById('demoBtnHero')?.addEventListener('click', () => {
+  updateLanding(); // the demo opens a document: leave landing mode now
+  void playDemo();
+});
+document.getElementById('demoBtn')?.addEventListener('click', () => {
+  updateLanding();
+  void playDemo();
+});
 document.getElementById('demoXlsx')?.addEventListener('click', () => exportXlsx());
-document.getElementById('demoTry')?.addEventListener('click', () => stopDemo());
+document.getElementById('demoTry')?.addEventListener('click', () => {
+  stopDemo();
+  updateLanding();
+});
 document.getElementById('demoReplay')?.addEventListener('click', () => {
   stopDemo();
+  updateLanding();
   void playDemo();
 });
 
-// drag & drop anywhere on the workspace
+// --- landing mode ---
+
+// Landing is the marketing page state: no document open, no compare, no demo.
+// Toggled in the same places #dropzone/#seo are (the subscribe callback below)
+// plus around demo start/stop, which does not always pass through emit().
+function updateLanding(): void {
+  const landing = !hasDoc() && !compareState.active && !document.body.classList.contains('demo');
+  document.body.classList.toggle('landing', landing);
+}
+
+// drag & drop anywhere on the page (landing and app alike)
 for (const evt of ['dragover', 'dragenter'] as const) {
-  scrollEl.addEventListener(evt, (e) => {
+  window.addEventListener(evt, (e) => {
     e.preventDefault();
     dropzone.classList.add('drag');
   });
 }
 for (const evt of ['dragleave', 'drop'] as const) {
-  scrollEl.addEventListener(evt, (e) => {
+  window.addEventListener(evt, (e) => {
     e.preventDefault();
     dropzone.classList.remove('drag');
   });
 }
-scrollEl.addEventListener('drop', (e) => {
+window.addEventListener('drop', (e) => {
   const f = e.dataTransfer?.files?.[0];
   if (f && f.type === 'application/pdf') void openFile(f);
 });
@@ -322,6 +348,7 @@ subscribe(() => {
   // the AEO content is for the landing state; once a drawing is open the
   // tool is the whole page (scrollers were running into marketing below)
   $('seo')?.classList.toggle('hidden', hasDoc() || compareState.active);
+  updateLanding();
   if (compareState.active) {
     $('cmpAName').textContent = compareState.a?.name ?? '-';
     $('cmpBName').textContent = compareState.b?.name ?? '-';

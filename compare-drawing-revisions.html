@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,20 +10,27 @@
     />
     <link rel="canonical" href="https://pdf2takeoff.com/compare-drawing-revisions" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#0A192F" />
     <meta property="og:title" content="Compare drawing revisions free | pdf2takeoff" />
     <meta
       property="og:description"
       content="Overlay two revisions of any PDF drawing: red = removed, blue = added. Runs entirely in your browser."
     />
     <meta property="og:type" content="website" />
-    <link rel="stylesheet" href="/src/app/marketing.css" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "HowTo",
         "name": "How to compare two revisions of a construction drawing for free",
         "totalTime": "PT2M",
+        "dateModified": "2026-10-24",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": { "@type": "PostalAddress", "addressLocality": "Gold Coast", "addressRegion": "QLD", "addressCountry": "AU" }
+        },
         "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff overlay compare" }],
         "step": [
           { "@type": "HowToStep", "name": "Open revision A", "text": "Open the current drawing in pdf2takeoff, then click Compare. The open file becomes revision A." },
@@ -63,74 +70,99 @@
       }
     </script>
   </head>
-  <body>
-    <header class="m-topbar">
-      <a class="brand" href="/">
-        <span class="mark">p2t</span>
-        <span class="name">pdf2takeoff</span>
-      </a>
-      <a class="cta" href="/">Open the tool</a>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
     </header>
 
-    <main class="m-wrap">
-      <span class="badge-pill">Free &amp; open source · files never uploaded</span>
-      <h1>Compare two drawing revisions, free, right in your browser</h1>
-      <p class="lead">
-        pdf2takeoff overlays two revisions of any PDF drawing and colour-codes the difference:
-        <strong class="c-red">red was removed</strong>, <strong class="c-blue">blue was added</strong>,
-        and unchanged linework stays dark. Both files are rendered on your own machine; nothing is
-        uploaded, and it works with scanned or vector sheets from any CAD tool.
-      </p>
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · files never uploaded</span>
+          <h1>Compare two drawing revisions, free, right in your browser</h1>
+          <p class="lead">
+            pdf2takeoff overlays two revisions of any PDF drawing and colour-codes the difference:
+            <strong class="c-red">red was removed</strong>, <strong class="c-blue">blue was added</strong>,
+            and unchanged linework stays dark. Both files are rendered on your own machine; nothing is
+            uploaded, and it works with scanned or vector sheets from any CAD tool.
+          </p>
 
-      <div class="fact-strip">
-        <span>Free, no account</span>
-        <span>Files never uploaded</span>
-        <span>Open source · Apache-2.0</span>
-        <span>Works offline once loaded</span>
-      </div>
+          <div class="fact-strip">
+            <span>Free, no account</span>
+            <span>Files never uploaded</span>
+            <span>Open source · Apache-2.0</span>
+            <span>Works offline once loaded</span>
+          </div>
 
-      <p><a class="cta big" href="/">Compare your drawings now →</a></p>
+          <p class="hero-cta"><a class="btn btn-primary" href="/">Compare your drawings now →</a></p>
+        </div>
+      </section>
 
-      <h2>How to compare revisions</h2>
-      <ol>
-        <li><strong>Open revision A.</strong> Open the current drawing in pdf2takeoff and click <em>Compare</em>; the open file becomes revision A.</li>
-        <li><strong>Choose revision B.</strong> Pick the newer sheet; the overlay blend appears instantly.</li>
-        <li><strong>Read the colours.</strong> Red exists only in A (deleted in the new revision); blue exists only in B (new); dark ink is unchanged.</li>
-        <li><strong>Align.</strong> <em>Fit B to A</em> scales B onto A's page size automatically; the nudge arrows fine-tune alignment to the millimetre.</li>
-        <li><strong>Isolate the changes.</strong> Turn on <em>Changes only</em> to fade everything unchanged to grey.</li>
-      </ol>
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to compare revisions</h2>
+            <ol>
+              <li><strong>Open revision A.</strong> Open the current drawing in pdf2takeoff and click <em>Compare</em>; the open file becomes revision A.</li>
+              <li><strong>Choose revision B.</strong> Pick the newer sheet; the overlay blend appears instantly.</li>
+              <li><strong>Read the colours.</strong> Red exists only in A (deleted in the new revision); blue exists only in B (new); dark ink is unchanged.</li>
+              <li><strong>Align.</strong> <em>Fit B to A</em> scales B onto A's page size automatically; the nudge arrows fine-tune alignment to the millimetre.</li>
+              <li><strong>Isolate the changes.</strong> Turn on <em>Changes only</em> to fade everything unchanged to grey.</li>
+            </ol>
 
-      <h2>Why estimators and reviewers use it</h2>
-      <p>
-        Issued-for-construction sets churn constantly, and a missed revision can cost a variation
-        claim or a rebuild. An overlay compare turns a half-hour of squinting at two windows into a
-        five-second colour-coded answer: what moved, what was added, what was deleted, including
-        moved walls (old position in red, new position in blue), added or removed fixtures, and
-        changed dimensions.
-      </p>
+            <h2>Why estimators and reviewers use it</h2>
+            <p>
+              Issued-for-construction sets churn constantly, and a missed revision can cost a variation
+              claim or a rebuild. An overlay compare turns a half-hour of squinting at two windows into a
+              five-second colour-coded answer: what moved, what was added, what was deleted, including
+              moved walls (old position in red, new position in blue), added or removed fixtures, and
+              changed dimensions.
+            </p>
 
-      <h2>FAQ</h2>
-      <details>
-        <summary>Is it free?</summary>
-        <p>Yes: free, Apache-2.0 licensed open source, no limits and no account.</p>
-      </details>
-      <details>
-        <summary>Are my drawings private?</summary>
-        <p>Yes. The comparison runs 100% in your browser; your PDFs never leave your machine.</p>
-      </details>
-      <details>
-        <summary>Does it work with scanned drawings?</summary>
-        <p>Yes. The blend works on rendered pixels, so scanned sheets compare just as well as vector CAD plots.</p>
-      </details>
-      <details>
-        <summary>Can I measure on the compared result?</summary>
-        <p>Compare and takeoff are one tool: exit compare and your calibrated measurements are still there, on either revision.</p>
-      </details>
-
-      <footer>
-        <a href="/">pdf2takeoff</a>: free, open-source PDF takeoff and markup. Calibrate, measure
-        lengths, areas and counts, export to Excel, save markups into the PDF.
-      </footer>
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>Is it free?</summary>
+                <p>Yes: free, Apache-2.0 licensed open source, no limits and no account.</p>
+              </details>
+              <details>
+                <summary>Are my drawings private?</summary>
+                <p>Yes. The comparison runs 100% in your browser; your PDFs never leave your machine.</p>
+              </details>
+              <details>
+                <summary>Does it work with scanned drawings?</summary>
+                <p>Yes. The blend works on rendered pixels, so scanned sheets compare just as well as vector CAD plots.</p>
+              </details>
+              <details>
+                <summary>Can I measure on the compared result?</summary>
+                <p>Compare and takeoff are one tool: exit compare and your calibrated measurements are still there, on either revision.</p>
+              </details>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/#agents">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/#benchmarks">Benchmarks</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
   </body>
 </html>

@@ -91,9 +91,9 @@ language pack (cached; see `PDF2TAKEOFF_TESSDATA` below), and `ai-count`
 sends the page you choose to the AI provider you choose:
 
 ```bash
-npx pdf2takeoff info drawing.pdf                     # run straight from npm, nothing installed
-npx pdf2takeoff scan drawing.pdf --page 1 --at 88,271
-npm install -g pdf2takeoff                           # or install the commands once
+npx github:ajflow/pdf2takeoff info drawing.pdf       # run straight from GitHub, nothing installed
+npx github:ajflow/pdf2takeoff scan drawing.pdf --page 1 --at 88,271
+npm install -g github:ajflow/pdf2takeoff             # or install the commands once
 ```
 
 The first `ocr` use fetches the ~3 MB English pack described above, whatever
@@ -183,13 +183,13 @@ from npm:
   "mcpServers": {
     "pdf2takeoff": {
       "command": "npx",
-      "args": ["-y", "pdf2takeoff", "mcp"]
+      "args": ["-y", "github:ajflow/pdf2takeoff", "mcp"]
     }
   }
 }
 ```
 
-Claude Code: `claude mcp add pdf2takeoff -- npx -y pdf2takeoff mcp`.
+Claude Code: `claude mcp add pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp`.
 
 ## ScaledDrawingBench
 

@@ -1,11 +1,11 @@
 # pdf2takeoff
 
-> pdf2takeoff is a free, open-source (Apache-2.0) PDF takeoff and markup tool that runs entirely in the browser, plus a headless Node CLI and MCP server built on the same engine. Calibrate a drawing's scale (typed, preset, or auto-read from the sheet with OCR), measure lengths, areas, perimeters, volumes and angles, auto-count repeated symbols, export the markups list to CSV/Excel, and save markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat. Files are processed locally and never uploaded — in the browser, at the terminal, or driven by an AI agent.
+> pdf2takeoff is a free, open-source (Apache-2.0) PDF takeoff and markup tool that runs entirely in the browser, plus a headless Node CLI and MCP server built on the same engine. Calibrate a drawing's scale (typed, preset, or auto-read from the sheet with OCR), measure lengths, areas, perimeters, volumes and angles, auto-count repeated symbols, export the markups list to CSV/Excel, and save markups back into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat. Files are processed locally and never uploaded: in the browser, at the terminal, or driven by an AI agent. Made by Flowtivity (https://flowtivity.ai), Gold Coast, Australia.
 
 Key facts:
 - Price: free, no account, no file limits, no paid tier
 - Licence: Apache-2.0 open source
-- Privacy: 100% local. In the browser nothing uploads and it works offline once loaded; the CLI and MCP server make zero network calls; the only runtime fetches are the OCR language pack (about 4 MB from a CDN, on first use, then cached) and, for the ML scan, the ONNX runtime (about 4 MB) and the v1 detector model (about 76 MB from GitHub, on first use, then cached)
+- Privacy: 100% local processing. In the browser nothing uploads and it works offline once loaded. The Node CLI and MCP server are local too, with two exceptions: the OCR language pack (about 4 MB, fetched on first use, then cached) and the opt-in ai-count command, which is network-only when the user runs it. In the browser the ML scan also fetches the ONNX runtime (about 4 MB) and the v1 detector model (about 76 MB from GitHub) on first use, then caches them
 - Measurements: lengths (segmented runs), areas, perimeters, volumes (area × depth), angles (scale-free), counts; metric and imperial units
 - Scale calibration: draw along any known printed dimension, pick presets (1:50 … 1:500, 1/8"=1'-0", 1/4"=1'-0", 1"=10'/20'/30'), or click Auto-read and let OCR read the printed dimension or title-block scale (e.g. "SCALE 1:100") off the sheet
 - Scan (auto-count): click one instance of a repeated symbol and the scan counts every match on the page in about 100 ms using local computer vision; on cluttered sheets the same click upgrades automatically to the in-browser v1 ML detector (ONNX, five classes: downlight, GPO, switch, smoke alarm, diffuser) with fallback to CV. Hits land as flagged proposals to confirm or delete, and the totals show a per-label kept-rate
@@ -14,15 +14,18 @@ Key facts:
 - Tool library: save a tool + label once (e.g. Length "Skirting", Count "Downlight DL-100"); clicking the chip pre-labels every placement and scan hit
 - Markups list: statuses (flag for checking / confirmed) that round-trip inside the PDF, search, status filters, sorting, group totals, one-click Clear; markup layers per trade, pinned notes, and formula columns (waste factors, rates) that flow into totals and every export
 - Export: CSV download, TSV clipboard, a real Excel workbook (.xlsx), a printable quantity report, and annotation round-trip into the PDF
-- Sessions: markups and calibrations autosave locally (IndexedDB, keyed by file hash — the PDF itself is never stored); experimental live sessions share a takeoff in real time between tabs/windows on the same machine (CRDT)
+- Sessions: markups and calibrations autosave locally (IndexedDB, keyed by file hash; the PDF itself is never stored); experimental live sessions share a takeoff in real time between tabs/windows on the same machine (CRDT)
 - Annotation compatibility: Line, PolyLine, Polygon and FreeText annotations with measurement values in the comment, authored as "pdf2takeoff"
 - Revision compare: overlay two revisions in the browser (red = removed, blue = added, dark = unchanged); from the CLI, compare two PDFs or batch-compare two revision folders (sheets paired by filename, added/removed sheets listed, overlay PNG per changed pair)
-- Headless CLI (Node ≥ 22.6): info, scan, compare (files or folders), export, annotate, run, mcp — deterministic JSON output, no network calls
+- Headless CLI (Node ≥ 22.13): info, scan, compare (files or folders), export, annotate, run, ocr, ai-count, mcp. Run it with no install: `npx github:ajflow/pdf2takeoff <command>`; add the MCP server to Claude Code with `claude mcp add pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp`. Everything runs on your machine; the only network calls are the OCR language pack on first use and ai-count when you run it
 - Takeoff-as-code: a committed takeoff.yaml (scale + click-point counts + exports) regenerates quantities via `pdf2takeoff run`; run with --prev to diff quantities against the previous revision's run
-- MCP server: twelve local stdio tools (open_document, render_page, read_text, set_scale, measure, scan_symbol, compare_revisions, list_markups, set_status, delete_markup, export, save_annotated) so AI agents can run a full takeoff and hand back a marked-up PDF for human review; read_text returns printed scales, dimensions and labels exactly and positioned, so agents never guess them off the rendered image
+- Opt-in AI count (`pdf2takeoff ai-count`): sends one rendered page to any OpenAI-compatible provider you choose (OpenRouter, OpenAI, Gemini, Z.ai, Ollama, LM Studio), with the API key read from environment variables. The network is used only when you run the command. Proposals come back as flagged count markups (status "check") for a human to confirm or delete
+- Counting presets: `propose_items` proposes items (doors, windows, spaces) as flagged markups and `count_items` totals them under a preset (aecv or schedule), so counts follow your conventions rather than the model's guess
+- MCP server: fifteen local stdio tools (open_document, render_page, read_text, set_scale, fill_area, measure, scan_symbol, propose_items, count_items, compare_revisions, list_markups, set_status, delete_markup, export, save_annotated) so AI agents can run a full takeoff and hand back a marked-up PDF for human review; read_text returns printed scales, dimensions and labels exactly and positioned, so agents never guess them off the rendered image
 - Limitations today: live sessions sync only between tabs/windows on the same machine (cross-machine relay is next); the v1 ML detector covers five symbol classes and runs in the browser only (the CLI and MCP server scan with the CV tier); Dynamic Fill can leak through openings wider than its gap-closing ladder; interactive revision compare is single-sheet (batch compare is CLI/MCP)
 - Stack: PDF.js (Apache-2.0) for rendering, pdf-lib (MIT) for writing annotations, tesseract.js (Apache-2.0) for OCR, onnxruntime-web for the ML scan; no backend, deployable as a static site
-- Benchmarks: the repo's `evals/` publishes reproducible accuracy numbers with run logs — room-area fill against analytic ground truth, detector precision/recall with miss attribution, MCP workflow conformance, and a CI baseline that fails on regressions
+- Benchmarks: AECV-Bench (counting doors, windows and rooms on 120 floor plans): 0.295 five-field exact match for the deterministic engine alone; 0.585 with the opt-in AI count on GPT-6.1 Sol, against 0.572 for the same model on the benchmark's own prompt and 0.543 for the best published model. AEC-Geometric-Bench (walls on 15 sheets): wall pixel F1 0.519 with no AI model, against 0.287 for the best general model. ScaledDrawingBench (200 sheets, our own open benchmark): 99.8% on PDFs exported from CAD and 37.3% on degraded scans; the scan gap is published, not hidden
+- Reproducibility: the repo's `evals/` publishes run logs for the numbers above plus room-area fill against analytic ground truth, detector precision/recall with miss attribution, MCP workflow conformance, and a CI baseline that fails on regressions
 
 Main page: https://pdf2takeoff.com/
 Revision compare page: https://pdf2takeoff.com/compare-drawing-revisions
@@ -30,22 +33,23 @@ Symbol auto-count page: https://pdf2takeoff.com/count-symbols-in-pdf-drawing
 Sample drawing: https://pdf2takeoff.com/examples/sample-floor-plan.pdf (revision A)
 Sample revision B: https://pdf2takeoff.com/examples/sample-floor-plan-rev-b.pdf
 Source code: https://github.com/ajflow/pdf2takeoff
+Made by Flowtivity (https://flowtivity.ai), Gold Coast, Australia
 
 ## How to do a takeoff from a PDF
 
 1. Open the drawing (drag and drop any PDF).
 2. Calibrate: click both ends of a printed dimension and Auto-read it with OCR, type its real length, or choose a standard scale.
-3. Measure: trace lengths, outline areas and volumes, take perimeters and angles, click count marks — or Scan to auto-count a repeated symbol. Totals update live, grouped by label.
+3. Measure: trace lengths, outline areas and volumes, take perimeters and angles, click count marks, or Scan to auto-count a repeated symbol. Totals update live, grouped by label.
 4. Export the markups list to CSV or paste directly into Excel.
 5. Save into the PDF; the annotated file opens in Bluebeam and Acrobat.
 
 ## How to run a takeoff headlessly (CLI or CI)
 
 1. Write takeoff.yaml next to the drawing set: the scale, one click-point per symbol type to count, and the exports you want.
-2. Run `pdf2takeoff run takeoff.yaml` — it scans, totals, and writes the Excel/CSV/annotated PDF outputs.
+2. Run `pdf2takeoff run takeoff.yaml`: it scans, totals, and writes the Excel/CSV/annotated PDF outputs.
 3. On a new revision, run again with `--prev` pointing at the previous run's summary to see exactly which quantities changed.
-4. AI agents: point any MCP client at `pdf2takeoff mcp` and let it open, look at, measure and export — locally, with the marked-up PDF left for human verification.
+4. AI agents: point any MCP client at `pdf2takeoff mcp` and let it open, look at, measure and export, locally, with the marked-up PDF left for human verification.
 
 ## How AI agents use pdf2takeoff (MCP)
 
-Register the MCP server, then the agent can: open a local PDF, render any sheet to PNG to look at it, read printed text (scales, dimensions, labels) exactly and positioned, set the scale, measure, scan-count symbols, compare two revisions or folders, mark proposals for checking, and export quantities plus an annotated PDF — every step on the user's machine, nothing uploaded anywhere.
+Register the MCP server, then the agent can: open a local PDF, render any sheet to PNG to look at it, read printed text (scales, dimensions, labels) exactly and positioned, set the scale, measure, scan-count symbols, propose and count items under a counting preset, compare two revisions or folders, mark proposals for checking, and export quantities plus an annotated PDF, every step on the user's machine, nothing uploaded anywhere.

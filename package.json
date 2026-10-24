@@ -6,13 +6,22 @@
   "bin": {
     "pdf2takeoff": "bin/pdf2takeoff.js"
   },
+  "files": [
+    "bin",
+    "dist-node",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.13"
   },
   "scripts": {
     "dev": "vite",
     "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node scripts/run-checks.mjs scripts/check-fill.mjs scripts/check-detector.mjs scripts/check-detector-node.mjs scripts/check-ocr.mjs scripts/check-scale.mjs scripts/check-vector.mjs scripts/check-raster-input.mjs scripts/check-scan.mjs scripts/check-openings.mjs scripts/check-scaled-bench.mjs scripts/check-inventory.mjs",
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
+    "build:node": "tsc -p tsconfig.node.json",
+    "prepack": "npm run build:node",
+    "prepare": "npm run build:node",
     "check:deploy": "node scripts/check-deploy.mjs",
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",
@@ -33,6 +42,11 @@
     "quantity-survey"
   ],
   "license": "Apache-2.0",
+  "homepage": "https://pdf2takeoff.com",
+  "bugs": {
+    "url": "https://github.com/ajflow/pdf2takeoff/issues"
+  },
+  "mcpName": "io.github.ajflow/pdf2takeoff",
   "overrides": {
     "pdfjs-dist": {
       "@napi-rs/canvas": "1.0.11"
@@ -44,7 +58,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@napi-rs/canvas": "^1.0.11",
+    "@napi-rs/canvas": "1.0.11",
     "js-yaml": "^5.5.0",
     "onnxruntime-web": "^1.30.0",
     "pdf-lib": "^1.17.1",

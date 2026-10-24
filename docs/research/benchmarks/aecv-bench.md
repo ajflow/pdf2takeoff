@@ -333,3 +333,47 @@ What did not work, for the record: closed-mask ink fraction (good closings 0.31-
 Anchors held: the AEC-Geometric-Bench harness now pins its first-pass detector config (base ladder, guards off — the new guards trade wall recall on those large commercial sheets for count sanity here), reproducing wall pixel F1 0.519 exactly; area pixel F1 moved 0.381 -> 0.324 with the spaces floor, area instance 0.087 -> 0.089, window object F1 0.089 -> 0.041 under the exterior gate. The takeoff bench (23/24 fill, 2/2 count, 9/9 scale, 3/3 doorcheck) and both check-openings fixtures are unchanged.
 
 Next levers, ranked by remaining error mass: the `5000` texture problem (a wall model that uses hatch periodicity rather than closing, or door-arc evidence gated on local texture), 6000-0010-class sparse-ink over-closing (a growth cap scaled to ink density), and the toilet label spread (a second OCR pass over flipped WC labels).
+
+## Status 2026-10-24: the opt-in AI count on GPT-6.1 Sol, with a same-model control
+
+Everything above is the deterministic engine with no vision model. This round measures the opt-in AI count (`pdf2takeoff ai-count`, prompt and schema in `src/ai/inventory.ts`). It asks a vision model to list every door, window and space it can see, each with a position, a kind and flags such as enclosed or wet. The model then returns per-field counts. To find out how much of any gain is the prompt and how much is the model, the same model was also run on the benchmark's own prompt.
+
+**Setup** [verified: I ran these]:
+- The model was GPT-6.1 Sol, called through the Codex CLI on a ChatGPT subscription. That backend is a research convenience, not the product path: the product takes any OpenAI-compatible key.
+- The inputs were the benchmark's own 120 PNGs.
+- There were four inventory runs: three at reasoning effort medium and one at high, all on 2026-10-23.
+- The control used the benchmark's intro text, `COUNTING_RULES` and `PlanElements` schema verbatim, at effort medium, on 2026-10-24.
+- The scores below are the counts the model returned. No post-hoc rules or fitting were applied.
+- In the control, one plan (5000_0025) failed on four attempts with a Codex tool-use error. It counts as wrong, as the benchmark scores a missing plan.
+
+| run | plans | five-field EM | Door | Window | Space | Bedroom | Toilet |
+|---|---|---|---|---|---|---|---|
+| inventory, medium, run 1 | 120 | **0.585** | 0.54 | 0.48 | 0.18 | 0.93 | 0.79 |
+| inventory, medium, run 2 | 120 | 0.568 | 0.53 | 0.40 | 0.19 | 0.94 | 0.78 |
+| inventory, medium, run 3 | 120 | 0.578 | 0.53 | 0.47 | 0.17 | 0.93 | 0.79 |
+| inventory, high | 120 | 0.585 | 0.58 | 0.47 | 0.14 | 0.94 | 0.78 |
+| control: benchmark prompt, medium | 119 | 0.572 | 0.55 | 0.44 | 0.17 | 0.93 | 0.78 |
+| best published: Gemini 3.5 Flash | 120 | 0.543 | 0.43 | 0.39 | 0.14 | 0.93 | 0.82 |
+| this engine, no vision model (round 3) | 120 | 0.295 | 0.108 | 0.117 | 0.083 | 0.708 | 0.458 |
+
+Paired bootstrap over plans, with 5,000 resamples and 95% intervals:
+- Inventory run 1 vs Gemini 3.5 Flash: **+4.2 points [+0.3, +8.0]**.
+- Control vs Gemini 3.5 Flash: +2.8 points [-0.8, +6.3].
+- Inventory run 1 vs control, same model: +1.3 points [-1.5, +4.2].
+
+**Reading.**
+- **The model drives most of the gain.** GPT-6.1 Sol on the benchmark's own prompt already sits above the published best. The itemised prompt adds about a point on top, mostly on Window (0.48 against 0.44), and that is within the margin of error. Of the configurations here, only the inventory run is clear of the published best, and only just. "Asking for a list" is therefore not an accuracy result.
+- **The inventory's value is that every count is checkable.** Each count arrives as a list of items with positions that a reviewer can see on the drawing. That is how `ai-count` uses it: each item is written into the PDF as a flagged count markup.
+- **Agreement across runs flags the counts to check.** Across the three medium runs, scored on raw counts:
+  - When all three agree on a field, run 1 is right 75% of the time (405 of 600 values). When they disagree, it is right 25% of the time.
+  - Flagging disagreements would send a reviewer to 33% of the values and catch 59% of run 1's errors.
+  - Counted under the fixed counting rules instead of raw, the same split reads 78% against 30%, with 37% of values flagged and 65% of errors caught.
+  - By field, runs agree on 62% of Door values, 49% of Window values and 38% of Space values. When they agree on Space, they are right only 28% of the time, so agreement is no use as a confidence signal for Space.
+- **Space stays hard everywhere.** Every model scores between 0.14 and 0.27. Our reading of the answer key is that it mostly counts labelled rooms and leaves out halls and closets, and that the Finnish `5000` family is counted differently. Room-count rules fitted on half the plans and scored on the other half add about 2 points (2-fold cross-fitted: 0.573 to 0.612 over the four runs). That is convention-matching, not perception, so it is kept out of the headline.
+- **Cost of the itemised prompt.** Per plan it uses about 15,100 input and 2,200 output tokens, against 19,100 and 900 for the control. Median latency is 71 s against 41 s. High effort doubles latency (median 128 s) with no clear gain. Tiling the sheet tested negative and was dropped.
+
+**Reproduce.**
+- The predictions from all five runs (counts and latency only, no ground truth or images) are in `bench/aecv-bench/predictions/`.
+- To score them against a local clone of the benchmark, run `node bench/aecv-bench/score.mjs --aecv /path/to/AECV-Bench`.
+- The Codex-CLI runner used for these runs is not in this repo.
+- To run the same inventory prompt on any OpenAI-compatible model, use `pdf2takeoff ai-count <plan.png> --provider openrouter --model <id>`.

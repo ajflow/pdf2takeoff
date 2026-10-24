@@ -30,8 +30,9 @@ import {
   swap as swapRevisions,
   nudge,
 } from './compare';
-import { calibrationFor, type Pt } from './state';
-import { formatLength, DISPLAY_UNITS, unitLabel, ratioForMetersPerPt } from '../engine/units';
+import { calibrationFor, ratioOn, type Pt } from './state';
+import { prepareFiles, ACCEPT } from './inputs';
+import { formatLength, DISPLAY_UNITS, unitLabel } from '../engine/units';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -73,7 +74,7 @@ setStatusHint((text) => {
 
 // --- file opening ---
 
-async function openBytes(bytes: Uint8Array, name: string): Promise<void> {
+async function openBytes(bytes: Uint8Array, name: string, notes: string[] = []): Promise<void> {
   exitCompare();
   stopSession(); // a new drawing starts a fresh channel
   $('loading').classList.remove('hidden');
@@ -90,28 +91,68 @@ async function openBytes(bytes: Uint8Array, name: string): Promise<void> {
     await renderPage();
     renderMarkups();
     setTool(restored ? 'pan' : 'calibrate');
-    $('toolHint').textContent = restored
-      ? restoreKind === 'pdf'
-        ? `Restored ${restored} markups from this PDF; calibrate the scale to see values`
-        : `Restored your last session: ${restored} measurements, scale included`
-      : 'Calibrate the scale to start measuring (press C)';
+    $('toolHint').textContent = [
+      restored
+        ? restoreKind === 'pdf'
+          ? `Restored ${restored} markups from this PDF; calibrate the scale to see values`
+          : `Restored your last session: ${restored} measurements, scale included`
+        : 'Calibrate the scale to start measuring (press C)',
+      ...notes,
+    ].join(' ');
   } catch (err) {
-    $('toolHint').textContent = `Could not open this PDF: ${err instanceof Error ? err.message : String(err)}`;
+    $('toolHint').textContent = `Could not open this file: ${err instanceof Error ? err.message : String(err)}`;
   } finally {
     $('loading').classList.add('hidden');
     emit();
   }
 }
 
-async function openFile(file: File): Promise<void> {
-  const buf = await file.arrayBuffer();
-  await openBytes(new Uint8Array(buf), file.name);
+/** Open one or more files: a PDF as it is, images and mixed sets as one document. */
+async function openFiles(files: File[]): Promise<void> {
+  if (!files.length) return;
+  $('loading').classList.remove('hidden');
+  try {
+    const prepared = await prepareFiles(files);
+    if (!prepared.ok) {
+      $('toolHint').textContent = prepared.message;
+      showMessage(prepared.message);
+      return;
+    }
+    await openBytes(prepared.bytes, prepared.name, prepared.notes);
+  } catch (err) {
+    const message = `Could not open this file: ${err instanceof Error ? err.message : String(err)}`;
+    $('toolHint').textContent = message;
+    showMessage(message);
+  } finally {
+    $('loading').classList.add('hidden');
+  }
 }
 
+/** On the landing page the status bar is hidden, so say it where the person is looking. */
+function showMessage(text: string): void {
+  if (!document.body.classList.contains('landing')) return;
+  const note = document.getElementById('openNote');
+  if (!note) return;
+  note.textContent = text;
+  note.hidden = false;
+}
+
+fileInput.accept = ACCEPT;
+fileInput.multiple = true;
 fileInput.addEventListener('change', () => {
-  const f = fileInput.files?.[0];
-  if (f) void openFile(f);
+  const files = [...(fileInput.files ?? [])];
   fileInput.value = '';
+  void openFiles(files);
+});
+
+// paste a screenshot or a copied image (not while typing in a field)
+window.addEventListener('paste', (e) => {
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const files = [...(e.clipboardData?.files ?? [])];
+  if (!files.length) return;
+  e.preventDefault();
+  void openFiles(files);
 });
 
 // every "Open a drawing" button across the landing page and the app topbar
@@ -198,8 +239,8 @@ for (const evt of ['dragleave', 'drop'] as const) {
   });
 }
 window.addEventListener('drop', (e) => {
-  const f = e.dataTransfer?.files?.[0];
-  if (f && f.type === 'application/pdf') void openFile(f);
+  const files = [...(e.dataTransfer?.files ?? [])];
+  if (files.length) void openFiles(files);
 });
 
 // --- toolbar ---
@@ -267,8 +308,9 @@ function bindCmpPicker(id: 'cmpPickA' | 'cmpPickB', inputId: 'cmpFileA' | 'cmpFi
     input.value = '';
     $('loading').classList.remove('hidden');
     try {
-      const buf = new Uint8Array(await f.arrayBuffer());
-      await loadRevision(slot, buf, f.name);
+      const prepared = await prepareFiles([f]);
+      if (!prepared.ok) throw new Error(prepared.message);
+      await loadRevision(slot, prepared.bytes, prepared.name);
     } catch (err) {
       $('toolHint').textContent = `Could not open ${f.name}: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
@@ -384,8 +426,9 @@ subscribe(() => {
     badge.textContent = 'Scale';
     badge.classList.remove('ok');
   } else if (cal) {
-    const ratio = ratioForMetersPerPt(cal.metersPerPt);
-    const pretty = Math.abs(ratio - Math.round(ratio)) < 0.5 ? `1:${Math.round(ratio)}` : `1:${ratio.toFixed(0)}*`;
+    // an image page without a paper size has a real scale but no printed ratio
+    const ratio = ratioOn(state.pageNum, cal.metersPerPt);
+    const pretty = ratio === null ? 'set' : Math.abs(ratio - Math.round(ratio)) < 0.5 ? `1:${Math.round(ratio)}` : `1:${ratio.toFixed(0)}*`;
     badge.textContent = `Scale ${pretty}`;
     badge.classList.add('ok');
   } else {

@@ -538,6 +538,14 @@ body.landing #dropzone.drag .drop-zone {
   margin-top: 1.5rem;
 }
 
+/* why a file couldn't open (a person decides what to do next: human signal) */
+.open-note {
+  margin: 1rem auto 0;
+  max-width: 34rem;
+  font-size: var(--fs-small);
+  color: var(--fs-human-light);
+}
+
 .drop-foot {
   display: flex;
   flex-wrap: wrap;

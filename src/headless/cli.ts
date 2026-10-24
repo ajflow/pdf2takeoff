@@ -28,16 +28,16 @@ import { PDFDocument } from 'pdf-lib';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
-Every <file.pdf> below also takes a PNG or JPG: the image opens as one
-page of width/3 x height/3 points (scale 3 renders the native pixels), and
-commands that write a PDF wrap the image into one.
+Every <file.pdf> below also takes an image (PNG, JPG, WebP, GIF, BMP, AVIF or
+SVG): it opens as one page of width/3 x height/3 points (scale 3 renders the
+native pixels), and commands that write a PDF wrap the image into one.
 
 Usage:
   pdf2takeoff info <file.pdf>
       Pages, page sizes, and annotation counts as JSON.
   pdf2takeoff set <folder> -o current-issue.pdf
       Slip-sheet: walk the folder, keep the newest file per sheet name
-      (PDF, PNG or JPG, paired by file stem, by modified time), merge into
+      (PDF or image, paired by file stem, by modified time), merge into
       one sorted multi-sheet PDF.
   pdf2takeoff compare <a> <b> [--png out.png] [--png-dir dir] [--threshold 24]
       Two PDFs (or images): per-sheet change fractions and changed regions.
@@ -93,21 +93,21 @@ to the provider you choose (or nowhere, with --provider ollama or lmstudio).
 
 export { openPdf, renderRasterNode };
 
-// every file argument also takes a PNG or JPG: one page of W/3 x H/3 points
+// every file argument also takes an image: one page of W/3 x H/3 points
 // (see image-node.ts); commands that write a PDF get the image wrapped as one
 async function readMarkupsFromPdf(file: string): Promise<{ doc: Awaited<ReturnType<typeof openPdf>>; markups: Markup[] }> {
   const { doc } = await openAny(file);
   return { doc, markups: await readMarkups(doc) };
 }
 
-/** PDF, PNG or JPG by extension (the file walkers of set and compare). */
+/** PDF or a readable image by extension (the file walkers of set and compare). */
 function isDrawingFile(name: string): boolean {
   return name.toLowerCase().endsWith('.pdf') || imageKindByExt(name) !== null;
 }
 
 /** The sheet name a file stands for: its basename without the extension. */
 function sheetStem(name: string): string {
-  return basename(name).replace(/\.(pdf|png|jpe?g)$/i, '');
+  return basename(name).replace(/\.(pdf|png|jpe?g|webp|gif|bmp|avif|svg)$/i, '');
 }
 
 async function cmdInfo(file: string): Promise<unknown> {

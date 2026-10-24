@@ -16,6 +16,7 @@ import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
 import { columnValuesFor } from './columns';
 import { isVisibleLayer } from './layers';
+import { fileStem } from './inputs';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -202,7 +203,7 @@ function download(name: string, mime: string, data: string | Uint8Array): void {
 }
 
 function baseName(): string {
-  return state.fileName.replace(/\.pdf$/i, '') || 'takeoff';
+  return fileStem(state.fileName) || 'takeoff';
 }
 
 function exportCsv(): void {

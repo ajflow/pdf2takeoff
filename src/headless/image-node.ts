@@ -1,6 +1,9 @@
 // Direct raster input for the headless engine: a PNG or JPG opened as a
 // one-page, document-like object that the PDF code paths (renderRasterNode,
-// scanDocAt, dynamicFill, readMarkups, text reads) accept unchanged.
+// scanDocAt, dynamicFill, readMarkups, text reads) accept unchanged. Other
+// images @napi-rs/canvas decodes (WebP, GIF, BMP, AVIF, SVG) are wrapped as a
+// one-page PDF by the shared engine/inputs.ts and opened through pdf.js; the
+// geometry is the same either way.
 //
 // Coordinate convention: the image's native pixels ARE the RASTER_SCALE
 // render. A W x H px image presents as a page of W/RASTER_SCALE by
@@ -10,32 +13,31 @@
 // native pixel (px, py) is therefore --at px/3,(H - py)/3, the same point the
 // pdf-lib-wrapped PDF of that image would take.
 
-import { loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas';
+import { createCanvas, loadImage, type Image, type SKRSContext2D } from '@napi-rs/canvas';
 import { readFileSync } from 'node:fs';
-import { extname } from 'node:path';
-import { PDFDocument } from 'pdf-lib';
+import { basename } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { RASTER_SCALE } from '../engine/ports.ts';
+import { buildDocument, sniffInput, unsupportedMessage, type ImageTranscoder, type InputKind } from '../engine/inputs.ts';
 import { openPdf } from './pdfjs-node.ts';
 
-export type ImageKind = 'png' | 'jpeg';
+/** Image kinds @napi-rs/canvas decodes (TIFF and HEIC it does not). */
+export type ImageKind = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'avif' | 'svg';
+const NODE_IMAGE_KINDS: ReadonlySet<InputKind> = new Set<InputKind>(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg']);
 
-/** PNG / JPEG by magic bytes, else null. */
+/** A decodable image by magic bytes, else null. */
 export function sniffImage(bytes: Uint8Array): ImageKind | null {
-  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
-  return null;
+  const k = sniffInput(bytes);
+  return NODE_IMAGE_KINDS.has(k) ? (k as ImageKind) : null;
 }
 
-/** PNG / JPEG by file extension, else null. */
+/** A decodable image by file extension, else null. */
 export function imageKindByExt(path: string): ImageKind | null {
-  const ext = extname(path).toLowerCase();
-  if (ext === '.png') return 'png';
-  if (ext === '.jpg' || ext === '.jpeg') return 'jpeg';
-  return null;
+  const k = sniffInput(new Uint8Array(0), path);
+  return NODE_IMAGE_KINDS.has(k) ? (k as ImageKind) : null;
 }
 
-/** True when the file is PNG/JPEG by extension or magic bytes (magic wins). */
+/** True when the file is a decodable image by extension or magic bytes (magic wins). */
 export function isImageFile(path: string, bytes: Uint8Array): boolean {
   return (sniffImage(bytes) ?? imageKindByExt(path)) !== null;
 }
@@ -103,6 +105,24 @@ export async function openImage(bytes: Uint8Array): Promise<PDFDocumentProxy> {
   return doc as unknown as PDFDocumentProxy;
 }
 
+/** SVGs are drawn so their long side has at least this many pixels (they have no native resolution). */
+const SVG_LONG_SIDE = 4000;
+
+/** Decode any image @napi-rs/canvas reads to PNG, on white (openImage draws on white too). */
+export const nodeTranscoder: ImageTranscoder = async (bytes, kind) => {
+  const img = await loadImage(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  if (!img.width || !img.height) throw new Error('image has no pixels');
+  const up = kind === 'svg' ? Math.max(1, SVG_LONG_SIDE / Math.max(img.width, img.height)) : 1;
+  const w = Math.round(img.width * up);
+  const h = Math.round(img.height * up);
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return { png: new Uint8Array(await canvas.encode('png')), scale: 1 };
+};
+
 /**
  * Wrap an image as a single-page PDF (page = pixels / RASTER_SCALE points,
  * image drawn edge to edge), so annotation writers have real PDF bytes to
@@ -110,13 +130,8 @@ export async function openImage(bytes: Uint8Array): Promise<PDFDocumentProxy> {
  */
 export async function imageToPdf(bytes: Uint8Array, kind?: ImageKind): Promise<Uint8Array> {
   const k = kind ?? sniffImage(bytes);
-  if (!k) throw new Error('not a PNG or JPEG');
-  const pdf = await PDFDocument.create();
-  const img = k === 'png' ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
-  const w = img.width / RASTER_SCALE;
-  const h = img.height / RASTER_SCALE;
-  pdf.addPage([w, h]).drawImage(img, { x: 0, y: 0, width: w, height: h });
-  return pdf.save();
+  if (!k) throw new Error('not an image pdf2takeoff can read');
+  return (await buildDocument([{ bytes, name: '', kind: k }], nodeTranscoder)).bytes;
 }
 
 export interface OpenedDocument {
@@ -126,12 +141,19 @@ export interface OpenedDocument {
   kind: 'pdf' | 'image';
 }
 
-/** Open a PDF, PNG or JPEG file (by magic bytes, then extension). */
+/** Open a PDF or an image file (by magic bytes, then extension). */
 export async function openAny(path: string): Promise<OpenedDocument> {
   const raw = new Uint8Array(readFileSync(path));
-  const kind = sniffImage(raw) ?? imageKindByExt(path);
-  if (kind) {
+  const kind = sniffInput(raw, path);
+  // PNG and JPEG read their native pixels directly; the other images go
+  // through their wrapped PDF, which has the same geometry by construction
+  if (kind === 'png' || kind === 'jpeg') {
     return { doc: await openImage(raw), bytes: await imageToPdf(raw, kind), kind: 'image' };
   }
-  return { doc: await openPdf(raw), bytes: raw, kind: 'pdf' };
+  if (NODE_IMAGE_KINDS.has(kind)) {
+    const bytes = await imageToPdf(raw, kind as ImageKind);
+    return { doc: await openPdf(bytes), bytes, kind: 'image' };
+  }
+  if (kind === 'pdf' || kind === 'unknown') return { doc: await openPdf(raw), bytes: raw, kind: 'pdf' };
+  throw new Error(unsupportedMessage(kind, basename(path)));
 }

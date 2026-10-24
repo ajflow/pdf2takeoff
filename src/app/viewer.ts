@@ -8,6 +8,7 @@ import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist';
 import { state, emit } from './state';
 import { vectorize, type VecPage } from '../engine/vector';
+import { parseImagePages, PAPER_KEY } from '../engine/inputs';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -69,6 +70,10 @@ export async function loadPdf(bytes: Uint8Array, name: string): Promise<void> {
   const task = pdfjsLib.getDocument({ data: bytes.slice() });
   doc = await task.promise;
   state.pageCount = doc.numPages;
+  // pages that came from images (opened here, or saved from here and reopened)
+  const meta = await doc.getMetadata().catch(() => null);
+  const custom = (meta?.info as { Custom?: Record<string, unknown> } | undefined)?.Custom;
+  state.imagePages = parseImagePages(custom?.[PAPER_KEY]);
   state.zoom = fitWidthZoom();
   emit();
 }

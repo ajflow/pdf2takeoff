@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,20 +10,27 @@
     />
     <link rel="canonical" href="https://pdf2takeoff.com/count-symbols-in-pdf-drawing" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#0A192F" />
     <meta property="og:title" content="Count symbols in a PDF drawing, free | pdf2takeoff" />
     <meta
       property="og:description"
       content="Click one fixture and count every match on the sheet in ~100 ms. Runs entirely in your browser."
     />
     <meta property="og:type" content="website" />
-    <link rel="stylesheet" href="/src/app/marketing.css" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "HowTo",
         "name": "How to count repeated symbols in a PDF drawing automatically",
         "totalTime": "PT1M",
+        "dateModified": "2026-10-24",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": { "@type": "PostalAddress", "addressLocality": "Gold Coast", "addressRegion": "QLD", "addressCountry": "AU" }
+        },
         "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff scan" }],
         "step": [
           { "@type": "HowToStep", "name": "Open the drawing", "text": "Open any PDF floor plan in pdf2takeoff. The drawing is rendered on your machine; nothing is uploaded." },
@@ -67,86 +74,111 @@
       }
     </script>
   </head>
-  <body>
-    <header class="m-topbar">
-      <a class="brand" href="/">
-        <span class="mark">p2t</span>
-        <span class="name">pdf2takeoff</span>
-      </a>
-      <a class="cta" href="/">Open the tool</a>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
     </header>
 
-    <main class="m-wrap">
-      <span class="badge-pill">Free &amp; open source · files never uploaded</span>
-      <h1>Count symbols in a PDF drawing automatically, free</h1>
-      <p class="lead">
-        Counting downlights across a floor plan by hand is how quantities get missed. With pdf2takeoff
-        you <strong>click one symbol and the scan counts every match</strong> on the sheet in about a
-        tenth of a second: numbered markers on the drawing, a running total in the list, ready for
-        Excel. It runs entirely in your browser, so confidential tender drawings never leave your
-        machine.
-      </p>
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · files never uploaded</span>
+          <h1>Count symbols in a PDF drawing automatically, free</h1>
+          <p class="lead">
+            Counting downlights across a floor plan by hand is how quantities get missed. With pdf2takeoff
+            you <strong>click one symbol and the scan counts every match</strong> on the sheet in about a
+            tenth of a second: numbered markers on the drawing, a running total in the list, ready for
+            Excel. It runs entirely in your browser, so confidential tender drawings never leave your
+            machine.
+          </p>
 
-      <div class="fact-strip">
-        <span>Free, no account</span>
-        <span>Files never uploaded</span>
-        <span>~100 ms per sheet</span>
-        <span>Open source · Apache-2.0</span>
-      </div>
+          <div class="fact-strip">
+            <span>Free, no account</span>
+            <span>Files never uploaded</span>
+            <span>~100 ms per sheet</span>
+            <span>Open source · Apache-2.0</span>
+          </div>
 
-      <p><a class="cta big" href="/">Count your symbols now →</a></p>
+          <p class="hero-cta"><a class="btn btn-primary" href="/">Count your symbols now →</a></p>
+        </div>
+      </section>
 
-      <h2>How to auto-count fixtures on a drawing</h2>
-      <ol>
-        <li><strong>Open the drawing.</strong> Drag any PDF floor plan into pdf2takeoff.</li>
-        <li><strong>Click one symbol.</strong> Press <em>S</em> (Scan) and click directly on one instance of the symbol: a downlight, a power point, a smoke alarm.</li>
-        <li><strong>Every match gets counted.</strong> The scan finds all instances of that symbol on the sheet and places a numbered marker on each, in reading order.</li>
-        <li><strong>Group by spec name.</strong> Rename the group (e.g. <em>Downlight DL-100</em>) and scan the next symbol type; the list keeps one total per group.</li>
-        <li><strong>Export.</strong> Take the counts to CSV or Excel, print the quantity report, or save the count markers into the PDF itself.</li>
-      </ol>
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to auto-count fixtures on a drawing</h2>
+            <ol>
+              <li><strong>Open the drawing.</strong> Drag any PDF floor plan into pdf2takeoff.</li>
+              <li><strong>Click one symbol.</strong> Press <em>S</em> (Scan) and click directly on one instance of the symbol: a downlight, a power point, a smoke alarm.</li>
+              <li><strong>Every match gets counted.</strong> The scan finds all instances of that symbol on the sheet and places a numbered marker on each, in reading order.</li>
+              <li><strong>Group by spec name.</strong> Rename the group (e.g. <em>Downlight DL-100</em>) and scan the next symbol type; the list keeps one total per group.</li>
+              <li><strong>Export.</strong> Take the counts to CSV or Excel, print the quantity report, or save the count markers into the PDF itself.</li>
+            </ol>
 
-      <h2>What it's good at, honestly</h2>
-      <p>
-        The scan is classic computer vision: it learns the shape of the symbol you clicked and matches
-        every instance by size, aspect, fill and shape signature. That makes it fast, private and
-        dependable for <strong>isolated symbols in vector CAD plots</strong>: lighting layouts, power
-        and data schedules, fire services, ceiling grids. Symbols that touch wall lines, or dense
-        scanned sheets, are harder: those are the target of the ML detector being trained on an
-        open data pipeline, which drops into the same scan without changing how you use it.
-      </p>
+            <h2>What it's good at, honestly</h2>
+            <p>
+              The scan is classic computer vision: it learns the shape of the symbol you clicked and matches
+              every instance by size, aspect, fill and shape signature. That makes it fast, private and
+              dependable for <strong>isolated symbols in vector CAD plots</strong>: lighting layouts, power
+              and data schedules, fire services, ceiling grids. Symbols that touch wall lines, or dense
+              scanned sheets, are harder: those are the target of the ML detector being trained on an
+              open data pipeline, which drops into the same scan without changing how you use it.
+            </p>
 
-      <h2>Why count with a tool at all?</h2>
-      <p>
-        Fixture quantities are the classic takeoff error: 63 downlights on the lighting layout, 58 in
-        the estimate, and nobody finds out until the electrician's variation arrives. A click-per-sheet
-        count you can repeat on every revision and cross-check against the schedule turns that
-        risk into a 30-second check. Pair it with the
-        <a href="/compare-drawing-revisions">revision overlay compare</a> to see exactly which fixtures
-        moved between revisions before you recount.
-      </p>
+            <h2>Why count with a tool at all?</h2>
+            <p>
+              Fixture quantities are the classic takeoff error: 63 downlights on the lighting layout, 58 in
+              the estimate, and nobody finds out until the electrician's variation arrives. A click-per-sheet
+              count you can repeat on every revision and cross-check against the schedule turns that
+              risk into a 30-second check. Pair it with the
+              <a class="textlink" href="/compare-drawing-revisions">revision overlay compare</a> to see exactly which fixtures
+              moved between revisions before you recount.
+            </p>
 
-      <h2>FAQ</h2>
-      <details>
-        <summary>Is it really automatic?</summary>
-        <p>One click teaches the scan what to count; every match on the page is found and marked automatically after that.</p>
-      </details>
-      <details>
-        <summary>Does it work on scanned drawings?</summary>
-        <p>Clear scans of distinct symbols usually work. Dense or low-contrast scans are where the ML detector (in training) will take over.</p>
-      </details>
-      <details>
-        <summary>Can I count symbols on all pages?</summary>
-        <p>Yes: scan each sheet, and the markups list totals every label across the whole set for the Excel export.</p>
-      </details>
-      <details>
-        <summary>Do the count markers show in Bluebeam?</summary>
-        <p>Yes. Save into the PDF and the count markers become standard PDF annotations that open in Bluebeam Revu and Acrobat.</p>
-      </details>
-
-      <footer>
-        <a href="/">pdf2takeoff</a>: free, open-source PDF takeoff and markup. Calibrate, measure
-        lengths, areas and counts, auto-count repeated symbols, export to Excel.
-      </footer>
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>Is it really automatic?</summary>
+                <p>One click teaches the scan what to count; every match on the page is found and marked automatically after that.</p>
+              </details>
+              <details>
+                <summary>Does it work on scanned drawings?</summary>
+                <p>Clear scans of distinct symbols usually work. Dense or low-contrast scans are where the ML detector (in training) will take over.</p>
+              </details>
+              <details>
+                <summary>Can I count symbols on all pages?</summary>
+                <p>Yes: scan each sheet, and the markups list totals every label across the whole set for the Excel export.</p>
+              </details>
+              <details>
+                <summary>Do the count markers show in Bluebeam?</summary>
+                <p>Yes. Save into the PDF and the count markers become standard PDF annotations that open in Bluebeam Revu and Acrobat.</p>
+              </details>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/#agents">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/#benchmarks">Benchmarks</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
   </body>
 </html>

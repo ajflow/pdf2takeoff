@@ -66,6 +66,15 @@ function centroid(pts: Pt[]): Pt {
 }
 
 /** Count numbers run per label per page in creation order, like Bluebeam. */
+/**
+ * Scan-review styling, driven by the review card: hits of the open scan that
+ * aren't doubtful (drawn plainly although they are still 'check'), the hit
+ * that was clicked (a halo) and the hit under review (a ring).
+ */
+export const scanStyle = { quiet: new Set<string>(), example: null as string | null, reviewing: null as string | null };
+const HUMAN = '#9a5218'; // a person decides
+const HALO = '#4fd0c6';
+
 export function countNumberFor(m: Markup): number {
   const same = state.markups
     .filter((o) => o.type === 'count' && o.label === m.label && o.page === m.page)
@@ -75,6 +84,8 @@ export function countNumberFor(m: Markup): number {
 
 export function renderMarkups(): void {
   markupsLayer.replaceChildren();
+  // a selected quantity row keeps its markups bright and fades the rest
+  markupsLayer.classList.toggle('focusing', state.focusLabel !== null);
   const page = state.pageNum;
   for (const v of state.viewports.filter((x) => x.page === page)) {
     markupsLayer.appendChild(renderViewport(v));
@@ -128,8 +139,9 @@ function addVertices(g: SVGGElement, pts: { x: number; y: number }[], color: str
 function renderMarkup(m: Markup): SVGGElement {
   const color = COLORS[m.type] ?? '#333';
   const selected = m.id === state.selectedId;
+  const focus = state.focusLabel === `${m.type}|${m.label}`;
   const g = el('g', {
-    class: `markup m-${m.type}${selected ? ' selected' : ''}`,
+    class: `markup m-${m.type}${selected ? ' selected' : ''}${focus ? ' focus' : ''}`,
     'data-id': m.id,
   });
   const title = el('title');
@@ -208,7 +220,18 @@ function renderMarkup(m: Markup): SVGGElement {
     // count marker
     const p = pts[0];
     const num = countNumberFor(m);
-    g.appendChild(el('circle', { cx: p.x, cy: p.y, r: selected ? 8.5 : 7, fill: color, 'fill-opacity': 0.92 }));
+    // needs checking: white with the human-signal ring, until a person decides
+    const flagged = m.status === 'check' && !scanStyle.quiet.has(m.id);
+    if (scanStyle.reviewing === m.id) g.appendChild(el('circle', { cx: p.x, cy: p.y, r: 14, fill: 'none', stroke: HUMAN, 'stroke-width': 2.5 }));
+    if (scanStyle.example === m.id) g.appendChild(el('circle', { cx: p.x, cy: p.y, r: 11.5, fill: 'none', stroke: HALO, 'stroke-width': 2, opacity: 0.8 }));
+    g.appendChild(
+      el(
+        'circle',
+        flagged
+          ? { cx: p.x, cy: p.y, r: selected ? 8.5 : 7, fill: '#ffffff', stroke: HUMAN, 'stroke-width': 1.8 }
+          : { cx: p.x, cy: p.y, r: selected ? 8.5 : 7, fill: color, 'fill-opacity': 0.92 },
+      ),
+    );
     const t = el('text', {
       x: p.x,
       y: p.y + 0.5,
@@ -216,7 +239,7 @@ function renderMarkup(m: Markup): SVGGElement {
       'dominant-baseline': 'central',
       'font-size': 8,
       'font-weight': '700',
-      fill: '#ffffff',
+      fill: flagged ? HUMAN : '#ffffff',
       'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
     });
     t.textContent = String(num);

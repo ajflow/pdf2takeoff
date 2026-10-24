@@ -367,9 +367,12 @@ body.landing #workspace {
 
 body.landing #scrollContainer,
 body.landing .topbar,
+body.landing .rail,
 body.landing #sidebar,
-body.landing #statusbar,
-body.landing #pageStrip {
+body.landing #pageStrip,
+body.landing .hint-pill,
+body.landing .zoom-pill,
+body.landing .scan-card {
   display: none;
 }
 

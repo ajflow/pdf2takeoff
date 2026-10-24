@@ -4,19 +4,21 @@
 import { state, emit, calibrationForMarkup, takeoffData } from './state';
 import {
   groupsOf,
+  groupTotal,
   valueParts,
   formatMarkupValue,
   buildMatrix,
   toDelimited,
   xlsxBytes,
 } from '../engine/export';
-import { defaultLabel, markupLength, markupArea, markupPerimeter, markupVolume } from '../engine/geometry';
+import { defaultLabel } from '../engine/geometry';
 import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
 import { columnValuesFor } from './columns';
 import { isVisibleLayer } from './layers';
 import { fileStem } from './inputs';
+import { COLORS, scanStyle } from './render';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -56,6 +58,19 @@ export function initTable(): void {
         emit();
       }
     }
+  });
+  totalsEl.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('.qrow');
+    if (!row) return;
+    const key = row.dataset.key!;
+    state.focusLabel = state.focusLabel === key ? null : key;
+    state.selectedId = null;
+    // nothing of it on this page: go to the first page that has it
+    if (state.focusLabel && !state.markups.some((m) => m.page === state.pageNum && groupKey(m) === key)) {
+      const first = state.markups.find((m) => groupKey(m) === key);
+      if (first) state.pageNum = first.page;
+    }
+    emit();
   });
   tbody.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
@@ -153,41 +168,63 @@ export function renderTable(): void {
   renderTotals();
 }
 
+/** A quantity row's key: one row per label and type, like the exports' groups. */
+export const groupKey = (m: { type: string; label: string }): string => `${m.type}|${m.label}`;
+
+/** "12.00 m" -> ["12.00", "m"]; anything else stays whole. */
+function splitUnit(text: string): [string, string] {
+  const m = /^([-−]?[\d.,]+)\s+(.+)$/.exec(text);
+  return m ? [m[1], m[2]] : [text, ''];
+}
+
 function renderTotals(): void {
   totalsEl.replaceChildren();
-  const gs = groupsOf(state.markups.filter(isVisibleLayer));
+  // notes carry no quantity; they stay in the Markups view
+  const gs = groupsOf(state.markups.filter(isVisibleLayer)).filter((g) => g.type !== 'note');
   if (gs.length === 0) {
-    totalsEl.innerHTML = `<div class="totals-empty">Totals appear once you measure something.</div>`;
+    totalsEl.innerHTML = `<div class="totals-empty">Quantities appear here as you measure. Set the scale (C), then use Length, Area, Fill or Scan.</div>`;
     return;
   }
+  const selected = state.markups.find((m) => m.id === state.selectedId);
+  const focus = state.focusLabel ?? (selected ? groupKey(selected) : null);
   for (const g of gs) {
-    const cal = calibrationForMarkup(g.items[0]);
-    let text: string;
-    if (g.type === 'count') {
-      text = `${g.items.length} ×`;
-      const extras = columnValuesFor(g.items.length, g.items.length);
-      if (extras.length) text += extras.map((x) => ` · ${x.name}: ${x.text}`).join('');
-    } else if (g.type === 'angle') {
-      text = '—'; // angles don't sum
-    } else if (cal) {
-      const total = g.items.reduce((s, m) => {
-        if (g.type === 'length') return s + markupLength(m, cal.metersPerPt);
-        if (g.type === 'perimeter') return s + markupPerimeter(m, cal.metersPerPt);
-        if (g.type === 'volume') return s + markupVolume(m, cal.metersPerPt);
-        return s + markupArea(m, cal.metersPerPt);
-      }, 0);
-      if (g.type === 'length' || g.type === 'perimeter') text = formatLength(total, state.displayUnit);
-      else if (g.type === 'volume') text = formatVolume(total, state.displayUnit);
-      else text = formatArea(total, state.displayUnit);
-      const extras = columnValuesFor(typeof total === 'number' ? total : null, g.items.length);
-      if (extras.length) text += extras.map((x) => ` · ${x.name}: ${x.text}`).join('');
-    } else {
-      text = 'not calibrated';
-    }
-    const div = document.createElement('div');
-    div.className = 'total-row';
-    div.innerHTML = `<span class="total-label">${escapeHtml(g.label)} <em>(${g.items.length})</em></span><span class="total-value">${text}</span>`;
-    totalsEl.appendChild(div);
+    const { total, uncalibrated } = groupTotal(g, calibrationForMarkup);
+    let value = '';
+    let unit = '';
+    if (g.type === 'count') [value, unit] = [String(g.items.length), 'ea'];
+    else if (g.type === 'angle') value = '—'; // angles don't sum
+    else if (total === null) unit = 'not calibrated';
+    else if (g.type === 'length' || g.type === 'perimeter') [value, unit] = splitUnit(formatLength(total, state.displayUnit));
+    else if (g.type === 'volume') [value, unit] = splitUnit(formatVolume(total, state.displayUnit));
+    else [value, unit] = splitUnit(formatArea(total, state.displayUnit));
+
+    // under the label: what needs a person first, then anything else worth knowing
+    // flagged for a person: what wears the ring on the drawing (an open scan's plain hits don't)
+    const toCheck = g.items.filter((m) => m.status === 'check' && !scanStyle.quiet.has(m.id)).length;
+    const pages = new Set(g.items.map((m) => m.page)).size;
+    const notes: string[] = [];
+    if (uncalibrated && total !== null) notes.push(`${uncalibrated} not calibrated`);
+    if (pages > 1) notes.push(`${pages} pages`);
+    const sub = toCheck
+      ? `<small class="chk">${toCheck} to check${notes.length ? ' · ' + notes.join(' · ') : ''}</small>`
+      : notes.length
+        ? `<small>${notes.join(' · ')}</small>`
+        : '';
+    const extras = columnValuesFor(g.type === 'count' ? g.items.length : total, g.items.length);
+
+    const key = groupKey(g);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `qrow${focus === key ? ' sel' : ''}`;
+    row.dataset.key = key;
+    row.setAttribute('aria-pressed', String(state.focusLabel === key));
+    row.title = `Show only ${g.label} on the drawing`;
+    row.innerHTML =
+      `<span class="qrow-dot" style="background:${COLORS[g.type] ?? '#64748b'}"></span>` +
+      `<span class="qrow-name"><b>${escapeHtml(g.label)}</b>${sub}</span>` +
+      `<span class="qrow-val">${escapeHtml(value)}${unit ? `<em>${escapeHtml(unit)}</em>` : ''}</span>` +
+      (extras.length ? `<span class="qrow-extra">${extras.map((x) => `${escapeHtml(x.name)}: ${escapeHtml(x.text)}`).join(' · ')}</span>` : '');
+    totalsEl.appendChild(row);
   }
 }
 

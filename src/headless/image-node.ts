@@ -22,9 +22,9 @@ import { buildDocument, sniffInput, unsupportedMessage, type ImageTranscoder, ty
 import type { DrawingScale } from '../engine/inputs.ts';
 import { openPdf } from './pdfjs-node.ts';
 
-/** Image kinds the headless engine reads: @napi-rs/canvas decodes these, and TIFF has its own reader (HEIC neither). */
-export type ImageKind = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'avif' | 'svg' | 'tiff';
-const NODE_IMAGE_KINDS: ReadonlySet<InputKind> = new Set<InputKind>(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg', 'tiff']);
+/** Image kinds the headless engine reads: @napi-rs/canvas decodes most; TIFF and HEIC have their own readers. */
+export type ImageKind = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'avif' | 'svg' | 'tiff' | 'heic';
+const NODE_IMAGE_KINDS: ReadonlySet<InputKind> = new Set<InputKind>(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg', 'tiff', 'heic']);
 
 /** A decodable image by magic bytes, else null. */
 export function sniffImage(bytes: Uint8Array): ImageKind | null {

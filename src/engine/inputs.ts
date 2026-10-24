@@ -119,9 +119,9 @@ export function unsupportedMessage(kind: InputKind, name: string): string {
     case 'dxf':
       return `${file} is a binary DXF. Save it as an ASCII DXF (or plot it to PDF) from your CAD app and open that.`;
     case 'heic':
-      return `This browser can't read HEIC photos (Safari can). Export the photo as a JPEG, or open it in Safari.`;
+      return `${file} is a HEIC photo that couldn't be decoded. Export it as a JPEG and open that.`;
     default:
-      return `${file} isn't a drawing pdf2takeoff can open. It opens PDFs and images (PNG, JPEG, TIFF, WebP, GIF, BMP, AVIF, SVG); print or export the file to PDF first.`;
+      return `${file} isn't a drawing pdf2takeoff can open. It opens PDFs, DXF drawings and images (PNG, JPEG, HEIC, TIFF, WebP, GIF, BMP, AVIF, SVG); print or export the file to PDF first.`;
   }
 }
 
@@ -278,6 +278,17 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
       addTiffPages(out, bytes).forEach((d, i) => imagePages.set(start + i + 1, d));
       continue;
     }
+    // HEIC: the platform if it can (Safari), else libheif (Chrome, Windows, Node)
+    let heic: { png: Uint8Array; scale: number } | null = null;
+    if (kind === 'heic') {
+      heic = await transcode(bytes, kind).catch(() => null);
+      if (!heic) {
+        const { addHeicPage } = await import('./heic.ts');
+        await addHeicPage(out, bytes);
+        imagePages.set(out.getPageCount(), 0);
+        continue;
+      }
+    }
     let dpi = imageDpi(bytes, kind);
     // PNG and upright JPEG embed as they are (no re-encode, no quality loss);
     // everything else, and anything pdf-lib refuses, goes through the platform
@@ -290,7 +301,7 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
       }
     }
     if (!image) {
-      const { png, scale } = await transcode(bytes, kind);
+      const { png, scale } = heic ?? (await transcode(bytes, kind));
       if (scale < 1) shrunk.push({ name, scale });
       dpi = dpi ? plausibleDpi(dpi * scale) : 0;
       image = await out.embedPng(png);

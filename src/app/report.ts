@@ -8,6 +8,7 @@ import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, take
 import { getPdfDoc } from './viewer';
 import { COLORS, countNumberFor } from './render';
 import { buildMatrix, formatMarkupValue } from '../engine/export';
+import { fileStem } from './inputs';
 
 const MAX_LONG_EDGE_PX = 1400;
 
@@ -234,7 +235,7 @@ function totalsTable(): string {
 }
 
 function baseName(): string {
-  return state.fileName.replace(/\.pdf$/i, '') || 'takeoff';
+  return fileStem(state.fileName) || 'takeoff';
 }
 
 function escapeHtml(s: string): string {

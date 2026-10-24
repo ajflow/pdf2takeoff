@@ -6,6 +6,8 @@ import type { DisplayUnit } from '../engine/units';
 import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
 import type { Viewport } from '../engine/viewports';
 import { resolveCalibration } from '../engine/viewports';
+import { paperFactor } from '../engine/inputs';
+import { metersPerPtForRatio, ratioForMetersPerPt } from '../engine/units';
 import type { CustomColumn, TakeoffData } from '../engine/export';
 
 export type { Calibration, Markup, MarkupType, Pt };
@@ -28,6 +30,8 @@ export interface AppState {
   displayUnit: DisplayUnit;
   tool: ToolId;
   calibrations: Map<number, Calibration>;
+  /** Pages that came from an image, with the scan resolution it stated (0 = paper size unknown). */
+  imagePages: Map<number, number>;
   markups: Markup[];
   selectedId: string | null;
   /** last reversible action, so Ctrl+Z can restore a drag before falling back to delete-newest */
@@ -53,6 +57,7 @@ export const state: AppState = {
   displayUnit: 'm',
   tool: 'pan',
   calibrations: new Map(),
+  imagePages: new Map(),
   markups: [],
   selectedId: null,
   lastAction: null,
@@ -73,6 +78,22 @@ export function subscribe(fn: Listener): () => void {
 
 export function emit(): void {
   for (const fn of listeners) fn();
+}
+
+/**
+ * Metres per page point for a printed ratio (1:100) on a page, or null when
+ * the page came from an image that doesn't say how big its paper was: a
+ * ratio needs the paper size, so those pages are calibrated from a dimension.
+ */
+export function metersPerPtForRatioOn(page: number, ratio: number): number | null {
+  const f = paperFactor(state.imagePages, page);
+  return f === null ? null : metersPerPtForRatio(ratio) * f;
+}
+
+/** The printed ratio a scale amounts to on a page, or null when its paper size is unknown. */
+export function ratioOn(page: number, metersPerPt: number): number | null {
+  const f = paperFactor(state.imagePages, page);
+  return f === null ? null : ratioForMetersPerPt(metersPerPt) / f;
 }
 
 export function calibrationFor(page: number): Calibration | undefined {

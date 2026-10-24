@@ -7,6 +7,7 @@ import { getPageAnnotations } from './viewer';
 import { buildAnnotatedPdf } from '../engine/annotate';
 import { parseMarkups, type AnnotationLike } from '../engine/read';
 import { syncUpsertMarkup } from './session';
+import { fileStem } from './inputs';
 import type { Markup } from '../engine/types';
 
 export async function saveAnnotatedPdf(): Promise<void> {
@@ -15,7 +16,7 @@ export async function saveAnnotatedPdf(): Promise<void> {
   const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = state.fileName.replace(/\.pdf$/i, '') + '-markups.pdf';
+  a.download = fileStem(state.fileName) + '-markups.pdf';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }

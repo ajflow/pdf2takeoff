@@ -113,6 +113,11 @@
           },
           {
             "@type": "Question",
+            "name": "Can I measure a JPG, PNG or screenshot of a plan?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open or drop any image (PNG, JPEG, WebP, GIF, BMP, AVIF or SVG), or paste a screenshot with Ctrl+V or ⌘V. Drop several files at once and they open as one set of sheets. An image only has a paper size when the scan states its resolution, so most images are calibrated from a dimension you know. Markups save into a PDF like any other drawing." }
+          },
+          {
+            "@type": "Question",
             "name": "Who makes pdf2takeoff?",
             "acceptedAnswer": { "@type": "Answer", "text": "Flowtivity, an AI consultancy on the Gold Coast, Australia, that builds practical AI tools for construction and other industries." }
           }
@@ -121,9 +126,9 @@
     </script>
   </head>
   <body class="landing">
-    <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
-    <input type="file" id="cmpFileA" accept="application/pdf,.pdf" hidden />
-    <input type="file" id="cmpFileB" accept="application/pdf,.pdf" hidden />
+    <input type="file" id="fileInput" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" multiple hidden />
+    <input type="file" id="cmpFileA" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
+    <input type="file" id="cmpFileB" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
 
     <!-- site header: landing mode only (hidden by the app styles once a document is open) -->
     <header id="siteHeader" class="fs-top navy">
@@ -148,9 +153,9 @@
         <span class="ver">v0.1</span>
       </a>
 
-      <button class="btn primary" id="openBtn" title="Open a PDF drawing">
+      <button class="btn primary" id="openBtn" title="Open a drawing: PDF or image (several make one set)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        Open PDF
+        Open drawing
       </button>
 
       <div class="toolgroup" role="toolbar" aria-label="Tools">
@@ -318,12 +323,13 @@
                 <div class="drop" id="open">
                   <div class="drop-zone">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg>
-                    <strong>Drop a PDF drawing here</strong>
-                    <p class="muted">Plans, sections, schedules. Vector PDFs and scans.</p>
+                    <strong>Drop a drawing here</strong>
+                    <p class="muted">PDFs, scans, photos and screenshots. Drop several to open a set, or paste with ⌘V.</p>
                     <div class="drop-actions">
                       <button class="btn btn-primary" type="button" id="openBtnHero">Choose a file</button>
                       <button class="btn btn-outline" type="button" id="sampleBtnHero">Try the sample drawing</button>
                     </div>
+                    <p class="open-note" id="openNote" role="status" hidden></p>
                   </div>
                   <div class="drop-foot">
                     <span>No account</span><span>Nothing uploaded</span><span>Works offline</span>
@@ -416,7 +422,7 @@
     </div>
 
     <footer id="statusbar">
-      <span id="toolHint">Open a PDF drawing to begin</span>
+      <span id="toolHint">Open a drawing (PDF or image) to begin</span>
       <span class="spacer"></span>
       <span id="cursorPos"></span>
       <span id="fileIndicator"></span>
@@ -660,6 +666,7 @@
             <details><summary>Does it work with Bluebeam Revu?</summary><p>Yes. Markups save into the PDF as standard Line, Polygon and FreeText annotations with their measurements, so they open in Bluebeam Revu and Adobe Acrobat.</p></details>
             <details><summary>Can AI do my takeoff for me?</summary><p>Not reliably on its own. The best published model gets 54.3% of floor plan counts exactly right. pdf2takeoff uses AI to propose items you confirm, and flags the ones most likely to be wrong.</p></details>
             <details><summary>Does it work on scanned drawings?</summary><p>Yes, with care. Scans are read with on-device OCR. Accuracy is lower than on PDFs exported from CAD, and we publish that gap in our benchmarks.</p></details>
+            <details><summary>Can I measure a JPG, PNG or screenshot of a plan?</summary><p>Yes. Open or drop any image (PNG, JPEG, WebP, GIF, BMP, AVIF or SVG), or paste a screenshot with Ctrl+V or ⌘V. Drop several files at once and they open as one set of sheets. An image only has a paper size when the scan states its resolution, so most images are calibrated from a dimension you know. Markups save into a PDF like any other drawing.</p></details>
             <details><summary>Who makes pdf2takeoff?</summary><p>Flowtivity, an AI consultancy on the Gold Coast, Australia, that builds practical AI tools for construction and other industries.</p></details>
           </div>
         </div>

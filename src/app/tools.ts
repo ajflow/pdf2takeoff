@@ -1,7 +1,7 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup } from './state';
+import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
 import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPdfDoc } from './viewer';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
@@ -17,7 +17,7 @@ import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dyna
 import { renderRaster } from './raster';
 import type { RasterPage } from '../engine/ports';
 import { scanDeps } from './adapters';
-import { parseLength, toMeters, PRESET_SCALES, metersPerPtForRatio, METERS_PER_PT, type Unit } from '../engine/units';
+import { parseLength, toMeters, PRESET_SCALES, METERS_PER_PT, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -109,7 +109,11 @@ export function initTools(overlay: SVGSVGElement): void {
     const ratio = parseFloat(calibPresetSel.value);
     if (!Number.isFinite(ratio) || ratio <= 0) return;
     const label = calibPresetSel.selectedOptions[0]?.label ?? `1:${ratio}`;
-    applyScaleToPages(metersPerPtForRatio(ratio), `preset ${label}`);
+    if (!applyRatioToPages(ratio, `preset ${label}`)) {
+      calibPresetSel.value = '';
+      hint(NO_PAPER_HINT);
+      return;
+    }
     closeCalibModal();
     renderMarkups();
     emit();
@@ -460,14 +464,38 @@ function closeCalibModal(): void {
   pendingCalib = null;
 }
 
+/** The pages a scale applies to: the current one, or every page when "all pages" is checked. */
+function scalePages(): number[] {
+  const all = (document.getElementById('calibAllPages') as HTMLInputElement | null)?.checked;
+  return all ? Array.from({ length: state.pageCount }, (_, i) => i + 1) : [state.pageNum];
+}
+
 /** Set the scale on the current page, or every page when "all pages" is checked. */
 function applyScaleToPages(metersPerPt: number, source: string): void {
-  const all = (document.getElementById('calibAllPages') as HTMLInputElement | null)?.checked;
-  const pages = all ? Array.from({ length: state.pageCount }, (_, i) => i + 1) : [state.pageNum];
-  for (const p of pages) {
+  for (const p of scalePages()) {
     state.calibrations.set(p, { metersPerPt, source });
     syncCalibration(p, { metersPerPt, source });
   }
+}
+
+const NO_PAPER_HINT =
+  "This page is an image that doesn't say how big its paper was, so a ratio like 1:100 can't be used. Click both ends of a dimension you know and type its length.";
+
+/**
+ * Set a printed ratio (1:100) on the current page or every page. Each page
+ * converts it through its own paper size; image pages without one are
+ * skipped. False when the current page is one of those (nothing applied there).
+ */
+function applyRatioToPages(ratio: number, source: string): boolean {
+  let current = false;
+  for (const p of scalePages()) {
+    const metersPerPt = metersPerPtForRatioOn(p, ratio);
+    if (metersPerPt === null) continue;
+    state.calibrations.set(p, { metersPerPt, source });
+    syncCalibration(p, { metersPerPt, source });
+    if (p === state.pageNum) current = true;
+  }
+  return current;
 }
 
 // --- volume depth modal ---
@@ -548,7 +576,10 @@ async function runOcrRead(): Promise<void> {
       }
     }
     if (scaleHit) {
-      applyScaleToPages(metersPerPtForRatio(scaleHit.ratio), `${scaleHit.source} (sheet)`);
+      if (!applyRatioToPages(scaleHit.ratio, `${scaleHit.source} (sheet)`)) {
+        hint(`The sheet says 1:${scaleHit.ratio}, but this page is an image without a paper size. Click both ends of a dimension you know and type its length.`);
+        return;
+      }
       closeCalibModal();
       renderMarkups();
       emit();
@@ -593,11 +624,16 @@ function applyViewport(): void {
     return;
   }
   const label = vpPresetSel.selectedOptions[0]?.label ?? `1:${Math.round(ratio)}`;
+  const metersPerPt = metersPerPtForRatioOn(state.pageNum, ratio);
+  if (metersPerPt === null) {
+    hint(NO_PAPER_HINT);
+    return;
+  }
   state.viewports.push({
     id: nextId('vp'),
     page: state.pageNum,
     points: pendingViewport.map((p) => ({ ...p })),
-    metersPerPt: metersPerPtForRatio(ratio),
+    metersPerPt,
     source: `viewport ${label}`,
   });
   pendingViewport = null;
@@ -636,8 +672,11 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
   const items = await getPageTextItems(page).catch(() => []);
   const words = items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height));
   const { votes, nts } = scaleVotesFromWords(words, 'text layer');
-  const measured = metersPerPt / METERS_PER_PT;
-  const c = checkAgainstSheet(measured, votes, nts);
+  // the printed ratio needs the paper size; an image page without one skips
+  // straight to the doorway check, which only needs pixels and metres
+  const paperRatio = ratioOn(page, metersPerPt);
+  const measured = paperRatio ?? metersPerPt / METERS_PER_PT;
+  const c: ReturnType<typeof checkAgainstSheet> = paperRatio === null ? { status: 'none' } : checkAgainstSheet(measured, votes, nts);
   if (c.status === 'disagrees' && c.sheetRatio !== undefined) {
     const why = c.likely ? `, likely ${c.likely}` : '';
     hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);

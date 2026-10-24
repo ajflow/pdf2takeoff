@@ -2,7 +2,7 @@
 // PDF space; converted to the viewBox (viewport@1) here. Sizes are paper-space
 // points, so markups look like printed PDF annotations at any zoom.
 
-import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, defaultLabel } from './state';
+import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, defaultLabel, ratioOn } from './state';
 import { markupsLayer, previewLayer, pdfToView } from './viewer';
 import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';
@@ -103,7 +103,7 @@ function renderViewport(v: { points: Pt[]; metersPerPt: number; source: string }
     'paint-order': 'stroke', stroke: '#ffffff', 'stroke-width': 2.4, 'stroke-linejoin': 'round',
     'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
   });
-  const ratio = ratioForMetersPerPt(v.metersPerPt);
+  const ratio = ratioOn(state.pageNum, v.metersPerPt) ?? ratioForMetersPerPt(v.metersPerPt);
   label.textContent = ` viewport 1:${Math.abs(ratio - Math.round(ratio)) < 0.5 ? Math.round(ratio) : ratio.toFixed(1)} `;
   g.appendChild(label);
   return g;

@@ -339,6 +339,7 @@
               </div>
 
               <!-- The Flowtivity Flow Line, resolving into a takeoff dimension -->
+              <div class="flowline-wrap">
               <svg class="flowline" viewBox="0 0 1280 120" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M0 96 C 180 96, 260 30, 420 30 S 640 78, 760 60" fill="none" stroke="rgb(79 208 198)" stroke-width="2" opacity=".55"/>
                 <path d="M760 60 L 1240 60" fill="none" stroke="rgb(113 231 222)" stroke-width="2"/>
@@ -346,6 +347,7 @@
                 <rect x="966" y="44" width="68" height="32" rx="6" fill="rgb(10 25 47)"/>
                 <text x="1000" y="66" text-anchor="middle" fill="rgb(113 231 222)" font-family="Inter, sans-serif" font-size="16" font-weight="600">12.00 m</text>
               </svg>
+              </div>
 
               <div class="proof">
                 <div><b>Free, with no limits</b>No account, no paid tier, no file caps.</div>
@@ -518,42 +520,44 @@
                 </defs>
                 <rect width="760" height="400" fill="url(#grid)"/>
                 <!-- room fill (Dynamic Fill) -->
-                <rect x="84" y="96" width="228" height="216" fill="rgb(14 165 160 / .13)" stroke="rgb(9 131 126)" stroke-width="2" stroke-dasharray="6 4"/>
+                <g id="vgFill"><rect x="84" y="96" width="228" height="216" fill="rgb(14 165 160 / .13)" stroke="rgb(9 131 126)" stroke-width="2" stroke-dasharray="6 4"/></g>
                 <!-- walls -->
                 <path d="M80 92 H 600 V 316 H 80 Z" fill="none" stroke="rgb(16 36 58)" stroke-width="7"/>
                 <path d="M316 92 V 250" stroke="rgb(16 36 58)" stroke-width="5"/>
                 <path d="M316 250 A 50 50 0 0 1 366 300" fill="none" stroke="rgb(16 36 58)" stroke-width="1.2" stroke-dasharray="3 3"/>
                 <path d="M600 160 V 230" stroke="white" stroke-width="9"/><path d="M596 160 H 604 M596 230 H 604 M600 160 V 230" stroke="rgb(16 36 58)" stroke-width="1.5"/>
                 <text x="198" y="214" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="rgb(16 36 58)">OFFICE</text>
-                <text x="198" y="232" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="rgb(7 117 113)">32.00 m²</text>
+                <g id="vgArea"><text x="198" y="232" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="rgb(7 117 113)">32.00 m²</text></g>
                 <text x="458" y="210" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="600" fill="rgb(16 36 58)">MEETING</text>
                 <!-- measured wall (length) -->
+                <g id="vgLength">
                 <path d="M80 50 H 600" stroke="rgb(9 131 126)" stroke-width="2.5"/>
                 <path d="M80 40 V 60 M600 40 V 60 M74 56 L 86 44 M594 56 L 606 44" stroke="rgb(9 131 126)" stroke-width="2.5"/>
                 <rect x="304" y="38" width="72" height="24" rx="5" fill="white"/>
                 <text x="340" y="55" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" fill="rgb(7 117 113)">12.00 m</text>
-                <!-- count markers -->
-                <g font-family="Inter, sans-serif" font-size="11" font-weight="700" text-anchor="middle">
-                  <g fill="rgb(7 117 113)">
-                    <circle cx="130" cy="140" r="11"/><circle cx="198" cy="140" r="11"/><circle cx="266" cy="140" r="11"/>
-                    <circle cx="130" cy="272" r="11"/><circle cx="198" cy="272" r="11"/><circle cx="266" cy="272" r="11"/>
-                    <circle cx="410" cy="140" r="11"/>
-                  </g>
-                  <g fill="white">
-                    <text x="130" y="144">1</text><text x="198" y="144">2</text><text x="266" y="144">3</text>
-                    <text x="130" y="276">4</text><text x="198" y="276">5</text><text x="266" y="276">6</text>
-                    <text x="410" y="144">7</text>
-                  </g>
-                  <circle cx="506" cy="140" r="11" fill="white" stroke="rgb(154 82 24)" stroke-width="2.5"/>
-                  <text x="506" y="144" fill="rgb(154 82 24)">8</text>
                 </g>
+                <!-- count markers (one group per hit, so a scan can reveal them in turn) -->
+                <g font-family="Inter, sans-serif" font-size="11" font-weight="700" text-anchor="middle">
+                  <g class="vg-hit" data-x="130" data-y="140"><circle cx="130" cy="140" r="11" fill="rgb(7 117 113)"/><text x="130" y="144" fill="white">1</text></g>
+                  <g class="vg-hit" data-x="198" data-y="140"><circle cx="198" cy="140" r="11" fill="rgb(7 117 113)"/><text x="198" y="144" fill="white">2</text></g>
+                  <g class="vg-hit" data-x="266" data-y="140"><circle cx="266" cy="140" r="11" fill="rgb(7 117 113)"/><text x="266" y="144" fill="white">3</text></g>
+                  <g class="vg-hit" data-x="130" data-y="272"><circle cx="130" cy="272" r="11" fill="rgb(7 117 113)"/><text x="130" y="276" fill="white">4</text></g>
+                  <g class="vg-hit" data-x="198" data-y="272"><circle cx="198" cy="272" r="11" fill="rgb(7 117 113)"/><text x="198" y="276" fill="white">5</text></g>
+                  <g class="vg-hit" data-x="266" data-y="272"><circle cx="266" cy="272" r="11" fill="rgb(7 117 113)"/><text x="266" y="276" fill="white">6</text></g>
+                  <g class="vg-hit" data-x="410" data-y="140"><circle cx="410" cy="140" r="11" fill="rgb(7 117 113)"/><text x="410" y="144" fill="white">7</text></g>
+                  <g class="vg-hit vg-flag" data-x="506" data-y="140"><circle cx="506" cy="140" r="11" fill="white" stroke="rgb(154 82 24)" stroke-width="2.5"/><text x="506" y="144" fill="rgb(154 82 24)">8</text></g>
+                </g>
+                <g id="vgCheck">
                 <path d="M519 134 L 548 118" stroke="rgb(154 82 24)" stroke-width="1.5"/>
                 <rect x="548" y="104" width="62" height="24" rx="5" fill="rgb(154 82 24)"/>
                 <text x="579" y="120" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="white">Check</text>
+                </g>
                 <!-- title block -->
+                <g id="vgTitle">
                 <rect x="560" y="340" width="176" height="44" fill="white" stroke="rgb(16 36 58)" stroke-width="1.2"/>
                 <text x="570" y="358" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="rgb(16 36 58)">GROUND FLOOR PLAN · REV B</text>
                 <text x="570" y="374" font-family="Inter, sans-serif" font-size="9.5" fill="rgb(82 100 120)">SCALE 1:100 @ A3</text>
+                </g>
               </svg>
             </figure>
             <aside class="qty" aria-label="Quantities">

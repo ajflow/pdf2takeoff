@@ -494,3 +494,10 @@ window.addEventListener('keydown', (e) => {
 setTool('pan');
 $('toolHint').textContent = 'Open a PDF drawing to begin, or drop one anywhere in this window';
 emit();
+
+// the homepage's dither moments are decoration: load them once the page is idle
+const loadHomeFx = (): void => {
+  if (document.body.classList.contains('landing')) void import('./fx/home').then((m) => m.initHome());
+};
+if ('requestIdleCallback' in window) requestIdleCallback(loadHomeFx, { timeout: 2500 });
+else setTimeout(loadHomeFx, 1200);

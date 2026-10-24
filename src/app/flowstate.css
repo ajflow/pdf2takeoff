@@ -1362,6 +1362,51 @@ body.fs-page {
   }
 }
 
+/* ---------- wonder layer: dither canvases (src/app/fx) ---------- */
+
+.fx-dither {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.flowline-wrap {
+  position: relative;
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+}
+
+.flowline-wrap .flowline {
+  margin-top: 0;
+}
+
+.sheet,
+.drop-zone,
+.closing {
+  position: relative;
+}
+
+/* room under the buttons for the drifting wave (beats the #seo section padding) */
+body.landing #seo section.closing {
+  padding-bottom: calc(var(--fs-section-space) + 4.5rem);
+}
+
+/* behind the words in the drop zone and the closing section */
+.drop-zone > :not(.fx-dither),
+.closing > :not(.fx-dither) {
+  position: relative;
+  z-index: 1;
+}
+
+.step::before {
+  transition: background 0.3s ease;
+}
+
+.step.lit::before {
+  background: var(--fs-ribbon-700);
+}
+
 /* no animation is required: honour the reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
   body.landing *,

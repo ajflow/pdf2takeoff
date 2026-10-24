@@ -9,6 +9,7 @@ Everything runs in your browser. **Drawings are never uploaded**; rendering and 
 - Price: free, no account, no file limits, no paid tier
 - Licence: Apache-2.0 — to our knowledge the **only permissively licensed takeoff engine** in a field of AGPL competitors, so you can embed and bundle it
 - Privacy: 100% client-side, zero telemetry
+- AI: models may propose, deterministic code measures, and a person reviews every proposal. The browser app never sends a drawing anywhere. The only path that sends a drawing off your machine is the opt-in [`ai-count`](#ai-count-bring-your-own-model) CLI command, and only to the provider you choose (or a local model)
 
 ## Benchmarks & evals — the numbers, the method, the failures
 

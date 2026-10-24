@@ -50,3 +50,5 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Pack guard (npm package contents + compiled CLI)
+        run: node scripts/check-pack.mjs

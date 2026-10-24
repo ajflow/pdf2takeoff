@@ -124,7 +124,7 @@ export async function runMcpServer(): Promise<void> {
     'open_document',
     {
       description:
-        'Open a local PDF drawing for takeoff (an image works too, PNG, JPG, WebP, GIF, BMP, AVIF or SVG: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
+        'Open a local PDF drawing for takeoff (an image works too, PNG, JPG, TIFF, WebP, GIF, BMP, AVIF or SVG: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
       inputSchema: { path: z.string().describe('path to the PDF (or PNG/JPG) on this machine') },
     },
     async ({ path }) => {

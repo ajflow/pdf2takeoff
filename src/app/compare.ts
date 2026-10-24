@@ -3,6 +3,7 @@
 // revision B (added), dark ink in both (unchanged). The Bluebeam-style overlay.
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { PDFJS_ASSET_URLS } from './viewer';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { emit } from './state';
@@ -41,7 +42,7 @@ export async function loadRevision(
   bytes: Uint8Array,
   name: string,
 ): Promise<void> {
-  const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice(), ...PDFJS_ASSET_URLS }).promise;
   const page = 1;
   const p = await doc.getPage(page);
   const vp = p.getViewport({ scale: 1 });

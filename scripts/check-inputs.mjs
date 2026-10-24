@@ -10,10 +10,17 @@
 //      untrustworthy ones (72, 96, 144 dpi) are ignored, and the paper entry
 //      survives pdf.js's metadata read, so paperFactor can convert ratios
 //   4. the headless openAny opens WebP, GIF, BMP, AVIF and SVG files
+//   5. TIFF: a Group 4 scan passes through untouched (single strip or many)
+//      and renders black on white at its stated 300 dpi; a colour LZW scan
+//      is decoded; a multi-page TIFF gives a page each
+//   6. scanned-PDF codecs pdf.js decodes with WebAssembly (CCITT fax via the
+//      Group 4 page above, and JPEG 2000 here) render: without the wasm they
+//      came out blank
 
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { crc32 } from 'node:zlib';
 import { createCanvas } from '@napi-rs/canvas';
 import { PDFDocument } from 'pdf-lib';
@@ -289,5 +296,64 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
+// --- 5. TIFF ------------------------------------------------------------------------
+
+const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'scans');
+const tif = (name) => new Uint8Array(readFileSync(join(fixtures, name)));
+const px = (r, x, y) => {
+  const i = (y * r.width + x) * 4;
+  return [r.data[i], r.data[i + 1], r.data[i + 2]];
+};
+const dark = (r, x, y) => px(r, x, y)[0] < 100;
+const inkCount = (r) => {
+  let n = 0;
+  for (let i = 0; i < r.data.length; i += 4) if (r.data[i] < 100) n++;
+  return n;
+};
+
+const g4 = tif('plan-g4-300dpi.tif');
+check('tiff: sniffed by its bytes', sniffInput(g4, 'scan.bin') === 'tiff');
+const g4doc = await buildDocument([{ bytes: g4, name: 'scan.tif' }], nodeTranscoder);
+const g4pdf = await PDFDocument.load(g4doc.bytes);
+check('tiff G4: one page of W/3 x H/3 points', g4pdf.getPageCount() === 1 && near(g4pdf.getPage(0).getWidth(), 100) && near(g4pdf.getPage(0).getHeight(), 60));
+check('tiff G4: its 300 dpi is the paper size', g4doc.imagePages.get(1) === 300);
+check('tiff G4: passes through as a CCITTFaxDecode stream, not decoded', new TextDecoder('latin1').decode(g4doc.bytes).includes('/CCITTFaxDecode') && g4doc.bytes.length < 4000, `${g4doc.bytes.length} bytes`);
+const g4r = await renderRasterNode(await openPdf(g4doc.bytes), 1, 3);
+check('tiff G4: renders black lines on white (frame, wall) at native size', g4r.width === 300 && dark(g4r, 14, 90) && dark(g4r, 151, 60) && !dark(g4r, 75, 90) && !dark(g4r, 230, 150), `${g4r.width}px frame ${px(g4r, 14, 90)} wall ${px(g4r, 151, 60)} room ${px(g4r, 75, 90)}`);
+const stripsDoc = await buildDocument([{ bytes: tif('plan-g4-strips.tif'), name: 'strips.tif' }], nodeTranscoder);
+const stripsR = await renderRasterNode(await openPdf(stripsDoc.bytes), 1, 3);
+check('tiff G4 in 23 strips: renders the same as one strip', Math.abs(inkCount(stripsR) - inkCount(g4r)) <= inkCount(g4r) * 0.01, `${inkCount(stripsR)} vs ${inkCount(g4r)}`);
+
+const lzwDoc = await buildDocument([{ bytes: tif('plan-lzw-rgb.tif'), name: 'colour.tif' }], nodeTranscoder);
+const lzwR = await renderRasterNode(await openPdf(lzwDoc.bytes), 1, 3);
+const red = px(lzwR, 120, 80);
+check('tiff LZW colour: decoded, frame dark and the red line red', lzwDoc.imagePages.get(1) === 200 && dark(lzwR, 11, 80) && red[0] > 180 && red[1] < 90, `red ${red}`);
+
+const setDoc3 = await buildDocument([{ bytes: tif('set-3-pages.tif'), name: 'set.tif' }], nodeTranscoder);
+const set3 = await PDFDocument.load(setDoc3.bytes);
+check('tiff multi-page: a page each, no resolution stated', set3.getPageCount() === 3 && [...setDoc3.imagePages].map(([p, d]) => `${p}:${d}`).join(',') === '1:0,2:0,3:0' && near(set3.getPage(2).getWidth(), 80));
+const tdir = mkdtempSync(join(tmpdir(), 'p2t-tiff-'));
+try {
+  const f = join(tdir, 'set.tiff');
+  writeFileSync(f, tif('set-3-pages.tif'));
+  const { doc, kind } = await openAny(f);
+  check('openAny: a multi-page .tiff opens with all its pages', kind === 'image' && doc.numPages === 3);
+} finally {
+  rmSync(tdir, { recursive: true, force: true });
+}
+
+// --- 6. a scanned PDF with a JPEG 2000 image ---------------------------------------
+
+{
+  const jp2 = tif('plan.jp2');
+  const doc = await PDFDocument.create({ updateMetadata: false });
+  const page = doc.addPage([40, 80 / 3]);
+  const name = page.node.newXObject('Im', doc.context.register(doc.context.stream(jp2, { Type: 'XObject', Subtype: 'Image', Width: 120, Height: 80, Filter: 'JPXDecode' })));
+  const { pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = await import('pdf-lib');
+  page.pushOperators(pushGraphicsState(), concatTransformationMatrix(40, 0, 0, 80 / 3, 0, 0), drawObject(name), popGraphicsState());
+  const r = await renderRasterNode(await openPdf(await doc.save()), 1, 3);
+  check('scanned PDF: a JPEG 2000 image renders (frame dark, inside white)', dark(r, 7, 40) && dark(r, 61, 20) && !dark(r, 30, 40), `frame ${px(r, 7, 40)} inside ${px(r, 30, 40)}`);
+}
+
 if (failed) process.exit(1);
-console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny)');
+console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny, TIFF, scanned-PDF codecs)');

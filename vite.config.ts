@@ -1,5 +1,40 @@
 import { defineConfig, type Plugin } from 'vite';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
+
+// pdf.js 5 decodes CCITT fax, JBIG2 and JPEG 2000 images (the codecs of most
+// scanned PDFs) with WebAssembly it fetches from wasmUrl, and draws the
+// standard-14 fonts from standardFontDataUrl. Ship both with the site under
+// /pdfjs/ (fetched only when a drawing needs them), and serve them in dev.
+const pdfjsRoot = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+const PDFJS_ASSETS: [string, (name: string) => boolean][] = [
+  ['wasm', (n) => /^(jbig2|openjpeg|qcms)/.test(n) && /\.(wasm|js)$/.test(n)],
+  ['standard_fonts', () => true],
+];
+function pdfjsAssets(): Plugin {
+  const files = () =>
+    PDFJS_ASSETS.flatMap(([dir, keep]) =>
+      readdirSync(join(pdfjsRoot, dir))
+        .filter((n) => keep(n) && statSync(join(pdfjsRoot, dir, n)).isFile())
+        .map((n): [string, string] => [`pdfjs/${dir}/${n}`, join(pdfjsRoot, dir, n)]),
+    );
+  return {
+    name: 'pdfjs-assets',
+    configureServer(server) {
+      const map = new Map<string, string>(files());
+      server.middlewares.use((req, res, next) => {
+        const path = map.get((req.url ?? '').split('?')[0].replace(/^\//, ''));
+        if (!path) return next();
+        if (path.endsWith('.wasm')) res.setHeader('Content-Type', 'application/wasm');
+        res.end(readFileSync(path));
+      });
+    },
+    generateBundle() {
+      for (const [fileName, path] of files()) this.emitFile({ type: 'asset', fileName, source: readFileSync(path) });
+    },
+  };
+}
 
 // onnxruntime-web's dynamic import drags its 28 MB wasm binary into dist/,
 // even though scan-onnx.ts loads the runtime from the CDN at runtime
@@ -16,6 +51,7 @@ function dropOrtWasmAssets(): Plugin {
 }
 
 export default defineConfig({
+  plugins: [pdfjsAssets()],
   build: {
     target: 'es2022',
     // pdf.worker is loaded via ?url import; keep chunking predictable

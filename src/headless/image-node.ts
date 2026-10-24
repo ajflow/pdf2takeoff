@@ -21,9 +21,9 @@ import { RASTER_SCALE } from '../engine/ports.ts';
 import { buildDocument, sniffInput, unsupportedMessage, type ImageTranscoder, type InputKind } from '../engine/inputs.ts';
 import { openPdf } from './pdfjs-node.ts';
 
-/** Image kinds @napi-rs/canvas decodes (TIFF and HEIC it does not). */
-export type ImageKind = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'avif' | 'svg';
-const NODE_IMAGE_KINDS: ReadonlySet<InputKind> = new Set<InputKind>(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg']);
+/** Image kinds the headless engine reads: @napi-rs/canvas decodes these, and TIFF has its own reader (HEIC neither). */
+export type ImageKind = 'png' | 'jpeg' | 'webp' | 'gif' | 'bmp' | 'avif' | 'svg' | 'tiff';
+const NODE_IMAGE_KINDS: ReadonlySet<InputKind> = new Set<InputKind>(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg', 'tiff']);
 
 /** A decodable image by magic bytes, else null. */
 export function sniffImage(bytes: Uint8Array): ImageKind | null {

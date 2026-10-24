@@ -28,7 +28,10 @@ const runOne = (script) =>
 // one worker per core at most; each takes the next script off the list
 const results = new Array(scripts.length);
 let next = 0;
-const limit = Math.min(os.availableParallelism(), scripts.length);
+// Cloudflare Pages builders are memory-tight: with every check running at once
+// the OCR check's small-print pass starves and misreads labels, so run them
+// one at a time there (build time doesn't matter); parallel everywhere else
+const limit = process.env.CF_PAGES ? 1 : Math.min(os.availableParallelism(), scripts.length);
 await Promise.all(
   Array.from({ length: limit }, async () => {
     while (next < scripts.length) {

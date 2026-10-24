@@ -18,6 +18,7 @@
 //      where they belong, text as real text, frozen layers and paper space
 //      left out, Scan finding all 8 inserts of a block; unitless and metre
 //      drawings, and a binary DXF's message
+//   8. HEIC photos decode with libheif where the platform can't (Node)
 //   6. scanned-PDF codecs pdf.js decodes with WebAssembly (CCITT fax via the
 //      Group 4 page above, and JPEG 2000 here) render: without the wasm they
 //      came out blank
@@ -455,5 +456,27 @@ check('dxf: a binary DXF says to save it as ASCII', /ASCII DXF/.test(binErr), bi
   }
 }
 
+// --- 8. HEIC (libheif where the platform can't decode it: Node here) --------------
+
+{
+  const heic = tif('plan.heic');
+  check('heic: sniffed by its ftyp brand', sniffInput(heic, 'photo.bin') === 'heic');
+  const built = await buildDocument([{ bytes: heic, name: 'photo.heic' }], nodeTranscoder);
+  const page = (await PDFDocument.load(built.bytes)).getPage(0);
+  check('heic: one page of W/3 x H/3 points', near(page.getWidth(), 100) && near(page.getHeight(), 200 / 3), `${page.getWidth()} x ${page.getHeight()}`);
+  const r = await renderRasterNode(await openPdf(built.bytes), 1, 3);
+  const red = px(r, 220, 80);
+  check('heic: decoded upright: frame dark, room white, the red mark red', dark(r, 12, 100) && !dark(r, 80, 100) && red[0] > 180 && red[1] < 90, `frame ${px(r, 12, 100)} room ${px(r, 80, 100)} red ${red}`);
+  const hdir = mkdtempSync(join(tmpdir(), 'p2t-heic-'));
+  try {
+    const f = join(hdir, 'site-photo.heic');
+    writeFileSync(f, heic);
+    const o = await openAny(f);
+    check('openAny: a .heic photo opens as one image page', o.kind === 'image' && o.doc.numPages === 1);
+  } finally {
+    rmSync(hdir, { recursive: true, force: true });
+  }
+}
+
 if (failed) process.exit(1);
-console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny, TIFF, scanned-PDF codecs, DXF)');
+console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny, TIFF, scanned-PDF codecs, DXF, HEIC)');

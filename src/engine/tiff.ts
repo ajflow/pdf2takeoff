@@ -8,9 +8,10 @@
 
 /// <reference path="./utif.d.ts" />
 import UTIF from 'utif';
-import { PDFDocument, concatTransformationMatrix, drawObject, popGraphicsState, pushGraphicsState } from 'pdf-lib';
+import type { PDFDocument } from 'pdf-lib';
 import { RASTER_SCALE } from './ports.ts';
 import { plausibleDpi } from './inputs.ts';
+import { drawRows, pixelImage } from './pixels.ts';
 
 type Ifd = Record<string, number[] | undefined> & { subIFD?: Ifd[] };
 
@@ -49,14 +50,8 @@ export function addTiffPages(out: PDFDocument, bytes: Uint8Array): number[] {
   for (const ifd of ifds) {
     const w = first(ifd, 256, 0);
     const h = first(ifd, 257, 0);
-    const wPt = w / RASTER_SCALE;
-    const hPt = h / RASTER_SCALE;
-    const page = out.addPage([wPt, hPt]);
-    const draw = (stream: ReturnType<PDFDocument['context']['stream']>, top: number, rows: number) => {
-      const name = page.node.newXObject('Im', out.context.register(stream));
-      const hStrip = rows / RASTER_SCALE;
-      page.pushOperators(pushGraphicsState(), concatTransformationMatrix(wPt, 0, 0, hStrip, 0, hPt - top / RASTER_SCALE - hStrip), drawObject(name), popGraphicsState());
-    };
+    const page = out.addPage([w / RASTER_SCALE, h / RASTER_SCALE]);
+    const draw = (stream: ReturnType<PDFDocument['context']['stream']>, top: number, rows: number) => drawRows(out, page, stream, top, rows);
     if (passesThrough(ifd)) {
       const perStrip = first(ifd, 278, h);
       ifd.t273!.forEach((offset, i) => {
@@ -81,25 +76,7 @@ export function addTiffPages(out: PDFDocument, bytes: Uint8Array): number[] {
       });
     } else {
       UTIF.decodeImage(buffer, ifd);
-      const rgba: Uint8Array = UTIF.toRGBA8(ifd);
-      // composite onto white; keep one channel when the page is grey
-      let grey = true;
-      for (let i = 0; i < rgba.length && grey; i += 4) grey = rgba[i] === rgba[i + 1] && rgba[i] === rgba[i + 2];
-      const channels = grey ? 1 : 3;
-      const px = new Uint8Array(w * h * channels);
-      for (let i = 0, o = 0; i < rgba.length; i += 4) {
-        const a = rgba[i + 3] / 255;
-        for (let c = 0; c < channels; c++) px[o++] = Math.round(rgba[i + c] * a + 255 * (1 - a));
-      }
-      const stream = out.context.flateStream(px, {
-        Type: 'XObject',
-        Subtype: 'Image',
-        Width: w,
-        Height: h,
-        ColorSpace: grey ? 'DeviceGray' : 'DeviceRGB',
-        BitsPerComponent: 8,
-      });
-      draw(stream, 0, h);
+      draw(pixelImage(out, UTIF.toRGBA8(ifd), w, h), 0, h);
     }
     dpis.push(dpiOf(ifd));
   }

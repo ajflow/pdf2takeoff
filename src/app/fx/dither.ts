@@ -79,6 +79,58 @@ interface Moment {
   done?: () => void;
 }
 
+/**
+ * A chrome moment: a short dither burst over an element (a button, a row, the
+ * rail) on a state change. `fn(x, y, w, h, t)` in the element's CSS pixels,
+ * t from 0 to 1; the overlay canvas removes itself when the moment ends.
+ */
+export function chromeMoment(
+  el: HTMLElement,
+  ms: number,
+  colour: string,
+  fn: (x: number, y: number, w: number, h: number, t: number) => number,
+  cell = 2,
+): Promise<void> {
+  if (reducedMotion() || !el.isConnected) return Promise.resolve();
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  const c = document.createElement('canvas');
+  c.className = 'fx-moment';
+  c.setAttribute('aria-hidden', 'true');
+  el.append(c);
+  const g = c.getContext('2d')!;
+  const t0 = performance.now();
+  return new Promise((resolve) => {
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      if (c.width !== Math.round(w * dpr)) {
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+      }
+      const px = cell * dpr;
+      const cols = Math.ceil(w / cell);
+      const rows = Math.ceil(h / cell);
+      g.clearRect(0, 0, c.width, c.height);
+      g.fillStyle = colour;
+      g.beginPath();
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          if (fn((i + 0.5) * cell, (j + 0.5) * cell, w, h, t) > BAYER[(j & 7) * 8 + (i & 7)]) g.rect(Math.round(i * px), Math.round(j * px), Math.ceil(px), Math.ceil(px));
+        }
+      }
+      g.fill();
+      if (t < 1) requestAnimationFrame(step);
+      else {
+        c.remove();
+        resolve();
+      }
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 export class DitherLayer {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -88,14 +140,19 @@ export class DitherLayer {
   private raf = 0;
   private observer: IntersectionObserver;
 
+  /** `canvas`: draw into an existing canvas (placed by the page) instead of appending one. */
   constructor(
     readonly host: HTMLElement,
     private cell = 3,
+    canvas?: HTMLCanvasElement,
   ) {
-    this.canvas = document.createElement('canvas');
-    this.canvas.className = 'fx-dither';
-    this.canvas.setAttribute('aria-hidden', 'true');
-    host.append(this.canvas);
+    if (canvas) this.canvas = canvas;
+    else {
+      this.canvas = document.createElement('canvas');
+      this.canvas.className = 'fx-dither';
+      this.canvas.setAttribute('aria-hidden', 'true');
+      host.append(this.canvas);
+    }
     this.ctx = this.canvas.getContext('2d')!;
     this.observer = new IntersectionObserver(([e]) => {
       this.visible = e.isIntersecting;

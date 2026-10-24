@@ -17,7 +17,7 @@
 import { state, emit, subscribe, type Markup } from './state';
 import { renderMarkups, scanStyle } from './render';
 import { syncUpsertMarkup, syncDeleteMarkup } from './session';
-import { pdfToView, isTypingTarget } from './viewer';
+import { pdfToView, viewSize, isTypingTarget } from './viewer';
 import type { ScanHit } from '../engine/types';
 
 type Provider = 'cv' | 'detector' | 'vector';
@@ -105,8 +105,10 @@ function show(): void {
   scanStyle.reviewing = m.id;
   const sc = $('scrollContainer');
   const wrap = $('pageWrap');
+  // view units are the page at 100%: scale them by the zoom to get pixels
   const v = pdfToView(m.points[0]);
-  sc.scrollTo({ left: wrap.offsetLeft + v.x - sc.clientWidth / 2, top: wrap.offsetTop + v.y - sc.clientHeight / 2, behavior: 'smooth' });
+  const k = wrap.clientWidth / (viewSize().w || 1);
+  sc.scrollTo({ left: wrap.offsetLeft + v.x * k - sc.clientWidth / 2, top: wrap.offsetTop + v.y * k - sc.clientHeight / 2, behavior: 'smooth' });
   render();
   renderMarkups();
 }

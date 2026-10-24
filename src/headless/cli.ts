@@ -108,7 +108,7 @@ function isDrawingFile(name: string): boolean {
 
 /** The sheet name a file stands for: its basename without the extension. */
 function sheetStem(name: string): string {
-  return basename(name).replace(/\.(pdf|png|jpe?g|webp|gif|bmp|avif|svg|tiff?)$/i, '');
+  return basename(name).replace(/\.(pdf|png|jpe?g|webp|gif|bmp|avif|svg|tiff?|dxf)$/i, '');
 }
 
 async function cmdInfo(file: string): Promise<unknown> {

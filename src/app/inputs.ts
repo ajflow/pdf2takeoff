@@ -7,7 +7,7 @@ import {
   buildDocument,
   sniffInput,
   unsupportedMessage,
-  IMAGE_KINDS,
+  OPENABLE_KINDS,
   INPUT_EXTENSIONS,
   MIME_BY_KIND,
   type ImageTranscoder,
@@ -103,7 +103,7 @@ export async function prepareFiles(files: File[]): Promise<Prepared> {
     }),
   );
   inputs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-  const bad = inputs.find((f) => f.kind !== 'pdf' && !IMAGE_KINDS.has(f.kind!));
+  const bad = inputs.find((f) => !OPENABLE_KINDS.has(f.kind!));
   if (bad) return { ok: false, message: unsupportedMessage(bad.kind!, bad.name) };
   if (inputs.length === 1 && inputs[0].kind === 'pdf') return { ok: true, bytes: inputs[0].bytes, name: inputs[0].name, notes: [] };
 
@@ -126,6 +126,14 @@ export async function prepareFiles(files: File[]): Promise<Prepared> {
   }
 
   const notes: string[] = [];
+  for (const [, s] of built.scales) {
+    notes.push(
+      s.assumed
+        ? `The DXF doesn't state its units; it reads as ${s.unit}, laid out at 1:${s.ratio}. Check a known dimension.`
+        : `Laid out at 1:${s.ratio} from the drawing's ${s.unit}: the scale is already set.`,
+    );
+    break; // one note covers a set
+  }
   for (const s of built.shrunk) notes.push(`${s.name} was too big for this browser, so it opened at ${Math.round(s.scale * 100)}% size.`);
   const noPaper = [...built.imagePages.values()].filter((dpi) => !dpi).length;
   if (noPaper) {

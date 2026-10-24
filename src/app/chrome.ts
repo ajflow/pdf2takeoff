@@ -140,6 +140,7 @@ const ALERT =
 /** Where a calibration came from, in the words an estimator would use. */
 function sourceText(source: string): string {
   if (/\(sheet\)$/.test(source)) return 'from title block';
+  if (/^drawing units/.test(source)) return /assumed/.test(source) ? 'units assumed' : 'from drawing units';
   if (/^measured |demo/.test(source)) return 'from a dimension';
   if (/^preset /.test(source)) return 'set by hand';
   return 'set';

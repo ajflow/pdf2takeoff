@@ -82,10 +82,19 @@ Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`pu
 
 ## Headless CLI (agents & scripts)
 
-The same engine runs headless on Node (≥ 22.6) — no browser, no bundler, and
+The same engine runs headless on Node (22.13+) — no browser, no bundler, and
 no network calls except two: the first `ocr` run on a scan downloads a ~3 MB
 language pack (cached; see `PDF2TAKEOFF_TESSDATA` below), and `ai-count`
 sends the page you choose to the AI provider you choose:
+
+```bash
+npx pdf2takeoff info drawing.pdf                     # run straight from npm, nothing installed
+npx pdf2takeoff scan drawing.pdf --page 1 --at 88,271
+npm install -g pdf2takeoff                           # or install the commands once
+```
+
+The first `ocr` use fetches the ~3 MB English pack described above, whatever
+install route you took.
 
 ```bash
 npm run cli -- info drawing.pdf                      # pages, sizes, annotation counts
@@ -163,18 +172,21 @@ confirm or delete, and `count_items` derives every quantity from those items
 under a counting preset (`aecv`, `schedule`) — switching the counting
 convention recounts instantly, with no new detection pass.
 
-Register it with any MCP client (ZCode, Claude Desktop, Cursor):
+Register it with any MCP client (ZCode, Claude Desktop, Cursor), straight
+from npm:
 
 ```json
 {
   "mcpServers": {
     "pdf2takeoff": {
-      "command": "node",
-      "args": ["/path/to/pdf2takeoff/bin/pdf2takeoff.js", "mcp"]
+      "command": "npx",
+      "args": ["-y", "pdf2takeoff", "mcp"]
     }
   }
 }
 ```
+
+Claude Code: `claude mcp add pdf2takeoff -- npx -y pdf2takeoff mcp`.
 
 ## ScaledDrawingBench
 

@@ -204,6 +204,13 @@ const LEAF_MIN_DEG = 40;
 const LEAF_MAX_DEG = 120;
 /** Share of the leaf (hinge to arc end, sampled 20..90 %) that must be real ink within 1 px. */
 const LEAF_INK_SHARE = 0.6;
+/**
+ * Rays tried around the fitted tip direction for the leaf: the fit's tip
+ * can stop short of the leaf where the arc's tangent stretch merges into
+ * it, about 10 degrees on a two-pixel stroke at R = 120 px.
+ */
+const LEAF_FAN_DEG = 12;
+const LEAF_FAN_STEP_DEG = 2;
 /** Rows (or columns) searched either side of the door line for the wall band, as a share of the door width. */
 const BAND_SEARCH_SHARE = 0.4;
 /** Jamb thickness ratio a wall band may show across one opening. */
@@ -345,19 +352,35 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
     for (const i of queue) reachCache.set(i, span);
     return span;
   };
-  const leafInk = (hx: number, hy: number, tx: number, ty: number): boolean => {
+  /**
+   * Is there a leaf of real ink from the hinge towards the arc's tip end?
+   * The fitted tip can fall short of the leaf by several degrees (the arc's
+   * last stretch runs into the leaf and is read as straight ink), so rays
+   * within LEAF_FAN_DEG of it are tried and the best one counts.
+   */
+  /** the leaf's direction (radians) when one is drawn, else null */
+  const leafInk = (hx: number, hy: number, tx: number, ty: number): number | null => {
     const len = Math.hypot(tx - hx, ty - hy);
-    let hit = 0;
-    let n = 0;
-    for (let s = 0.2 * len; s <= 0.9 * len; s += 1) {
-      const x = Math.round(hx + ((tx - hx) * s) / len);
-      const y = Math.round(hy + ((ty - hy) * s) / len);
-      n++;
-      let found = false;
-      for (let oy = -1; oy <= 1 && !found; oy++) for (let ox = -1; ox <= 1 && !found; ox++) if (evidence(x + ox, y + oy)) found = true;
-      if (found) hit++;
+    const a0 = Math.atan2(ty - hy, tx - hx);
+    for (let k = 0; k <= LEAF_FAN_DEG / LEAF_FAN_STEP_DEG; k++) {
+      for (const sign of k === 0 ? [1] : [1, -1]) {
+        const a = a0 + (sign * k * LEAF_FAN_STEP_DEG * Math.PI) / 180;
+        const ux = Math.cos(a);
+        const uy = Math.sin(a);
+        let hit = 0;
+        let n = 0;
+        for (let s = 0.2 * len; s <= 0.9 * len; s += 1) {
+          const x = Math.round(hx + ux * s);
+          const y = Math.round(hy + uy * s);
+          n++;
+          let found = false;
+          for (let oy = -1; oy <= 1 && !found; oy++) for (let ox = -1; ox <= 1 && !found; ox++) if (evidence(x + ox, y + oy)) found = true;
+          if (found) hit++;
+        }
+        if (n > 0 && hit >= LEAF_INK_SHARE * n) return a;
+      }
     }
-    return n > 0 && hit >= LEAF_INK_SHARE * n;
+    return null;
   };
 
   /**
@@ -370,32 +393,43 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
     const arc = inp.arcs[k];
     const lines: DoorLine[] = [];
     let offAxis = false;
-    for (let e = 0; e < 2; e++) {
-      const closed = arc.ends[e];
-      const tip = arc.ends[1 - e];
-      const dx = closed.x - arc.hx;
-      const dy = closed.y - arc.hy;
+    const sinTol = Math.sin((AXIS_SNAP_DEG * Math.PI) / 180);
+    const add = (dx: number, dy: number) => {
       const len = Math.hypot(dx, dy);
-      if (len < 1) continue;
-      const sinTol = Math.sin((AXIS_SNAP_DEG * Math.PI) / 180);
       const f = Math.abs(dy) <= len * sinTol ? ROW : Math.abs(dx) <= len * sinTol ? COL : null;
-      // the leaf opens away from the door line, and is drawn
-      const a1 = Math.atan2(dy, dx);
-      const a2 = Math.atan2(tip.y - arc.hy, tip.x - arc.hx);
-      let d = Math.abs(a1 - a2) * (180 / Math.PI);
-      if (d > 180) d = 360 - d;
-      if (d < LEAF_MIN_DEG || d > LEAF_MAX_DEG || !leafInk(arc.hx, arc.hy, tip.x, tip.y)) continue;
       if (!f) {
         offAxis = true;
-        continue;
+        return;
       }
       // snapped to the axis: the closed end sits one radius from the hinge
       const uh = f.u(arc.hx, arc.hy);
       const vh = f.v(arc.hx, arc.hy);
       const s = Math.sign(f.u(dx, dy));
-      lines.push({ f, uh, vh, s, uc: uh + s * arc.r, vc: vh, r: arc.r });
+      if (!lines.some((l) => l.f === f && l.s === s)) lines.push({ f, uh, vh, s, uc: uh + s * arc.r, vc: vh, r: arc.r });
+    };
+    for (let e = 0; e < 2; e++) {
+      const closed = arc.ends[e];
+      const tip = arc.ends[1 - e];
+      const dx = closed.x - arc.hx;
+      const dy = closed.y - arc.hy;
+      if (Math.hypot(dx, dy) < 1) continue;
+      // the leaf opens away from the door line, and is drawn
+      const a1 = Math.atan2(dy, dx);
+      const a2 = Math.atan2(tip.y - arc.hy, tip.x - arc.hx);
+      let d = Math.abs(a1 - a2) * (180 / Math.PI);
+      if (d > 180) d = 360 - d;
+      if (d < LEAF_MIN_DEG || d > LEAF_MAX_DEG) continue;
+      const leaf = leafInk(arc.hx, arc.hy, tip.x, tip.y);
+      if (leaf === null) continue;
+      // the door line through the arc's closed end, and, for an arc cut
+      // short (furniture crossing it), the door line a fully open leaf
+      // implies: a quarter turn from the leaf, on the arc's side. Either
+      // must still find both jambs (scanDoorway)
+      add(dx, dy);
+      const turn = Math.sin(a1 - leaf) >= 0 ? Math.PI / 2 : -Math.PI / 2;
+      add(Math.cos(leaf + turn), Math.sin(leaf + turn));
     }
-    return { lines, offAxis };
+    return { lines, offAxis: offAxis && !lines.length };
   };
 
   /**
@@ -475,7 +509,7 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
     const last = bandRows[bandRows.length - 1];
     const alongA = Math.min(runAlong(f, first.ua, p0, -s, 64), runAlong(f, last.ua, p1, -s, 64));
     const alongB = Math.min(runAlong(f, first.ub, p0, s, 64), runAlong(f, last.ub, p1, s, 64));
-    const need = Math.min(64, Math.max(3, 2 * band));
+    const need = Math.min(64, Math.max(3, band));
     if (alongA < need || alongB < need) return null;
     const back = (along: number) => Math.min(along - 1, Math.max(2, band));
     const thick = (u: number) => {

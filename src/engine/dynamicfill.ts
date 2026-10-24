@@ -402,7 +402,7 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
     doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)),
     // the same reading over a changed copy of the ink (dynamicFill's arc put-back)
     doorsOn: (inkNow) => sheetDoors(rowGaps, colGaps, inkNow, w, h, minDoorPx),
-    // the wall-end gaps themselves: the room partition's portal candidates
+    // the wall-end gaps themselves: the room partition's uncued-opening evidence
     rowGaps,
     colGaps,
   };
@@ -816,9 +816,20 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
           // the two arcs touch tangentially, so a straight cut hands the
           // last degrees of one to the other: give each circle every pixel
           // on it (the shared meeting pixels to both) and fit the two again
-          const on = (c: { ax: number; ay: number; R: number }) => (i: number) => Math.abs(Math.hypot((i % w) - c.ax, ((i / w) | 0) - c.ay) - c.R) <= Math.max(1.5, 0.03 * c.R);
+          const off = (i: number, c: { ax: number; ay: number; R: number }) => Math.abs(Math.hypot((i % w) - c.ax, ((i / w) | 0) - c.ay) - c.R);
+          const on = (c: { ax: number; ay: number; R: number }) => (i: number) => off(i, c) <= Math.max(1.5, 0.03 * c.R);
           const again = pair.map((c) => fitPiece(comp.filter(on(c!))));
           found = again[0] && again[1] ? again : pair;
+          // and every pixel of the piece goes to the nearer arc, so the whole
+          // symbol is erased as a single arc's piece is (a thick stroke's
+          // outer pixels at the meeting point lie off both fitted circles)
+          const [p, q] = found as { pts: number[]; ax: number; ay: number; R: number }[];
+          const inP = new Set(p.pts);
+          const inQ = new Set(q.pts);
+          for (const i of comp) {
+            if (inP.has(i) || inQ.has(i)) continue;
+            (off(i, p) <= off(i, q) ? p.pts : q.pts).push(i);
+          }
           break;
         }
       }
@@ -1011,7 +1022,7 @@ interface PageFill {
   thr: Uint8Array;
   doors: () => SheetDoors;
   doorsOn: (inkNow: Uint8Array) => SheetDoors;
-  /** Wall-end gaps of thr (the partition's portal candidates). */
+  /** Wall-end gaps of thr (the partition's uncued-opening evidence). */
   rowGaps: Gap[];
   colGaps: Gap[];
   /** Ink pixels the swing-arc erase took out (the partition reads them as the drawing's ink). */

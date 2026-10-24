@@ -23,7 +23,7 @@
 //      and rendered by pdf.js at 1.5, 3 and 6 px/pt.
 // It prints the pass's cost per region.
 
-import { positives, negatives, unsupported, render, transpose, shift, twoRooms, largeRoom, pdfBytes, m } from './partition-proxies.mjs';
+import { positives, negatives, unsupported, render, transpose, shift, largeRoom, pdfBytes, rect, layout, PAD } from './partition-proxies.mjs';
 import { partitionOpen, scoreChildren, ptPolyMask, matchRoom, rectMask, iou } from './partition-lib.mjs';
 import { dynamicFill, dynamicFillRooms, fillEvidence } from '../src/engine/dynamicfill.ts';
 import { autoRooms, gridSeeds, roomSelector } from '../src/engine/auto-rooms.ts';
@@ -209,6 +209,48 @@ for (const k of [1, 2, 0.5]) {
   const fr = dynamicFill(roomy.raster, roomy.seeds[0].pt);
   if ('error' in fr || matchRoom(ptPolyMask(fr.points, roomy.raster), roomy.rooms, roomy.raster.width, roomy.raster.height).iou < 0.99) fail('large room (padded page): fill does not return the room');
   console.log('invariance: translation, seed order, parent/child order, cased opening, comb, page padding');
+}
+
+// --- 3b. the primitive gate (design section 6, gate 1) -----------------------------
+// A sealed room whose wall has one gap to the outside, in a vertical wall and
+// transposed into a horizontal one, and translated: the closing reads the
+// gap the same way in every orientation and position. A gap of exactly 2r
+// closes at rung r (gapPx 2r); 2r + 1 needs r + 1. A gap flanked by a stub
+// shorter than the wall is thick still closes (short support is not lost).
+{
+  // walls 6 px thick; the gap starts 100 px down the left wall, or with
+  // `stub` 8 px below the top-left corner (a flank shorter than 2x the wall)
+  const room = (gapPx, stub = false) => {
+    const [x0, y0, x1, y1] = [PAD, PAD, PAD + 400, PAD + 300];
+    const g0 = stub ? y0 + 8 : y0 + 100;
+    const prims = [rect(x0 - 6, y0 - 6, x1 + 6, y0), rect(x0 - 6, y1, x1 + 6, y1 + 6), rect(x1, y0, x1 + 6, y1), rect(x0 - 6, y0, x0, g0), rect(x0 - 6, g0 + gapPx, x0, y1)];
+    return layout(`gap-${gapPx}${stub ? '-stub' : ''}`, prims, [{ name: 'X', rects: [[x0, y0, x1, y1]] }]);
+  };
+  const read = (lay) => {
+    const { raster, seeds, rooms } = render(lay, 1);
+    const r = dynamicFill(raster, seeds[0].pt);
+    if ('error' in r) return { err: r.error };
+    return { gapPx: r.gapPx ?? 0, iou: matchRoom(ptPolyMask(r.points, raster), rooms, raster.width, raster.height).iou.toFixed(3) };
+  };
+  for (const [gap, want] of [[32, 32], [33, 34], [56, 56], [57, 58]]) {
+    const base = room(gap);
+    const results = [base, transpose(base), shift(base, 23, 7, 30), shift(transpose(base), 5, 41, 30)].map(read);
+    const key = JSON.stringify(results[0]);
+    if (results.some((x) => JSON.stringify(x) !== key)) fail(`primitive gate: a ${gap} px gap reads differently by orientation/position: ${JSON.stringify(results)}`);
+    if (results[0].gapPx !== want || results[0].iou < 0.99) fail(`primitive gate: a ${gap} px gap closed as ${JSON.stringify(results[0])}, want gapPx ${want}`);
+  }
+  const stub = room(40, true);
+  const sres = [stub, transpose(stub)].map(read);
+  if (JSON.stringify(sres[0]) !== JSON.stringify(sres[1]) || sres[0].err) fail(`primitive gate: short-flank gap ${JSON.stringify(sres)}`);
+  // fixtures beside a door in a vertical and in a horizontal wall: the same split
+  const bath = POS.find((l) => l.name === 'fixture-dense-bath');
+  const sizes = (lay) => {
+    const r = render(lay, 1);
+    const res = partitionOpen(r.raster, r.seeds[0].px);
+    return res ? `${res.status}:${res.children.map((c) => c.length).sort((p, q) => p - q).join(',')}` : 'unbounded';
+  };
+  if (sizes(bath) !== sizes(transpose(bath))) fail(`primitive gate: fixture bath splits differently transposed (${sizes(bath)} vs ${sizes(transpose(bath))})`);
+  console.log('primitive gate: gaps of 2r and 2r+1, short flank and fixture bath read the same in every orientation and position');
 }
 
 // --- 4. the production render path ------------------------------------------------

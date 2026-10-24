@@ -46,6 +46,69 @@ if (!existsSync(join(benchDir, 'dataset', 'manifest.json'))) {
 const manifest = JSON.parse(readFileSync(join(benchDir, 'dataset', 'manifest.json'), 'utf8'));
 mkdirSync(outDir, { recursive: true });
 
+// --- unassisted Dynamic Fill sweep (areas only), one sheet -------------------
+//
+//   node --experimental-strip-types scripts/aec-geometric-bench.mjs --fill-auto \
+//     --bench <clone> --out <dir> [--sheet sheet_02] [--grid 90] [--arms on,off]
+//
+// The B6d unassisted protocol on the current engine: a grid of seeds every
+// `grid` manifest px (column by column), each filled by Dynamic Fill on the
+// app's 3 px/pt raster with no hints (no clicks, no labels, no scale), the
+// ink threshold escalating 150 -> 185 -> 220 only while a fill fails (the
+// ladder the B6d engine carried), rooms under 250 manifest px² dropped and
+// rooms overlapping an earlier one by intersection-over-min >= 0.6 dropped
+// (autoRooms, src/engine/auto-rooms.ts, compares exact pixels; children of a
+// partitioned region replace their merged parent). Arm `on` runs the room
+// partition pass, arm `off` the same with the pass disabled, on the same
+// raster. Each arm is scored with the bench's own scoring functions.
+if (args.includes('--fill-auto')) {
+  const { createHash } = await import('node:crypto');
+  const { autoRooms } = await import('../src/engine/auto-rooms.ts');
+  const { RASTER_SCALE } = await import('../src/engine/ports.ts');
+  const sheetId = arg('sheet', 'sheet_02');
+  const GRID = Number(arg('grid', 90));
+  const arms = arg('arms', 'on,off').split(',');
+  const entry = manifest.sheets.find((s) => s.sheet === sheetId);
+  const bytes = new Uint8Array(readFileSync(join(benchDir, 'dataset', entry.pdf)));
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  if (entry.pdf_sha256 && sha !== entry.pdf_sha256) {
+    console.error(`${sheetId}.pdf sha256 ${sha} does not match the manifest`);
+    process.exit(1);
+  }
+  const doc = await openPdf(bytes);
+  const page = await doc.getPage(1);
+  const vp1 = page.getViewport({ scale: 1 });
+  const frameScale = entry.width / vp1.width; // manifest px per PDF pt
+  const pdfH = vp1.height;
+  const raster = await renderRasterNode(doc, 1, RASTER_SCALE);
+  console.log(`${sheetId}: sha256 ${sha.slice(0, 16)}…, fill raster ${raster.width}×${raster.height} at ${RASTER_SCALE} px/pt, manifest ${entry.width}×${entry.height} at ${frameScale.toFixed(4)} px/pt`);
+  const seeds = [];
+  for (let mx = GRID / 2; mx < entry.width; mx += GRID) for (let my = GRID / 2; my < entry.height; my += GRID) seeds.push({ x: mx / frameScale, y: pdfH - my / frameScale });
+  const minAreaPx = Math.round(250 * (RASTER_SCALE / frameScale) ** 2);
+  const summary = { sheet: sheetId, pdfSha256: sha, grid: GRID, seeds: seeds.length, rasterScale: RASTER_SCALE, minAreaPx, tolerances: [150, 185, 220], arms: {} };
+  for (const arm of arms) {
+    const t = Date.now();
+    const { rooms, stats } = autoRooms(raster, seeds, {}, { tolerances: [150, 185, 220], minAreaPx, overlapKeep: 0.6, partition: arm === 'on' });
+    const areas = rooms.map((r) => r.points.map((p) => [Math.round(p.x * frameScale * 100) / 100, Math.round((pdfH - p.y) * frameScale * 100) / 100]));
+    const dir = join(outDir, `arm-${arm}`);
+    mkdirSync(dir, { recursive: true });
+    const predFile = join(dir, `${sheetId}.json`);
+    writeFileSync(predFile, JSON.stringify({ sheet: sheetId, objects: [], areas, walls: [] }) + '\n');
+    const seconds = Math.round((Date.now() - t) / 1000);
+    console.log(`arm ${arm}: ${rooms.length} rooms (${rooms.filter((r) => r.evidence).length} partition children) from ${seeds.length} seeds in ${seconds} s; ${JSON.stringify(stats)}`);
+    const sc = spawnSync(python, ['-I', join(__dirname, 'bench', 'aecgb-score-sheet.py'), '--bench', benchDir, '--sheet', sheetId, '--pred', predFile], { encoding: 'utf8' });
+    if (sc.status !== 0) {
+      console.error(sc.stderr || sc.stdout);
+      process.exit(1);
+    }
+    writeFileSync(join(outDir, `score-${arm}.json`), sc.stdout);
+    console.log(sc.stdout);
+    summary.arms[arm] = { rooms: rooms.length, partitionChildren: rooms.filter((r) => r.evidence).length, seconds, stats, score: JSON.parse(sc.stdout) };
+  }
+  writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
+  process.exit(0);
+}
+
 /** Wall mask as merged run-length rectangles (exact reconstruction when the scorer rasterizes the union). */
 function maskRectangles(mask, mw, mh, s, kx, ky) {
   const rects = [];

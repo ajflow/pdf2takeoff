@@ -692,3 +692,6 @@ export function negatives() {
   for (let i = 0; i < n; i++) if (/^(l-room|alcove|corridor|open-plan|uncued)/.test(out[i].name)) out.push(transpose(out[i]));
   return out;
 }
+
+// primitives for the seeded random generator (scripts/partition-holdout.mjs)
+export { rect, line, arc, ring, wall, door, frame, layout, PAD, T_OUT, T_IN };

@@ -1,0 +1,55 @@
+{
+  "runtime": {
+    "3pxPerPt": {
+      "regions": 87,
+      "roiPx": {
+        "median": 234600,
+        "max": 363614
+      },
+      "passMs": {
+        "median": 5.5,
+        "p95": 27.9,
+        "max": 38.1
+      },
+      "fills": 184,
+      "fillMsPassOff": {
+        "median": 12.3,
+        "p95": 33
+      },
+      "fillMsPassOn": {
+        "median": 12.9,
+        "p95": 35.7
+      }
+    },
+    "6pxPerPt": {
+      "regions": 29,
+      "roiPx": {
+        "median": 938400,
+        "max": 1454456
+      },
+      "passMs": {
+        "median": 18.2,
+        "p95": 121.8,
+        "max": 154.5
+      },
+      "fills": 62,
+      "fillMsPassOff": {
+        "median": 63.4,
+        "p95": 129.3
+      },
+      "fillMsPassOn": {
+        "median": 63.9,
+        "p95": 141
+      }
+    }
+  },
+  "scratchBytesPerRoiPx": 16,
+  "workBudgets": {
+    "maxArcs": 512,
+    "maxPortals": 256,
+    "structVisitCap": 50000,
+    "maxLabelPasses": 3,
+    "abstentionsOnMatrix": 0
+  },
+  "nondeterministicDecisions": 0
+}

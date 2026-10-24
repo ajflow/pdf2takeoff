@@ -1,0 +1,54 @@
+{
+  "sheet": "sheet_02",
+  "pdfSha256": "7b09ac1712bea416aa2f525b3017ee2f961dc98e57785f595fc4fd4ae865a56a",
+  "grid": 90,
+  "seeds": 442,
+  "rasterScale": 3,
+  "minAreaPx": 291,
+  "tolerances": [
+    150,
+    185,
+    220
+  ],
+  "arms": {
+    "off": {
+      "rooms": 23,
+      "partitionChildren": 0,
+      "seconds": 406,
+      "stats": {
+        "seeds": 442,
+        "covered": 51,
+        "errors": {
+          "that region is not bounded by lines on all sides": 354,
+          "you clicked on a line": 10
+        },
+        "candidates": 23,
+        "duplicates": 0,
+        "small": 4,
+        "partitioned": 0,
+        "unresolved": 0,
+        "parentsReplaced": 0
+      },
+      "score": {
+        "sheet": "sheet_02",
+        "submitted_rings": 23,
+        "valid_rings_as_submitted": 23,
+        "scored_area_instances": 23,
+        "gt_area_instances": 22,
+        "area_instance": {
+          "tp": 9,
+          "fp": 14,
+          "fn": 13,
+          "precision": 0.391304347826087,
+          "recall": 0.4090909090909091,
+          "f1": 0.4
+        },
+        "area_pixel": {
+          "precision": 0.8769674463145353,
+          "recall": 0.9463442085510413,
+          "f1": 0.9103359392157694
+        }
+      }
+    }
+  }
+}

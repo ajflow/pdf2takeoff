@@ -113,6 +113,15 @@ const SWING_MAX_PX = 400;
 /** A swing arc covers between a chopped quarter turn and a double-door half turn (degrees). */
 const SWING_MIN_SPAN_DEG = 45;
 const SWING_MAX_SPAN_DEG = 200;
+/**
+ * A swing's circle may carry ink beyond its own span (walls and the leaf it
+ * crosses, a neighbouring door), but not this share of the full turn more:
+ * a door swing never closes into a ring, a circle symbol always does.
+ */
+const SWING_RING_EXCESS = 0.3;
+/** Double door: leaf radii within this ratio, each arc at most this many degrees. */
+const SWING_DOUBLE_RATIO = 1.25;
+const SWING_DOUBLE_MAX_SPAN_DEG = 120;
 /** Cap on the sheet-derived fine rungs between two ladder rungs (see fineRungs). */
 const MAX_FINE_RUNGS = 64;
 /** Ink at least this thick (PDF pt) counts as a heavy (wall-weight) line. */
@@ -761,13 +770,85 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
     const hx = Math.round(ax);
     const hy = Math.round(ay);
     const tol = Math.max(3, Math.round(0.08 * R));
-    for (let y = Math.max(0, hy - tol); y <= Math.min(h - 1, hy + tol); y++) {
+    let hinged = false;
+    for (let y = Math.max(0, hy - tol); y <= Math.min(h - 1, hy + tol) && !hinged; y++) {
       for (let x = Math.max(0, hx - tol); x <= Math.min(w - 1, hx + tol); x++) {
         const j = y * w + x;
-        if (ink[j] && thin[j] !== THIN_CURVY) return { pts, ax, ay, R };
+        if (ink[j] && thin[j] !== THIN_CURVY) {
+          hinged = true;
+          break;
+        }
       }
     }
-    return null;
+    if (!hinged) return null;
+    // a door swing never closes into a ring: a circle symbol (smoke alarm,
+    // downlight) cut into arcs by a crosshair or a centre line has ink all
+    // round its circle, far beyond the piece's own span
+    if (ringCoverage(ax, ay, R) > spanDeg / 360 + SWING_RING_EXCESS) return null;
+    return { pts, ax, ay, R };
+  };
+  /** Share of the circle (cx, cy, R) with ink on it, sampled every 3 degrees, a stroke either side. */
+  const ringCoverage = (cx: number, cy: number, R: number): number => {
+    const band = Math.max(1.5, 0.03 * R);
+    let hit = 0;
+    for (let k = 0; k < 120; k++) {
+      const a = (k * Math.PI) / 60;
+      let found = false;
+      for (let d = -band; d <= band && !found; d += 0.75) {
+        const x = Math.round(cx + (R + d) * Math.cos(a));
+        const y = Math.round(cy + (R + d) * Math.sin(a));
+        if (x >= 0 && y >= 0 && x < w && y < h && ink[y * w + x]) found = true;
+      }
+      if (found) hit++;
+    }
+    return hit / 120;
+  };
+  /**
+   * Two fitted arcs that form one double door: hinges about r1 + r2 apart,
+   * radii within SWING_DOUBLE_RATIO, each arc a quarter-ish turn, both on the
+   * same side of the hinge line, and each with an end at the meeting point
+   * midway between the hinges.
+   */
+  const doubleDoor = (p: { pts: number[]; ax: number; ay: number; R: number }, q: { pts: number[]; ax: number; ay: number; R: number }): boolean => {
+    const D = Math.hypot(q.ax - p.ax, q.ay - p.ay);
+    if (Math.max(p.R, q.R) > SWING_DOUBLE_RATIO * Math.min(p.R, q.R)) return false;
+    if (Math.abs(D - (p.R + q.R)) > Math.max(4, 0.15 * (p.R + q.R))) return false;
+    const mx = (p.ax + q.ax) / 2;
+    const my = (p.ay + q.ay) / 2;
+    const ux = (q.ax - p.ax) / D;
+    const uy = (q.ay - p.ay) / D;
+    let side = 0;
+    for (const c of [p, q]) {
+      const { spanDeg, a0, a1 } = arcExtent(c.pts, w, c.ax, c.ay);
+      if (spanDeg < SWING_MIN_SPAN_DEG || spanDeg > SWING_DOUBLE_MAX_SPAN_DEG) return false;
+      const tol = Math.max(4, 0.15 * c.R);
+      const ends = [a0, a1].map((a) => ({ x: c.ax + c.R * Math.cos(a), y: c.ay + c.R * Math.sin(a) }));
+      if (!ends.some((e) => Math.hypot(e.x - mx, e.y - my) <= tol)) return false;
+      // which side of the hinge line the arc bulges to (its pixel centroid)
+      let sx = 0;
+      let sy = 0;
+      for (const i of c.pts) {
+        sx += i % w;
+        sy += (i / w) | 0;
+      }
+      const s = Math.sign(ux * (sy / c.pts.length - p.ay) - uy * (sx / c.pts.length - p.ax));
+      if (!s || (side && s !== side)) return false;
+      side = s;
+    }
+    return true;
+  };
+  /** One Kasa fit of a whole piece is good: it is a single circle or arc, never a double door. */
+  const oneCircle = (piece: number[], x0: number, y0: number, x1: number, y1: number): boolean => {
+    const mx = (x0 + x1) / 2;
+    const my = (y0 + y1) / 2;
+    const f = fitCircle(piece, w, mx, my);
+    if (!f) return false;
+    let ss = 0;
+    for (const i of piece) {
+      const d = Math.hypot((i % w) - mx - f.cx, ((i / w) | 0) - my - f.cy) - f.r;
+      ss += d * d;
+    }
+    return Math.sqrt(ss / piece.length) <= Math.max(1.5, 0.03 * f.r);
   };
   for (let start = 0; start < thin.length; start++) {
     if (thin[start] !== THIN_CURVY) continue;
@@ -801,40 +882,39 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
       }
     }
     let found = [fitPiece(comp)];
-    if (!found[0] && comp.length >= 16) {
+    // pixels to erase with an arc but kept out of its extent (its ends)
+    const extra: number[][] = [[], []];
+    if (!found[0] && comp.length >= 16 && !oneCircle(comp, x0, y0, x1, y1)) {
       // a double door's two arcs meet at the middle of the opening and join
       // into one piece that fits no single circle: split it at the middle of
       // its longer side, then its shorter, and keep the split whose halves
-      // are both door arcs (deterministic, no sampling)
+      // form a double door (deterministic, no sampling). A piece one circle
+      // fits (a ring, a semicircle) is never split
       const longX = x1 - x0 >= y1 - y0;
       for (const alongX of [longX, !longX]) {
         const mid = alongX ? (x0 + x1) / 2 : (y0 + y1) / 2;
         const lo = comp.filter((i) => (alongX ? i % w : (i / w) | 0) < mid);
         const hi = comp.filter((i) => (alongX ? i % w : (i / w) | 0) >= mid);
         const pair = [fitPiece(lo), fitPiece(hi)];
-        if (pair[0] && pair[1]) {
-          // the two arcs touch tangentially, so a straight cut hands the
-          // last degrees of one to the other: give each circle every pixel
-          // on it (the shared meeting pixels to both) and fit the two again
-          const off = (i: number, c: { ax: number; ay: number; R: number }) => Math.abs(Math.hypot((i % w) - c.ax, ((i / w) | 0) - c.ay) - c.R);
-          const on = (c: { ax: number; ay: number; R: number }) => (i: number) => off(i, c) <= Math.max(1.5, 0.03 * c.R);
-          const again = pair.map((c) => fitPiece(comp.filter(on(c!))));
-          found = again[0] && again[1] ? again : pair;
-          // and every pixel of the piece goes to the nearer arc, so the whole
-          // symbol is erased as a single arc's piece is (a thick stroke's
-          // outer pixels at the meeting point lie off both fitted circles)
-          const [p, q] = found as { pts: number[]; ax: number; ay: number; R: number }[];
-          const inP = new Set(p.pts);
-          const inQ = new Set(q.pts);
-          for (const i of comp) {
-            if (inP.has(i) || inQ.has(i)) continue;
-            (off(i, p) <= off(i, q) ? p.pts : q.pts).push(i);
-          }
-          break;
-        }
+        if (!pair[0] || !pair[1]) continue;
+        // the two arcs touch tangentially, so a straight cut hands the last
+        // degrees of one to the other: give each circle every pixel on it
+        // (the shared meeting pixels to both) and fit the two again
+        const off = (i: number, c: { ax: number; ay: number; R: number }) => Math.abs(Math.hypot((i % w) - c.ax, ((i / w) | 0) - c.ay) - c.R);
+        const on = (c: { ax: number; ay: number; R: number }) => (i: number) => off(i, c) <= Math.max(1.5, 0.03 * c.R);
+        const again = pair.map((c) => fitPiece(comp.filter(on(c!))));
+        const two = (again[0] && again[1] ? again : pair) as { pts: number[]; ax: number; ay: number; R: number }[];
+        if (!doubleDoor(two[0], two[1])) continue;
+        found = two;
+        // a thick stroke's outer pixels at the meeting point lie off both
+        // fitted circles: erase them with the nearer arc, outside its extent
+        const inP = new Set(two[0].pts);
+        const inQ = new Set(two[1].pts);
+        for (const i of comp) if (!inP.has(i) && !inQ.has(i)) extra[off(i, two[0]) <= off(i, two[1]) ? 0 : 1].push(i);
+        break;
       }
     }
-    for (const fp of found) {
+    for (const [fi, fp] of found.entries()) {
       if (!fp) continue;
       const { ax, ay, R } = fp;
       const arcPx = fp.pts.slice();
@@ -868,7 +948,7 @@ function swingArcs(ink: Uint8Array, thin: Uint8Array, w: number, h: number, pxPe
       }
       const { a0, a1 } = arcExtent(arcPx, w, ax, ay);
       arcs.push({
-        px: arcPx,
+        px: extra[fi].length ? arcPx.concat(extra[fi]) : arcPx,
         hx: ax,
         hy: ay,
         r: R,
@@ -1488,20 +1568,28 @@ function fillCore(raster: RasterPage, seed: Pt, tolerance: number, hints: FillHi
   // Room partition (partition.ts): split the bounded region at door-cued,
   // wall-supported portals into its rooms, or abstain. The children replace
   // the region; a child that fails its own trace rolls the split back.
-  const part = partitionRegion({
-    w,
-    h,
-    region,
-    count,
-    box: parent.box,
-    ink: inkNow,
-    virtual: [bridgePx, swingPx],
-    erased: pf.erased,
-    rowGaps: gapsNow.rows,
-    colGaps: gapsNow.cols,
-    arcs,
-    ...partitionBounds(pxPerPt, hints.metersPerPt),
-  });
+  // The pass is bounded by its own budgets; should anything still fail
+  // (an allocation the host cannot make), the click keeps the region whole
+  // and says so rather than throwing
+  let part: PartitionResult;
+  try {
+    part = partitionRegion({
+      w,
+      h,
+      region,
+      count,
+      box: parent.box,
+      ink: inkNow,
+      virtual: [bridgePx, swingPx],
+      erased: pf.erased,
+      rowGaps: gapsNow.rows,
+      colGaps: gapsNow.cols,
+      arcs,
+      ...partitionBounds(pxPerPt, hints.metersPerPt),
+    });
+  } catch (err) {
+    return whole('unresolved', 0, [`partition pass failed: ${err instanceof Error ? err.message : String(err)}`]);
+  }
   if (part.status !== 'partitioned') return whole(part.status, part.portals.length, part.reasons);
   const has = (px: Int32Array, i: number) => {
     let lo = 0;
@@ -1537,7 +1625,7 @@ function fillCore(raster: RasterPage, seed: Pt, tolerance: number, hints: FillHi
   }
   // a seed in a portal strip: the click keeps the merged region (nothing to
   // pick); automatic callers still get every child
-  if (seedRoom < 0 && !all) return whole('partitioned', part.portals.length, [...part.reasons, 'seed in a portal strip']);
+  if (seedRoom < 0 && !all) return whole('unresolved', part.portals.length, [...part.reasons, 'seed in a portal strip: the click keeps the merged region']);
   return {
     rooms,
     seedRoom: all ? seedRoom : 0,

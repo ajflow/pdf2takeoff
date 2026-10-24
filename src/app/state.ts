@@ -20,6 +20,13 @@ export interface ToolPreset {
   label: string;
 }
 
+/** What the sheet says about a page's scale once it is set (Flow State scale chip). */
+export interface ScaleCheck {
+  status: 'agrees' | 'disagrees' | 'doors-ok' | 'doors-bad';
+  /** The explanation to show when the check disagrees. */
+  message?: string;
+}
+
 export interface AppState {
   fileName: string;
   fileBytes: Uint8Array | null; // original bytes, kept for save-with-annotations
@@ -32,6 +39,10 @@ export interface AppState {
   calibrations: Map<number, Calibration>;
   /** Pages that came from an image, with the scan resolution it stated (0 = paper size unknown). */
   imagePages: Map<number, number>;
+  /** Per page: whether the printed scale or the doorways agree with the calibration. */
+  scaleChecks: Map<number, ScaleCheck>;
+  /** The quantity row selected in the panel: its markups stay bright, the rest fade. */
+  focusLabel: string | null;
   markups: Markup[];
   selectedId: string | null;
   /** last reversible action, so Ctrl+Z can restore a drag before falling back to delete-newest */
@@ -58,6 +69,8 @@ export const state: AppState = {
   tool: 'pan',
   calibrations: new Map(),
   imagePages: new Map(),
+  scaleChecks: new Map(),
+  focusLabel: null,
   markups: [],
   selectedId: null,
   lastAction: null,

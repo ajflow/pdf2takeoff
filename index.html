@@ -147,108 +147,143 @@
 
     <div id="shell">
     <header class="topbar">
-      <a class="brand" href="/">
-        <svg class="mark" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
-        <span class="name">pdf2takeoff</span>
-        <span class="ver">v0.1</span>
+      <a class="brand" href="/" aria-label="pdf2takeoff home">
+        <svg class="mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
       </a>
-
-      <button class="btn primary" id="openBtn" title="Open a drawing: PDF or image (several make one set)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        Open drawing
-      </button>
-
-      <div class="toolgroup" role="toolbar" aria-label="Tools">
-        <button class="btn" data-tool="pan" title="Select / pan (V)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
-          <span class="label">Pan</span><span class="kbd">V</span>
-        </button>
-        <button class="btn" data-tool="calibrate" title="Calibrate scale (C)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>
-          <span class="label">Calibrate</span><span class="kbd">C</span>
-        </button>
-        <button class="btn" data-tool="length" title="Measure length (L)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></svg>
-          <span class="label">Length</span><span class="kbd">L</span>
-        </button>
-        <button class="btn" data-tool="area" title="Measure area (A)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 6-3 11H6L3 9z"/></svg>
-          <span class="label">Area</span><span class="kbd">A</span>
-        </button>
-        <button class="btn" data-tool="count" title="Count items (N)">
-          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6.5" cy="17.5" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="17.5" cy="6.5" r="2.4"/></svg>
-          <span class="label">Count</span><span class="kbd">N</span>
-        </button>
-        <button class="btn" data-tool="perimeter" title="Measure perimeter (P)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 5h14v14H5z" stroke-dasharray="0"/><path d="M5 5l4-2M19 5l2 4M19 19l-4 2M5 19l-2-4" opacity="0.55"/></svg>
-          <span class="label">Perimeter</span><span class="kbd">P</span>
-        </button>
-        <button class="btn" data-tool="volume" title="Measure volume: area × depth (O)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9" opacity="0.55"/></svg>
-          <span class="label">Volume</span><span class="kbd">O</span>
-        </button>
-        <button class="btn" data-tool="angle" title="Measure angle (G)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20L20 20"/><path d="M4 20L16 6"/><path d="M4 20 A 14 14 0 0 0 12.5 17.8" opacity="0.7"/></svg>
-          <span class="label">Angle</span><span class="kbd">G</span>
-        </button>
-        <button class="btn" data-tool="note" title="Place a note (T)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/><path d="M14 6l4 4"/></svg>
-          <span class="label">Note</span><span class="kbd">T</span>
-        </button>
-        <button class="btn" data-tool="fill" title="Dynamic fill: click inside a room to read its area (D)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 15l3-8 6 3 5-4-2 12-7 1z" fill="currentColor" fill-opacity="0.18"/></svg>
-          <span class="label">Fill</span><span class="kbd">D</span>
-        </button>
-        <button class="btn" data-tool="viewport" title="Viewport: outline a region drawn at a different scale (W)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" stroke-linecap="round"/><path d="M9 12l2-3 2 3 2-3 1 3" stroke-dasharray="0"/><rect x="8" y="9" width="8" height="6" stroke-dasharray="3 2"/></svg>
-          <span class="label">Viewport</span><span class="kbd">W</span>
-        </button>
-        <button class="btn" data-tool="scan" title="Scan: click a repeated symbol to count all of them (S)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity="0.65"/></svg>
-          <span class="label">Scan</span><span class="kbd">S</span>
-        </button>
+      <div class="doc">
+        <b id="fileIndicator"></b>
+        <span class="pages">
+          <button class="icon-btn sm" type="button" id="prevPage" aria-label="Previous page (←)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+          <span id="pageIndicator">- / -</span>
+          <button class="icon-btn sm" type="button" id="nextPage" aria-label="Next page (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+        </span>
       </div>
-
-      <select class="btn" id="unitSelect" title="Display units" aria-label="Display units"></select>
-
-      <button class="btn" id="scaleBadge" title="Scale for the current page (click to calibrate)">Scale</button>
-
       <span class="spacer"></span>
-
-      <div class="toolgroup">
-        <button class="btn" id="prevPage" title="Previous page (←)">‹</button>
-        <span id="pageIndicator" style="font-size:11px; padding:0 4px; font-family: var(--mono); color: var(--text-dim)">- / -</span>
-        <button class="btn" id="nextPage" title="Next page (→)">›</button>
-      </div>
-      <div class="toolgroup">
-        <button class="btn" id="zoomOut" title="Zoom out (−)">−</button>
-        <span id="zoomIndicator" style="font-size:11px; padding:0 4px; font-family: var(--mono); color: var(--text-dim)">100%</span>
-        <button class="btn" id="zoomIn" title="Zoom in (+)">+</button>
-        <button class="btn" id="zoomFit" title="Fit width (F)">Fit</button>
-      </div>
-
-      <div class="toolgroup">
-        <button class="btn" id="sessionBtn" title="Live session: share this takeoff with other tabs and windows of the same drawing (same machine, phase 1; cross-machine next)">
-          Live
+      <button class="cmdk-btn" type="button" id="cmdkBtn" aria-haspopup="dialog" aria-keyshortcuts="Meta+K Control+K">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg>
+        <span class="cmdk-label">Search tools and markups</span>
+        <kbd id="cmdkKey">⌘K</kbd>
+      </button>
+      <span class="spacer"></span>
+      <button class="scale-chip" type="button" id="scaleBadge">Scale</button>
+      <span id="sessionPeers" class="peers hidden" aria-label="Live session peers"></span>
+      <button class="icon-btn" type="button" id="compareBtn" aria-label="Compare two revisions" title="Compare two revisions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="12" height="12" rx="1.5"/><rect x="9" y="3" width="12" height="12" rx="1.5"/></svg>
+      </button>
+      <div class="menu-wrap">
+        <button class="icon-btn" type="button" id="moreBtn" aria-label="More" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
         </button>
-        <span id="sessionPeers" class="peers hidden" aria-label="Live session peers"></span>
-        <button class="btn" id="compareBtn" title="Overlay-compare two revisions of a drawing">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="7" width="12" height="12" rx="1.5"/><rect x="9" y="3" width="12" height="12" rx="1.5"/></svg>
-          Compare
-        </button>
-        <button class="btn" id="demoBtn" title="Watch the guided demo on the sample drawing">▶ Demo</button>
+        <div class="menu hidden" id="moreMenu" role="menu" aria-label="More">
+          <button class="menu-item" type="button" role="menuitem" id="openBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Open a drawing</span></button>
+          <label class="menu-item menu-field"><span>Units</span><select id="unitSelect" aria-label="Display units"></select></label>
+          <button class="menu-item" type="button" role="menuitem" id="sessionBtn" title="Share this takeoff live with other tabs and windows of the same drawing (same machine)">Live</button>
+          <button class="menu-item" type="button" role="menuitem" id="demoBtn">Watch the demo</button>
+        </div>
+      </div>
+      <div class="menu-wrap">
+        <button class="btn primary" type="button" id="exportMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">Export</button>
+        <div class="menu menu-right hidden" id="exportMenu" role="menu" aria-label="Export">
+          <button class="menu-item" type="button" role="menuitem" data-proxy="exportXlsxBtn">Excel workbook</button>
+          <button class="menu-item" type="button" role="menuitem" data-proxy="exportCsvBtn">CSV</button>
+          <button class="menu-item" type="button" role="menuitem" data-proxy="copyTsvBtn">Copy for a spreadsheet</button>
+          <button class="menu-item" type="button" role="menuitem" data-proxy="reportBtn">Printable report</button>
+          <button class="menu-item" type="button" role="menuitem" data-proxy="savePdfBtn">Save into the PDF</button>
+        </div>
       </div>
     </header>
 
     <div id="app">
+      <nav class="rail" role="toolbar" aria-label="Tools" aria-orientation="vertical">
+        <button class="tool" type="button" data-tool="pan" aria-label="Select / pan (V)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
+          <span class="tip" aria-hidden="true">Pan <kbd>V</kbd></span>
+        </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="calibrate" aria-label="Calibrate scale (C)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>
+          <span class="tip" aria-hidden="true">Set scale <kbd>C</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="viewport" aria-label="Viewport: outline a region drawn at a different scale (W)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" stroke-linecap="round"/><path d="M9 12l2-3 2 3 2-3 1 3" stroke-dasharray="0"/><rect x="8" y="9" width="8" height="6" stroke-dasharray="3 2"/></svg>
+          <span class="tip" aria-hidden="true">Viewport <kbd>W</kbd></span>
+        </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="length" aria-label="Measure length (L)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19L19 5"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></svg>
+          <span class="tip" aria-hidden="true">Length <kbd>L</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="area" aria-label="Measure area (A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 6-3 11H6L3 9z"/></svg>
+          <span class="tip" aria-hidden="true">Area <kbd>A</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="fill" aria-label="Dynamic fill: click inside a room to read its area (D)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 15l3-8 6 3 5-4-2 12-7 1z" fill="currentColor" fill-opacity="0.18"/></svg>
+          <span class="tip" aria-hidden="true">Fill a room <kbd>D</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="perimeter" aria-label="Measure perimeter (P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 5h14v14H5z" stroke-dasharray="0"/><path d="M5 5l4-2M19 5l2 4M19 19l-4 2M5 19l-2-4" opacity="0.55"/></svg>
+          <span class="tip" aria-hidden="true">Perimeter <kbd>P</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="volume" aria-label="Measure volume: area × depth (O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9" opacity="0.55"/></svg>
+          <span class="tip" aria-hidden="true">Volume <kbd>O</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="angle" aria-label="Measure angle (G)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20L20 20"/><path d="M4 20L16 6"/><path d="M4 20 A 14 14 0 0 0 12.5 17.8" opacity="0.7"/></svg>
+          <span class="tip" aria-hidden="true">Angle <kbd>G</kbd></span>
+        </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="count" aria-label="Count items (N)">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6.5" cy="17.5" r="2.4"/><circle cx="12" cy="12" r="2.4"/><circle cx="17.5" cy="6.5" r="2.4"/></svg>
+          <span class="tip" aria-hidden="true">Count <kbd>N</kbd></span>
+        </button>
+        <button class="tool" type="button" data-tool="scan" aria-label="Scan: click a repeated symbol to count all of them (S)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.5 10.5h6M10.5 7.5v6" opacity="0.65"/></svg>
+          <span class="tip" aria-hidden="true">Scan <kbd>S</kbd></span>
+        </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="note" aria-label="Place a note (T)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/><path d="M14 6l4 4"/></svg>
+          <span class="tip" aria-hidden="true">Note <kbd>T</kbd></span>
+        </button>
+      </nav>
+
       <main id="workspace">
         <div id="scrollContainer">
           <div id="pageWrap">
             <canvas id="pdfCanvas"></canvas>
+            <canvas id="fxCanvas" aria-hidden="true"></canvas>
             <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
               <g id="previewLayer"></g>
               <g id="markupsLayer"></g>
             </svg>
+          </div>
+        </div>
+
+        <div class="hint-pill" id="hintPill" role="status" aria-live="polite"><span id="toolHint">Open a drawing (PDF or image) to begin</span></div>
+
+        <div class="zoom-pill" role="group" aria-label="Zoom">
+          <button type="button" id="zoomOut" aria-label="Zoom out (−)">−</button>
+          <span id="zoomIndicator">100%</span>
+          <button type="button" id="zoomIn" aria-label="Zoom in (+)">+</button>
+          <i aria-hidden="true"></i>
+          <button type="button" id="zoomFit" aria-label="Fit width (F)">Fit</button>
+          <span id="cursorPos" aria-hidden="true"></span>
+        </div>
+
+        <div class="scan-card hidden" id="scanCard" role="dialog" aria-label="Scan results">
+          <span class="n" id="scanCount"></span>
+          <div class="what">
+            <button type="button" class="scan-label" id="scanLabel" title="Rename every hit of this scan"></button>
+            <input type="text" class="scan-label-input hidden" id="scanLabelInput" aria-label="Label for this scan" autocomplete="off" />
+            <span id="scanMeta"></span>
+          </div>
+          <span class="chk hidden" id="scanCheck"><i aria-hidden="true"></i><span></span></span>
+          <div class="acts">
+            <button type="button" class="btn quiet" id="scanUndo">Undo</button>
+            <button type="button" class="btn line" id="scanReview">Review</button>
+            <button type="button" class="btn primary" id="scanKeep">Keep all</button>
           </div>
         </div>
 
@@ -359,7 +394,46 @@
         </div>
       </main>
 
-      <aside id="sidebar">
+      <aside id="sidebar" aria-label="Takeoff">
+        <div class="panel-head" role="tablist" aria-label="Panel">
+          <button type="button" role="tab" class="panel-tab" id="tabQty" aria-controls="viewQty" aria-selected="true">Quantities</button>
+          <button type="button" role="tab" class="panel-tab" id="tabMarkups" aria-controls="viewMarkups" aria-selected="false" tabindex="-1">Markups <span class="count" id="markupCount"></span></button>
+          <button type="button" role="tab" class="panel-tab" id="tabLibrary" aria-controls="viewLibrary" aria-selected="false" tabindex="-1">Library</button>
+        </div>
+
+        <section class="panel-view" id="viewQty" role="tabpanel" aria-labelledby="tabQty">
+          <div id="markupTotals"></div>
+        </section>
+
+        <section class="panel-view" id="viewMarkups" role="tabpanel" aria-labelledby="tabMarkups" hidden>
+        <div class="list-tools">
+          <input type="text" id="listSearch" placeholder="Filter by label…" autocomplete="off" aria-label="Filter by label" />
+          <div class="list-pills" role="group" aria-label="Filter by status">
+            <button class="pill" data-status-filter="all" title="All measurements">All</button>
+            <button class="pill" data-status-filter="none" title="No status yet">Unmarked</button>
+            <button class="pill" data-status-filter="check" title="Needs checking">⚑</button>
+            <button class="pill" data-status-filter="confirmed" title="Confirmed">✓</button>
+          </div>
+          <select id="listSort" aria-label="Sort list">
+            <option value="added">Added order</option>
+            <option value="label">Label A–Z</option>
+            <option value="page">Page</option>
+          </select>
+        </div>
+        <div class="markup-table-wrap">
+          <table class="markup-table">
+            <thead>
+              <tr><th>Label</th><th>Type</th><th>Page</th><th style="text-align:right">Value</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="markupRows"></tbody>
+          </table>
+        </div>
+          <div class="side-actions">
+            <button class="btn quiet" type="button" id="clearMarkups" title="Remove every measurement in this takeoff">Clear all markups</button>
+          </div>
+        </section>
+
+        <section class="panel-view" id="viewLibrary" role="tabpanel" aria-labelledby="tabLibrary" hidden>
         <div class="library">
           <h2>Tool library</h2>
           <div class="lib-add">
@@ -383,52 +457,22 @@
             <button class="btn" id="layerNewBtn">+ Layer</button>
           </div>
         </details>
-        <h2>Markups</h2>
-        <div id="markupTotals"></div>
-        <div class="list-tools">
-          <input type="text" id="listSearch" placeholder="Filter by label…" autocomplete="off" aria-label="Filter by label" />
-          <div class="list-pills" role="group" aria-label="Filter by status">
-            <button class="pill" data-status-filter="all" title="All measurements">All</button>
-            <button class="pill" data-status-filter="none" title="No status yet">Unmarked</button>
-            <button class="pill" data-status-filter="check" title="Needs checking">⚑</button>
-            <button class="pill" data-status-filter="confirmed" title="Confirmed">✓</button>
+        </section>
+
+        <div class="panel-foot">
+          <button class="btn primary" type="button" id="exportXlsxBtn" title="Download the takeoff as an Excel workbook">Export to Excel</button>
+          <div class="menu-wrap">
+            <button class="btn line" type="button" id="exportMoreBtn" aria-label="Other formats" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMoreMenu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <div class="menu menu-up menu-right hidden" id="exportMoreMenu" role="menu" aria-label="Other formats">
+              <button class="menu-item" type="button" role="menuitem" id="exportCsvBtn" title="Download the markups list as CSV">CSV</button>
+              <button class="menu-item" type="button" role="menuitem" id="copyTsvBtn" title="Copy the list for pasting into Excel">Copy for a spreadsheet</button>
+              <button class="menu-item" type="button" role="menuitem" id="reportBtn" title="Printable report: marked-up sheets and quantities">Printable report</button>
+              <button class="menu-item" type="button" role="menuitem" id="savePdfBtn" title="Save the PDF with markups as standard annotations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg><span>Save into the PDF</span></button>
+            </div>
           </div>
-          <select id="listSort" aria-label="Sort list">
-            <option value="added">Added order</option>
-            <option value="label">Label A–Z</option>
-            <option value="page">Page</option>
-          </select>
-        </div>
-        <div class="markup-table-wrap">
-          <table class="markup-table">
-            <thead>
-              <tr><th>Label</th><th>Type</th><th>Page</th><th style="text-align:right">Value</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody id="markupRows"></tbody>
-          </table>
-        </div>
-        <div class="side-actions">
-          <button class="btn" id="copyTsvBtn" title="Copy the list for pasting into Excel">Copy</button>
-          <button class="btn" id="exportCsvBtn" title="Download the markups list as CSV">CSV</button>
-          <button class="btn" id="exportXlsxBtn" title="Download the takeoff as an Excel workbook">Excel</button>
-          <button class="btn" id="reportBtn" title="Printable report: marked-up sheets + quantities">Report</button>
-          <button class="btn" id="clearMarkups" title="Remove every measurement in this takeoff">Clear</button>
-        </div>
-        <div class="side-actions">
-          <button class="btn primary" id="savePdfBtn" title="Save the PDF with markups as standard annotations">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg>
-            Save into PDF
-          </button>
         </div>
       </aside>
     </div>
-
-    <footer id="statusbar">
-      <span id="toolHint">Open a drawing (PDF or image) to begin</span>
-      <span class="spacer"></span>
-      <span id="cursorPos"></span>
-      <span id="fileIndicator"></span>
-    </footer>
     </div>
 
     <!-- calibration modal -->

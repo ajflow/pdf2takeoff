@@ -30,7 +30,10 @@ import {
   swap as swapRevisions,
   nudge,
 } from './compare';
-import { calibrationFor, ratioOn, type Pt } from './state';
+import { calibrationFor, type Pt } from './state';
+import { initChrome, renderScaleChip } from './chrome';
+import { initCmdk } from './cmdk';
+import { initScanReview } from './scanreview';
 import { prepareFiles, ACCEPT } from './inputs';
 import { formatLength, DISPLAY_UNITS, unitLabel } from '../engine/units';
 
@@ -280,7 +283,13 @@ $('nextPage').addEventListener('click', () => {
 });
 $('savePdfBtn').addEventListener('click', () => void saveAnnotatedPdf());
 
-$('scaleBadge').addEventListener('click', () => setTool('calibrate'));
+$('scaleBadge').addEventListener('click', () => {
+  if (!hasDoc()) return;
+  // a scale that disagrees with the sheet explains itself; otherwise set it (again)
+  const check = state.scaleChecks.get(state.pageNum);
+  if (check?.message && (check.status === 'disagrees' || check.status === 'doors-bad')) $('toolHint').textContent = check.message;
+  else setTool('calibrate');
+});
 
 // --- overlay compare ---
 
@@ -416,27 +425,14 @@ subscribe(() => {
 
   // nav / zoom readouts
   const nav = $('pageIndicator');
-  nav.textContent = hasDoc() ? `${state.pageNum} / ${state.pageCount}` : '- / -';
+  nav.textContent = hasDoc() ? `Page ${state.pageNum} of ${state.pageCount}` : '';
+  ($('prevPage') as HTMLButtonElement).disabled = !hasDoc() || state.pageNum <= 1;
+  ($('nextPage') as HTMLButtonElement).disabled = !hasDoc() || state.pageNum >= state.pageCount;
   $('zoomIndicator').textContent = `${Math.round(state.zoom * 100)}%`;
 
-  // scale badge
-  const cal = calibrationFor(state.pageNum);
-  const badge = $('scaleBadge');
-  if (!hasDoc()) {
-    badge.textContent = 'Scale';
-    badge.classList.remove('ok');
-  } else if (cal) {
-    // an image page without a paper size has a real scale but no printed ratio
-    const ratio = ratioOn(state.pageNum, cal.metersPerPt);
-    const pretty = ratio === null ? 'set' : Math.abs(ratio - Math.round(ratio)) < 0.5 ? `1:${Math.round(ratio)}` : `1:${ratio.toFixed(0)}*`;
-    badge.textContent = `Scale ${pretty}`;
-    badge.classList.add('ok');
-  } else {
-    badge.textContent = 'Scale: not calibrated';
-    badge.classList.remove('ok');
-  }
-
+  renderScaleChip(hasDoc());
   $('fileIndicator').textContent = state.fileName;
+  $('markupCount').textContent = state.markups.length ? String(state.markups.length) : '';
 
   renderMarkups();
   renderTable();
@@ -464,6 +460,13 @@ window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   if (!hasDoc()) return;
   switch (e.key) {
+    case 'Escape':
+      // let go of a selected quantity row: every markup back to full strength
+      if (state.focusLabel !== null) {
+        state.focusLabel = null;
+        emit();
+      }
+      break;
     case '+':
     case '=':
       setZoom(state.zoom * 1.25);
@@ -491,6 +494,9 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+initChrome();
+initCmdk();
+initScanReview();
 setTool('pan');
 $('toolHint').textContent = 'Open a PDF drawing to begin, or drop one anywhere in this window';
 emit();

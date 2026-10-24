@@ -1,7 +1,8 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
+import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
+import { openScanReview, isDoubtful } from './scanreview';
 import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPdfDoc } from './viewer';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
@@ -370,6 +371,11 @@ async function runScan(p: Pt): Promise<void> {
     return;
   }
   const fallbackLabel = state.activePreset?.type === 'count' ? state.activePreset.label : 'Scanned symbol';
+  // review first: every hit is proposed as 'check' and the card asks a person
+  const added: Markup[] = [];
+  const doubtful = new Set<string>();
+  let example: string | null = null;
+  let nearest = Infinity;
   for (const hit of hits) {
     const scanned: Markup = {
       id: nextId('mk'),
@@ -379,20 +385,24 @@ async function runScan(p: Pt): Promise<void> {
       label: hit.label ?? fallbackLabel,
       points: [{ x: hit.x, y: hit.y }],
       createdAt: Date.now(),
+      status: 'check',
     };
     state.markups.push(scanned);
     syncUpsertMarkup(scanned);
+    added.push(scanned);
+    if (isDoubtful(hit, result.provider)) doubtful.add(scanned.id);
+    const d = Math.hypot(hit.x - p.x, hit.y - p.y);
+    if (d < nearest) {
+      nearest = d;
+      example = scanned.id; // the one that was clicked gets the halo
+    }
   }
   state.lastAction = null;
   setTool('pan');
+  openScanReview(added, doubtful, ms, example);
   renderMarkups();
   emit();
-  const label = hits[0].label ?? fallbackLabel;
-  hint(
-    label !== 'Scanned symbol'
-      ? `Scan counted ${hits.length} × ${label} in ${ms} ms`
-      : `Scan found ${hits.length} symbols in ${ms} ms; rename "Scanned symbol" in the list to group them`,
-  );
+  if ((hits[0].label ?? fallbackLabel) === 'Scanned symbol') hint(`Scan found ${hits.length} matches in ${ms} ms; click "Scanned symbol" on the card to name them`);
 }
 
 function finishDraft(): void {
@@ -474,6 +484,7 @@ function scalePages(): number[] {
 function applyScaleToPages(metersPerPt: number, source: string): void {
   for (const p of scalePages()) {
     state.calibrations.set(p, { metersPerPt, source });
+    state.scaleChecks.delete(p); // a new scale needs checking afresh
     syncCalibration(p, { metersPerPt, source });
   }
 }
@@ -492,6 +503,7 @@ function applyRatioToPages(ratio: number, source: string): boolean {
     const metersPerPt = metersPerPtForRatioOn(p, ratio);
     if (metersPerPt === null) continue;
     state.calibrations.set(p, { metersPerPt, source });
+    state.scaleChecks.delete(p);
     syncCalibration(p, { metersPerPt, source });
     if (p === state.pageNum) current = true;
   }
@@ -677,12 +689,23 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
   const paperRatio = ratioOn(page, metersPerPt);
   const measured = paperRatio ?? metersPerPt / METERS_PER_PT;
   const c: ReturnType<typeof checkAgainstSheet> = paperRatio === null ? { status: 'none' } : checkAgainstSheet(measured, votes, nts);
+  // what the check found also drives the scale chip
+  const record = (check: ScaleCheck | null) => {
+    if (check) state.scaleChecks.set(page, check);
+    else state.scaleChecks.delete(page);
+    emit();
+  };
   if (c.status === 'disagrees' && c.sheetRatio !== undefined) {
     const why = c.likely ? `, likely ${c.likely}` : '';
-    hint(`Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`);
+    const message = `Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`;
+    record({ status: 'disagrees', message });
+    hint(message);
     return;
   }
-  if (c.status === 'agrees') return; // the printed scale is the stronger witness
+  if (c.status === 'agrees') {
+    record({ status: 'agrees' }); // the printed scale is the stronger witness
+    return;
+  }
   // no printed scale to lean on (scans): do the doors come out door-sized?
   // (sheets larger than A1 are not checked: the pass would take seconds, so
   // the size is read from the page before anything is rendered)
@@ -693,9 +716,15 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
   const raster = await renderRaster(page, 3).catch(() => null);
   if (!raster) return;
   const doors = doorWidthCheck(metersPerPt, sheetDoorWidthPx(raster), 3);
-  if (doors?.status !== 'implausible') return;
+  if (!doors) return;
+  if (doors.status === 'plausible') {
+    record({ status: 'doors-ok' });
+    return;
+  }
   const why = doors.likely ? `, likely ${doors.likely}` : '';
-  hint(`Scale set to about 1:${Math.round(measured)}, which makes this sheet's doorways ${doors.impliedDoorM.toFixed(2)} m wide${why}. Check the dimension you used.`);
+  const message = `Scale set to about 1:${Math.round(measured)}, which makes this sheet's doorways ${doors.impliedDoorM.toFixed(2)} m wide${why}. Check the dimension you used.`;
+  record({ status: 'doors-bad', message });
+  hint(message);
 }
 
 // --- keyboard ---

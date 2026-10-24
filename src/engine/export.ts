@@ -44,6 +44,33 @@ export function groupsOf(markups: Markup[]): Group[] {
   return [...map.values()];
 }
 
+/**
+ * A group's total with each markup at its own scale: one label can span
+ * pages, or viewports, drawn at different scales. `total` is null when no
+ * item can be totalled (angles and notes never are); `uncalibrated` counts
+ * the items left out because their page has no scale yet.
+ */
+export function groupTotal(g: Group, calFor: (m: Markup) => Calibration | undefined): { total: number | null; uncalibrated: number } {
+  if (g.type === 'count') return { total: g.items.length, uncalibrated: 0 };
+  if (g.type === 'angle' || g.type === 'note') return { total: null, uncalibrated: 0 };
+  let total = 0;
+  let counted = 0;
+  let uncalibrated = 0;
+  for (const m of g.items) {
+    const cal = calFor(m);
+    if (!cal) {
+      uncalibrated++;
+      continue;
+    }
+    counted++;
+    if (g.type === 'length') total += markupLength(m, cal.metersPerPt);
+    else if (g.type === 'perimeter') total += markupPerimeter(m, cal.metersPerPt);
+    else if (g.type === 'volume') total += markupVolume(m, cal.metersPerPt);
+    else total += markupArea(m, cal.metersPerPt);
+  }
+  return { total: counted ? total : null, uncalibrated };
+}
+
 export function valueParts(
   m: Markup,
   cal: Calibration | undefined,
@@ -93,20 +120,11 @@ export function buildMatrix(d: TakeoffData): Matrix {
     rows.push([]);
     rows.push(['Group', 'Type', 'Items', 'Total', '']);
     for (const g of gs) {
-      const cal = resolveCalibration(g.items[0], d.calibrations, d.viewports);
-      let total: string | number = '';
-      if (g.type === 'count') {
-        total = g.items.length;
-      } else if (g.type === 'angle' || g.type === 'note') {
-        total = ''; // angles don't sum; notes carry no quantity
-      } else if (cal) {
-        total = g.items.reduce((s, m) => {
-          if (g.type === 'length') return s + markupLength(m, cal.metersPerPt);
-          if (g.type === 'perimeter') return s + markupPerimeter(m, cal.metersPerPt);
-          if (g.type === 'volume') return s + markupVolume(m, cal.metersPerPt);
-          return s + markupArea(m, cal.metersPerPt);
-        }, 0);
-      }
+      const calFor = (m: Markup) => resolveCalibration(m, d.calibrations, d.viewports);
+      const cal = calFor(g.items[0]);
+      // each item at its own scale; a group with any unscaled item has no honest total
+      const sum = groupTotal(g, calFor);
+      const total: string | number = sum.total !== null && !sum.uncalibrated ? sum.total : '';
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
       const confirmed = g.items.filter((m) => m.status === 'confirmed').length;
       const numeric = typeof total === 'number' ? total : null;

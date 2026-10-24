@@ -115,12 +115,10 @@ export function unsupportedMessage(kind: InputKind, name: string): string {
       return `${file} is a DWG, which the browser can't read. In your CAD app, export the sheet as a PDF (or DXF) and open that.`;
     case 'dxf':
       return `${file} is a DXF. Plot it to PDF from your CAD app and open that; direct DXF support is coming.`;
-    case 'tiff':
-      return `This browser can't read TIFF files (Safari can). Save the scan as a PDF or PNG and open that.`;
     case 'heic':
       return `This browser can't read HEIC photos (Safari can). Export the photo as a JPEG, or open it in Safari.`;
     default:
-      return `${file} isn't a drawing pdf2takeoff can open. It opens PDFs and images (PNG, JPEG, WebP, GIF, BMP, AVIF, SVG); print or export the file to PDF first.`;
+      return `${file} isn't a drawing pdf2takeoff can open. It opens PDFs and images (PNG, JPEG, TIFF, WebP, GIF, BMP, AVIF, SVG); print or export the file to PDF first.`;
   }
 }
 
@@ -259,6 +257,13 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
       continue;
     }
     if (!IMAGE_KINDS.has(kind)) throw new Error(unsupportedMessage(kind, name));
+    if (kind === 'tiff') {
+      // its own reader: Group 4 scans pass through, the rest are decoded; a page per IFD
+      const { addTiffPages } = await import('./tiff.ts');
+      const start = out.getPageCount();
+      addTiffPages(out, bytes).forEach((d, i) => imagePages.set(start + i + 1, d));
+      continue;
+    }
     let dpi = imageDpi(bytes, kind);
     // PNG and upright JPEG embed as they are (no re-encode, no quality loss);
     // everything else, and anything pdf-lib refuses, goes through the platform

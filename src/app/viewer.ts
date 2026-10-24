@@ -10,6 +10,16 @@ import { state, emit } from './state';
 import { vectorize, type VecPage } from '../engine/vector';
 import { parseImagePages, PAPER_KEY } from '../engine/inputs';
 
+/**
+ * Where pdf.js finds its WebAssembly decoders (CCITT fax, JBIG2, JPEG 2000:
+ * without them a scanned PDF's images come out blank) and the standard-14
+ * fonts; both ship with the site under /pdfjs/ (vite.config.ts).
+ */
+export const PDFJS_ASSET_URLS = {
+  wasmUrl: new URL(`${import.meta.env.BASE_URL}pdfjs/wasm/`, location.href).href,
+  standardFontDataUrl: new URL(`${import.meta.env.BASE_URL}pdfjs/standard_fonts/`, location.href).href,
+};
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
 export type ViewPt = { x: number; y: number }; // viewport@1 space (top-left origin)
@@ -69,7 +79,7 @@ export async function loadPdf(bytes: Uint8Array, name: string): Promise<void> {
   state.calibrations.clear();
   state.scaleChecks.clear();
   state.focusLabel = null;
-  const task = pdfjsLib.getDocument({ data: bytes.slice() });
+  const task = pdfjsLib.getDocument({ data: bytes.slice(), ...PDFJS_ASSET_URLS });
   doc = await task.promise;
   state.pageCount = doc.numPages;
   // pages that came from images (opened here, or saved from here and reopened)

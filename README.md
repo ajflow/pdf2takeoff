@@ -43,7 +43,7 @@ Everything regenerates from this repo with one command per table — see
 ## What it does today
 
 - **Viewer**: open any PDF drawing; zoom, pan, multi-page (PDF.js)
-- **Images too**: open, drop or paste (⌘V / Ctrl+V) PNG, JPEG, WebP, GIF, BMP, AVIF or SVG; drop several files (images and PDFs) to open them as one set in file-name order. Each image becomes a page (wrapped as a PDF, so every tool, export and *Save into PDF* works). A scan that states its resolution (300 dpi and so on) keeps its paper size, so printed ratios like 1:100 apply; other images are calibrated from a dimension, and ratio presets refuse rather than give wrong lengths. DWG and DXF get a plain "export to PDF" message for now.
+- **Images and scans too**: open, drop or paste (⌘V / Ctrl+V) PNG, JPEG, TIFF (multi-page; black-and-white Group 4 scans pass straight through, never decoded), WebP, GIF, BMP, AVIF or SVG; drop several files (images and PDFs) to open them as one set in file-name order. Each image becomes a page (wrapped as a PDF, so every tool, export and *Save into PDF* works). A scan that states its resolution (300 dpi and so on) keeps its paper size, so printed ratios like 1:100 apply; other images are calibrated from a dimension, and ratio presets refuse rather than give wrong lengths. DWG and DXF get a plain "export to PDF" message for now.
 - **Scale calibration**: click both ends of a known dimension and type its real length, or pick a preset (1:50 … 1:500, 1/8″ = 1′-0″, 1/4″ = 1′-0″, 1″ = 10′/20′/30′). Each page keeps its own scale. Metric and imperial. Multi-scale viewports (W): outline a region drawn at a different scale (a 1:20 detail on a 1:100 sheet) and measurements inside it resolve to that scale automatically.
 - **OCR auto-read**: click both ends of a printed dimension and hit *Auto-read from sheet* — the value ("12.00") or the title-block scale ("1:100") is read straight off the drawing. First use fetches the OCR language pack (~4 MB, then cached); drawings still never leave your machine.
 - **Takeoff tools**: Length (segmented runs), Area, Perimeter, Volume (area × depth), Angle (scale-free) and Count, with live measurements on the drawing and per-label group totals
@@ -145,9 +145,9 @@ headless; today the CLI scans with the CV tier), and the exports. Re-run it on
 every revision with `--prev` to see exactly which quantities changed — the
 CI-friendly revision loop.
 
-Every `<file.pdf>` above also takes an image directly (PNG, JPG, WebP, GIF,
-BMP, AVIF or SVG; the MCP `open_document` included), as well as image-only
-(scanned) PDFs: an image is
+Every `<file.pdf>` above also takes an image directly (PNG, JPG, TIFF, WebP,
+GIF, BMP, AVIF or SVG; the MCP `open_document` included), as well as
+image-only (scanned) PDFs, including CCITT fax, JBIG2 and JPEG 2000 images: an image is
 one page of width/3 by height/3 points, so a click at pixel (px, py) is
 `--at px/3,(H - py)/3` and the scan sees the native pixels. `compare --json`
 is designed for pipelines (`jq '.changedSheets'`); `scan`

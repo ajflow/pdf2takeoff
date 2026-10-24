@@ -28,9 +28,10 @@ import { PDFDocument } from 'pdf-lib';
 
 const HELP = `pdf2takeoff — free, open-source PDF takeoff (Apache-2.0)
 
-Every <file.pdf> below also takes an image (PNG, JPG, WebP, GIF, BMP, AVIF or
-SVG): it opens as one page of width/3 x height/3 points (scale 3 renders the
-native pixels), and commands that write a PDF wrap the image into one.
+Every <file.pdf> below also takes an image (PNG, JPG, TIFF, WebP, GIF, BMP,
+AVIF or SVG): it opens as width/3 x height/3 points per page (scale 3 renders
+the native pixels; a multi-page TIFF gives a page each), and commands that
+write a PDF wrap the image into one.
 
 Usage:
   pdf2takeoff info <file.pdf>
@@ -107,7 +108,7 @@ function isDrawingFile(name: string): boolean {
 
 /** The sheet name a file stands for: its basename without the extension. */
 function sheetStem(name: string): string {
-  return basename(name).replace(/\.(pdf|png|jpe?g|webp|gif|bmp|avif|svg)$/i, '');
+  return basename(name).replace(/\.(pdf|png|jpe?g|webp|gif|bmp|avif|svg|tiff?)$/i, '');
 }
 
 async function cmdInfo(file: string): Promise<unknown> {

@@ -1,7 +1,7 @@
 {
   "name": "pdf2takeoff",
   "version": "0.1.0",
-  "description": "Free, open-source PDF takeoff and markup tool that runs entirely in your browser. PDF in, quantities out — files never leave your machine.",
+  "description": "Free, open-source construction takeoff engine: a Node CLI and MCP server for quantity takeoff from PDF drawings, scans and DXF files (scale, lengths, areas, symbol counts, Excel and CSV export, markups that open in Bluebeam). Runs locally. Browser app: https://pdf2takeoff.com",
   "type": "module",
   "bin": {
     "pdf2takeoff": "bin/pdf2takeoff.js"
@@ -33,13 +33,31 @@
     "bench:scaled": "node --experimental-strip-types scripts/scaled-drawing-bench.mjs"
   },
   "keywords": [
-    "pdf",
-    "takeoff",
     "construction",
+    "takeoff",
+    "construction-takeoff",
+    "quantity-takeoff",
+    "construction-estimating",
     "estimating",
-    "measurement",
+    "quantity-surveying",
     "bluebeam-alternative",
-    "quantity-survey"
+    "aec",
+    "floor-plan",
+    "pdf",
+    "pdf-markup",
+    "pdf-annotations",
+    "measurement",
+    "dxf",
+    "cad",
+    "ocr",
+    "computer-vision",
+    "symbol-detection",
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agents",
+    "cli",
+    "local-first"
   ],
   "license": "Apache-2.0",
   "homepage": "https://pdf2takeoff.com",

@@ -97,10 +97,16 @@ All numbers below are committed in the repo with reproduce commands.
   scorer: OpenTakeoff **0.667** (tool-assisted, not unassisted), Kamai
   **0.829** (its 0.931 is the corpus-wide figure, not this sheet). Most
   false positives are believed to be regions that run through a doorway and
-  merge two rooms. A **room-partition pass** (wall-supported doorway strips,
-  then relabelling, with an explicit "unresolved" result instead of risky
-  splits) is being built now; its outcome is pending. Do not propose it as
-  new; do critique it.
+  merge two rooms. A **room-partition pass** (door-cued, wall-supported
+  portals, then relabelling, with an explicit "unresolved" result instead
+  of risky splits) is now built. On our synthetic holdout (200 sheets) it
+  cut 437 of 469 needed doors with no wrong cuts and split none of 41
+  hard-negative groups. On sheet_02, one frozen unassisted run scored
+  instance F1 **0.400** (9 TP / 14 FP / 13 FN, all rings valid), but the
+  pass never fired there: switching it off gives byte-identical output, so
+  the gain over 0.295 comes from other engine changes and valid geometry.
+  The remaining false positives are untested guesses (closets, openings
+  with no door symbol). Do not propose the pass as new; do critique it.
 - **AECV-Bench** (external, 120 raster plans, counting task): deterministic
   engine with no vision model scores **0.295** five-field exact match
   (best published VLM 0.543); room-label counts from OCR alone reach 0.708

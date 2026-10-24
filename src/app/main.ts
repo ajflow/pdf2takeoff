@@ -34,6 +34,7 @@ import { calibrationFor, type Pt } from './state';
 import { initChrome, renderScaleChip } from './chrome';
 import { initCmdk } from './cmdk';
 import { initScanReview } from './scanreview';
+import { initWonder } from './fx/wonder';
 import { prepareFiles, ACCEPT } from './inputs';
 import { formatLength, DISPLAY_UNITS, unitLabel } from '../engine/units';
 
@@ -497,6 +498,7 @@ window.addEventListener('keydown', (e) => {
 initChrome();
 initCmdk();
 initScanReview();
+initWonder();
 setTool('pan');
 $('toolHint').textContent = 'Open a PDF drawing to begin, or drop one anywhere in this window';
 emit();

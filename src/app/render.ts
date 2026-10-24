@@ -71,7 +71,7 @@ function centroid(pts: Pt[]): Pt {
  * aren't doubtful (drawn plainly although they are still 'check'), the hit
  * that was clicked (a halo) and the hit under review (a ring).
  */
-export const scanStyle = { quiet: new Set<string>(), example: null as string | null, reviewing: null as string | null };
+export const scanStyle = { quiet: new Set<string>(), example: null as string | null, reviewing: null as string | null, hidden: new Set<string>() };
 const HUMAN = '#9a5218'; // a person decides
 const HALO = '#4fd0c6';
 
@@ -141,7 +141,7 @@ function renderMarkup(m: Markup): SVGGElement {
   const selected = m.id === state.selectedId;
   const focus = state.focusLabel === `${m.type}|${m.label}`;
   const g = el('g', {
-    class: `markup m-${m.type}${selected ? ' selected' : ''}${focus ? ' focus' : ''}`,
+    class: `markup m-${m.type}${selected ? ' selected' : ''}${focus ? ' focus' : ''}${scanStyle.hidden.has(m.id) ? ' fx-pending' : ''}`,
     'data-id': m.id,
   });
   const title = el('title');

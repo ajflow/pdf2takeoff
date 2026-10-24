@@ -1665,6 +1665,23 @@ td.empty {
   margin-right: 3px;
 }
 
+/* ---------- wonder layer (src/app/fx/wonder.ts) ---------- */
+
+/* a scan's hits wait for the wave to reach them */
+#markupsLayer > .markup.fx-pending {
+  opacity: 0;
+}
+
+.fx-moment {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* a selected quantity row: its markups stay bright, the rest step back */
 #markupsLayer.focusing > .markup:not(.focus) {
   opacity: 0.28;

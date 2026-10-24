@@ -28,6 +28,7 @@ import { partitionOpen, scoreChildren, ptPolyMask, matchRoom, rectMask, iou } fr
 import { dynamicFill, dynamicFillRooms, fillEvidence } from '../src/engine/dynamicfill.ts';
 import { autoRooms, gridSeeds, roomSelector } from '../src/engine/auto-rooms.ts';
 import { simpleRingError } from '../src/engine/polygon.ts';
+import { partitionRegion } from '../src/engine/partition.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 
@@ -125,6 +126,33 @@ for (const k of [1, 2, 0.5]) {
   const off = dynamicFill(raster, seeds[0].pt, undefined, {}, { partition: false });
   const offMatch = 'error' in off ? null : matchRoom(ptPolyMask(off.points, raster), rooms, raster.width, raster.height);
   if (!offMatch || offMatch.iou > 0.7) fail(`${lay.name} with the pass off: expected the merged pair, got ${JSON.stringify(offMatch)}`);
+  // a click in the portal strip itself (between the children) keeps the
+  // merged region and must not claim a partition
+  {
+    const parentR = dynamicFillRooms(raster, seeds[0].pt, undefined, {}, { partition: false });
+    if (!('error' in parentR)) {
+      const inChild = new Set();
+      for (const c of rr.rooms) for (const i of c.px) inChild.add(i);
+      const strip = [...parentR.rooms[0].px].find((i) => !inChild.has(i) && raster.data[i * 4] > 200);
+      const sr = strip === undefined ? null : dynamicFill(raster, raster.toPdf(strip % raster.width, (strip / raster.width) | 0));
+      if (!sr) fail('strip seed: no strip pixel found');
+      else if (!('error' in sr) && sr.partition === 'partitioned') fail('a click in the portal strip returned the merged region flagged partitioned');
+    }
+  }
+  // budgets: a region box over the pixel cap, and a sheet with many arcs far
+  // from the region, never throw; the first abstains, the second is ignored
+  {
+    const W = 3000;
+    const H = 3000;
+    const region = new Uint8Array(W * H);
+    region[10] = 1;
+    const base = { w: W, h: H, region, count: 1, ink: new Uint8Array(W * H), virtual: [], erased: null, rowGaps: [], colGaps: [], minDoorPx: 18, maxDoorPx: 800, structPx: 108 };
+    const big = partitionRegion({ ...base, box: { x0: 0, y0: 0, x1: W - 1, y1: H - 1 }, arcs: [] });
+    if (big.status !== 'unresolved' || !/pixel budget/.test(big.reasons.join())) fail(`oversized region box: ${big.status} ${big.reasons}`);
+    const far = Array.from({ length: 2000 }, (_, i) => ({ hx: 2000 + (i % 40) * 20, hy: 2000 + Math.floor(i / 40) * 15, r: 60, ends: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }));
+    const small = partitionRegion({ ...base, box: { x0: 0, y0: 0, x1: 99, y1: 99 }, arcs: far });
+    if (small.status === 'unresolved' && /arc budget/.test(small.reasons.join())) fail('arcs far from the region exhausted the arc budget');
+  }
   // the pass never fires on a non-split case
   let fired = 0;
   for (const l of [...NEG, ...UNS]) {

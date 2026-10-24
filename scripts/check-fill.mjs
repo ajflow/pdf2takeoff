@@ -506,6 +506,75 @@ const slotSheet = (slotPx) => {
   if (dp40 < 38 || dp40 > 42) { console.error(`FAIL door-sized slots not reported: ${dp40}px`); process.exit(1); }
 }
 
+// --- circle symbols are not door swings ---------------------------------------
+// A smoke alarm or downlight is a full circle, often with a crosshair or a
+// centre tick. Cut by its crosshair into quarter arcs (or by a centre line
+// into halves) it fits door-radius circles hinged on line ink, and once read
+// as swings its chords (1.15 R from the centre) can span a corridor and halve
+// the room. Every case must read as the same room without the symbol, report
+// no swing, and a ring tangent to a thin partition must keep its disc out of
+// the room exactly as a solid disc there does (the analytic room minus disc).
+{
+  const CW = 1400;
+  const CH = 1000;
+  const K = 3;
+  const make = (draw) => {
+    const data = new Uint8ClampedArray(CW * CH * 4).fill(255);
+    const set = (x, y) => {
+      x = Math.round(x);
+      y = Math.round(y);
+      if (x < 0 || y < 0 || x >= CW || y >= CH) return;
+      const i = (y * CW + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 0;
+    };
+    const rect = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) set(x, y); };
+    draw({ set, rect });
+    return { width: CW, height: CH, data, toPdf: (x, y) => ({ x: x / K, y: (CH - y) / K }), toRaster: (x, y) => ({ x: x * K, y: CH - y * K }) };
+  };
+  const walls = ({ rect }) => { rect(100, 100, 800, 106); rect(100, 494, 800, 500); rect(100, 100, 106, 500); rect(794, 100, 800, 500); };
+  const corr = ({ rect }) => { rect(100, 250, 1300, 256); rect(100, 350, 1300, 356); rect(100, 250, 106, 356); rect(1294, 250, 1300, 356); };
+  const circle = (set, cx, cy, rad, solid = false) => {
+    for (let y = cy - rad - 3; y <= cy + rad + 3; y++) for (let x = cx - rad - 3; x <= cx + rad + 3; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (solid ? d <= rad + 0.75 : Math.abs(d - rad) <= 0.75) set(x, y);
+    }
+  };
+  const areaPx = (pts) => area(pts) * K * K;
+  const cases = [
+    // name, drawing, the area it must read (px)
+    ['corridor ring + full crosshair', (d) => { corr(d); circle(d.set, 700, 303, 42); d.rect(655, 303, 746, 304); d.rect(700, 258, 701, 349); }, 'corridor'],
+    ['corridor ring + centre tick', (d) => { corr(d); circle(d.set, 700, 303, 42); d.rect(690, 303, 711, 304); d.rect(700, 293, 701, 314); }, 'corridor'],
+    ['corridor bare ring', (d) => { corr(d); circle(d.set, 700, 303, 42); }, 'corridor'],
+    ['room ring + centre tick', (d) => { walls(d); circle(d.set, 400, 300, 45); d.rect(390, 300, 411, 301); d.rect(400, 290, 401, 311); }, 'room'],
+    ['room ring + tick near a wall', (d) => { walls(d); circle(d.set, 160, 300, 45); d.rect(150, 300, 171, 301); d.rect(160, 290, 161, 311); }, 'room'],
+    ['room ring + full crosshair', (d) => { walls(d); circle(d.set, 400, 300, 45); d.rect(350, 300, 451, 301); d.rect(400, 250, 401, 351); }, 'room'],
+    ['room ring + diameter line', (d) => { walls(d); circle(d.set, 400, 300, 45); d.rect(350, 300, 451, 301); }, 'room'],
+    ['ring + diameter on a thin partition', (d) => { walls(d); d.rect(450, 106, 452, 494); circle(d.set, 406, 300, 45); d.rect(361, 300, 452, 301); }, 'partition'],
+    ['solid disc + diameter on a thin partition', (d) => { walls(d); d.rect(450, 106, 452, 494); circle(d.set, 406, 300, 45, true); d.rect(361, 300, 452, 301); }, 'partition'],
+  ];
+  const seed = { x: 300 / K, y: (CH - 300) / K };
+  const base = {
+    corridor: (() => { const r = dynamicFill(make(corr), seed); return 'error' in r ? NaN : areaPx(r.points); })(),
+    room: (() => { const r = dynamicFill(make(walls), seed); return 'error' in r ? NaN : areaPx(r.points); })(),
+    partition: (() => {
+      // the left room (x 106..449, y 106..493) minus every pixel of the disc
+      let n = 344 * 388;
+      for (let y = 106; y < 494; y++) for (let x = 106; x < 450; x++) if (Math.hypot(x - 406, y - 300) <= 45.75) n--;
+      return n;
+    })(),
+  };
+  for (const [name, draw, want] of cases) {
+    const r = dynamicFill(make(draw), seed);
+    if ('error' in r) { console.error(`FAIL circle symbol (${name}): ${r.error}`); process.exit(1); }
+    const a = areaPx(r.points);
+    if (Math.abs(a - base[want]) / base[want] > 0.005 || r.swings) {
+      console.error(`FAIL circle symbol (${name}): area ${a.toFixed(0)} vs ${base[want].toFixed(0)}, swings ${r.swings}`);
+      process.exit(1);
+    }
+  }
+  console.log(`circle symbols: ${cases.length} rings with crosshairs, ticks and diameters read as the room without them, no swings (corridor ${base.corridor.toFixed(0)}, room ${base.room.toFixed(0)}, room minus disc ${base.partition})`);
+}
+
 // A ring that revisits a non-adjacent vertex is two lobes touching at one
 // point. Area and proper-crossing checks alone accept it, but downstream
 // polygon repair can turn the single fill into multiple scored instances.

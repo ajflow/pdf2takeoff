@@ -1,0 +1,189 @@
+{
+  "layouts": [
+    {
+      "layout": "door-mark-on-line",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "door-mark-on-line_T",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "double-door-12",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "double-door-15",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "double-door-18",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "double-door-24",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "fixture-dense-bath",
+      "rooms": 2,
+      "submitted": 4,
+      "valid_as_submitted": 4,
+      "instances_after_preprocessing": 4,
+      "pass": false
+    },
+    {
+      "layout": "room-circulation",
+      "rooms": 3,
+      "submitted": 3,
+      "valid_as_submitted": 3,
+      "instances_after_preprocessing": 3,
+      "pass": true
+    },
+    {
+      "layout": "short-flank-pantry",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "three-room-cycle",
+      "rooms": 3,
+      "submitted": 3,
+      "valid_as_submitted": 3,
+      "instances_after_preprocessing": 3,
+      "pass": true
+    },
+    {
+      "layout": "three-room-cycle_T",
+      "rooms": 3,
+      "submitted": 3,
+      "valid_as_submitted": 3,
+      "instances_after_preprocessing": 3,
+      "pass": true
+    },
+    {
+      "layout": "two-door-100-a+",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-100-a-",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-80-a+",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-80-a-",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-80-a-_T",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-91-b+",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-91-b-",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-cycle",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-outline",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-thickwall",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    },
+    {
+      "layout": "two-door-thinline",
+      "rooms": 2,
+      "submitted": 2,
+      "valid_as_submitted": 2,
+      "instances_after_preprocessing": 2,
+      "pass": true
+    }
+  ],
+  "all_layouts_pass": false,
+  "scorer_contract": {
+    "shared_edge_children_instances": 1,
+    "one_px_strip_children_instances": 2,
+    "two_lobe_ring_valid": false,
+    "two_lobe_ring_instances_after_repair": 2,
+    "comb_instances": 1
+  },
+  "scorer_contract_as_expected": true
+}

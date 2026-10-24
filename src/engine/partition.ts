@@ -170,6 +170,12 @@ export interface PartitionResult {
 
 /** Fixed work limits: exceeding one makes the result `unresolved`, never a guess. */
 const MAX_ARCS = 512;
+/**
+ * Region bounding boxes larger than this (px) are not labelled: at 16 bytes
+ * per pixel of scratch that is 128 MB, a 2800 px square (a 33 m square hall
+ * at 1:100 and 3 px/pt). Bigger regions are left whole as `unresolved`.
+ */
+const MAX_ROI_PX = 8_000_000;
 const MAX_PORTALS = 256;
 const MAX_LABEL_PASSES = 3;
 /** Ink pixels a structural-piece search may visit before it calls the piece structural. */
@@ -260,7 +266,7 @@ const median = (xs: number[]): number => {
 let pool: { label: Int32Array; base: Int32Array; stack: Int32Array } | null = null;
 function scratch(n: number): { label: Int32Array; base: Int32Array; stack: Int32Array } {
   if (!pool || pool.label.length < n) {
-    const size = Math.max(n, 2 * (pool?.label.length ?? 0));
+    const size = Math.min(MAX_ROI_PX, Math.max(n, 2 * (pool?.label.length ?? 0)));
     // a pixel is seeded at most once from each side, so the stack needs 2n
     pool = { label: new Int32Array(size), base: new Int32Array(size), stack: new Int32Array(2 * size + 2) };
   }
@@ -283,7 +289,18 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
   };
   const inBox = (x: number, y: number) => x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1;
   const regionAt = (x: number, y: number) => inBox(x, y) && region[y * w + x] === 1;
-  if (inp.arcs.length > MAX_ARCS) return { status: 'unresolved', children: [], portals: [], reasons: ['complex evidence: arc budget exceeded'], stripPx: 0 };
+  // only the arcs that can touch the region count against the budget and
+  // are searched: the doors elsewhere on a big plan never disable the pass
+  const nearArcs: number[] = [];
+  for (let k = 0; k < inp.arcs.length; k++) {
+    const a = inp.arcs[k];
+    const r = a.r + 4;
+    if (a.hx + r >= box.x0 && a.hx - r <= box.x1 && a.hy + r >= box.y0 && a.hy - r <= box.y1) nearArcs.push(k);
+  }
+  if (nearArcs.length > MAX_ARCS) return { status: 'unresolved', children: [], portals: [], reasons: ['complex evidence: arc budget exceeded'], stripPx: 0 };
+  // the labelling buffers are bounded too: a region whose box exceeds the
+  // cap is left whole and reported, never allocated
+  if ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1) > MAX_ROI_PX) return { status: 'unresolved', children: [], portals: [], reasons: ['complex evidence: region box over the pixel budget'], stripPx: 0 };
 
   // in frame f, page (x, y) of along u / across v
   const xy = (f: Frame, u: number, v: number): [number, number] => (f.axis === 'row' ? [u, v] : [v, u]);
@@ -555,11 +572,6 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
 
   // --- step A: cue-first portals ------------------------------------------------
   const candidates: Candidate[] = [];
-  const near = (k: number) => {
-    const a = inp.arcs[k];
-    const r = a.r + 4;
-    return a.hx + r >= box.x0 && a.hx - r <= box.x1 && a.hy + r >= box.y0 && a.hy - r <= box.y1;
-  };
   const lineCache = new Map<number, ReturnType<typeof doorLines>>();
   const linesOf = (k: number) => {
     let l = lineCache.get(k);
@@ -567,8 +579,8 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
     return l;
   };
   const matched = new Set<number>();
-  for (let k = 0; k < inp.arcs.length && candidates.length < MAX_PORTALS; k++) {
-    if (!near(k)) continue;
+  for (const k of nearArcs) {
+    if (candidates.length >= MAX_PORTALS) break;
     for (const dl of linesOf(k).lines) {
       const c = scanDoorway(dl.f, dl.uh, dl.vh, dl.s, dl.uc, dl.r, Math.max(END_TOL_PX, END_TOL_SHARE * dl.r));
       if (c) {
@@ -582,10 +594,12 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
   }
   // double doors: two unmatched arcs on one door line, hinged at its two
   // ends, closed ends meeting, leaves of similar width
-  for (let k1 = 0; k1 < inp.arcs.length && candidates.length < MAX_PORTALS; k1++) {
-    if (matched.has(k1) || !near(k1)) continue;
-    for (let k2 = k1 + 1; k2 < inp.arcs.length && !matched.has(k1); k2++) {
-      if (matched.has(k2) || !near(k2)) continue;
+  for (const [n1, k1] of nearArcs.entries()) {
+    if (candidates.length >= MAX_PORTALS) break;
+    if (matched.has(k1)) continue;
+    for (const k2 of nearArcs.slice(n1 + 1)) {
+      if (matched.has(k1)) break;
+      if (matched.has(k2)) continue;
       const r1 = inp.arcs[k1].r;
       const r2 = inp.arcs[k2].r;
       if (Math.max(r1, r2) > DOUBLE_RADIUS_RATIO * Math.min(r1, r2)) continue;
@@ -609,10 +623,12 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
     }
   }
   if (candidates.length >= MAX_PORTALS) return { status: 'unresolved', children: [], portals: [], reasons: ['complex evidence: portal budget exceeded'], stripPx: 0 };
-  // the same doorway found twice (two cues on one strip) is one portal
+  // the same doorway found twice (two cues on one strip) is one portal:
+  // identical strips, pixel for pixel (overlapping but different strips
+  // are conflicting hypotheses, rejected below)
   const seenStrip = new Set<string>();
   const cued = candidates.filter((c) => {
-    const key = `${c.px[0]}:${c.px.length}`;
+    const key = c.px.slice().sort((p, q) => p - q).join(',');
     if (seenStrip.has(key)) return false;
     seenStrip.add(key);
     return true;
@@ -622,8 +638,8 @@ export function partitionRegion(inp: PartitionInput): PartitionResult {
   // to cut there (a door in a diagonal wall, or one the jamb rules reject):
   // the region provably spans a doorway the pass cannot cut
   let unmatchedCrossed = 0;
-  for (let k = 0; k < inp.arcs.length; k++) {
-    if (matched.has(k) || !near(k)) continue;
+  for (const k of nearArcs) {
+    if (matched.has(k)) continue;
     const arc = inp.arcs[k];
     const { lines, offAxis } = linesOf(k);
     if (!lines.length && !offAxis) continue; // not a door symbol (no leaf)

@@ -552,37 +552,50 @@ function wallThickness(hist: Float64Array, minWallPx: number, peakShare: number,
 
 // --- connected components ---------------------------------------------------------
 
+/** Doubles a flat flood-fill stack until it holds `need` slots. */
+function growStack(stack: Int32Array<ArrayBuffer>, need: number): Int32Array<ArrayBuffer> {
+  let n = stack.length || 1024;
+  while (n < need) n *= 2;
+  const out = new Int32Array(n);
+  out.set(stack);
+  return out;
+}
+
 /** Clears blobs whose bounding box is shorter than minLen on both axes (4-connected). */
-function dropSmallBlobs(mask: Uint8Array, w: number, h: number, minLen: number): void {  const seen = new Uint8Array(w * h);
-  const stack: number[] = [];
-  const members: number[] = [];
+function dropSmallBlobs(mask: Uint8Array, w: number, h: number, minLen: number): void {
+  const seen = new Uint8Array(w * h);
+  // preallocated flat stack and member list (doubling): the number[] stack and
+  // the per-pixel neighbour array were most of this fill's cost; visit order
+  // and results are the same (neighbours still read left, right, up, down)
+  let stack = new Int32Array(1024);
+  let members = new Int32Array(1024);
   for (let start = 0; start < mask.length; start++) {
     if (!mask[start] || seen[start]) continue;
-    stack.length = 0;
-    members.length = 0;
-    stack.push(start);
+    let sp = 0;
+    let np = 0;
+    stack[sp++] = start;
     seen[start] = 1;
     let x0 = start % w;
     let x1 = x0;
     let y0 = (start / w) | 0;
     let y1 = y0;
-    while (stack.length) {
-      const i = stack.pop()!;
-      members.push(i);
+    while (sp > 0) {
+      if (sp + 4 > stack.length) stack = growStack(stack, sp + 4);
+      const i = stack[--sp];
+      if (np === members.length) members = growStack(members, np + 1);
+      members[np++] = i;
       const x = i % w;
       const y = (i / w) | 0;
       if (x < x0) x0 = x;
       if (x > x1) x1 = x;
       if (y < y0) y0 = y;
       if (y > y1) y1 = y;
-      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
-      for (const j of nb) {
-        if (j < 0 || !mask[j] || seen[j]) continue;
-        seen[j] = 1;
-        stack.push(j);
-      }
+      if (x > 0) { const j = i - 1; if (mask[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (x < w - 1) { const j = i + 1; if (mask[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (y > 0) { const j = i - w; if (mask[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (y < h - 1) { const j = i + w; if (mask[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
     }
-    if (x1 - x0 + 1 < minLen && y1 - y0 + 1 < minLen) for (const i of members) mask[i] = 0;
+    if (x1 - x0 + 1 < minLen && y1 - y0 + 1 < minLen) for (let k = 0; k < np; k++) mask[members[k]] = 0;
   }
 }
 
@@ -600,20 +613,22 @@ function networkMask(mask: Uint8Array, w: number, h: number, share: number, fill
   const id = new Int32Array(w * h);
   const masses: number[] = [];
   const fills: number[] = [];
-  const stack: number[] = [];
+  // flat preallocated stack (see dropSmallBlobs): same visit order
+  let stack = new Int32Array(1024);
   for (let start = 0; start < mask.length; start++) {
     if (!mask[start] || id[start]) continue;
     const cur = masses.length + 1;
-    stack.length = 0;
-    stack.push(start);
+    let sp = 0;
+    stack[sp++] = start;
     id[start] = cur;
     let mass = 0;
     let x0 = w;
     let x1 = 0;
     let y0 = h;
     let y1 = 0;
-    while (stack.length) {
-      const i = stack.pop()!;
+    while (sp > 0) {
+      if (sp + 4 > stack.length) stack = growStack(stack, sp + 4);
+      const i = stack[--sp];
       mass++;
       const x = i % w;
       const y = (i / w) | 0;
@@ -621,12 +636,10 @@ function networkMask(mask: Uint8Array, w: number, h: number, share: number, fill
       if (x > x1) x1 = x;
       if (y < y0) y0 = y;
       if (y > y1) y1 = y;
-      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
-      for (const j of nb) {
-        if (j < 0 || !mask[j] || id[j]) continue;
-        id[j] = cur;
-        stack.push(j);
-      }
+      if (x > 0) { const j = i - 1; if (mask[j] && !id[j]) { id[j] = cur; stack[sp++] = j; } }
+      if (x < w - 1) { const j = i + 1; if (mask[j] && !id[j]) { id[j] = cur; stack[sp++] = j; } }
+      if (y > 0) { const j = i - w; if (mask[j] && !id[j]) { id[j] = cur; stack[sp++] = j; } }
+      if (y < h - 1) { const j = i + w; if (mask[j] && !id[j]) { id[j] = cur; stack[sp++] = j; } }
     }
     masses.push(mass);
     fills.push(mass <= fill * (x1 - x0 + 1) * (y1 - y0 + 1) ? 1 : 0);
@@ -674,27 +687,27 @@ const NO_MASK = new Uint8Array(0);
  */
 function enclosedCells(wall: Uint8Array, w: number, h: number, minArea: number): number {
   const seen = new Uint8Array(w * h);
-  const stack: number[] = [];
+  // flat preallocated stack (see dropSmallBlobs): same visit order
+  let stack = new Int32Array(1024);
   let cells = 0;
   for (let start = 0; start < wall.length; start++) {
     if (wall[start] || seen[start]) continue;
-    stack.length = 0;
-    stack.push(start);
+    let sp = 0;
+    stack[sp++] = start;
     seen[start] = 1;
     let area = 0;
     let edge = false;
-    while (stack.length) {
-      const i = stack.pop()!;
+    while (sp > 0) {
+      if (sp + 4 > stack.length) stack = growStack(stack, sp + 4);
+      const i = stack[--sp];
       const x = i % w;
       const y = (i / w) | 0;
       area++;
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
-      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
-      for (const j of nb) {
-        if (j < 0 || wall[j] || seen[j]) continue;
-        seen[j] = 1;
-        stack.push(j);
-      }
+      if (x > 0) { const j = i - 1; if (!wall[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (x < w - 1) { const j = i + 1; if (!wall[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (y > 0) { const j = i - w; if (!wall[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
+      if (y < h - 1) { const j = i + w; if (!wall[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } }
     }
     if (!edge && area >= minArea) cells++;
   }
@@ -1013,13 +1026,30 @@ function arcScoreAt(
   const off = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const deg = DEG0 + ((DEG1 - DEG0) * i) / (n - 1);
-    const inkAt = (rr: number) => {
-      const p = polar(axis, hx, hy, dir, side, rr, deg);
-      return at(Math.round(p.x), Math.round(p.y));
-    };
-    for (let d = -tol; d <= tol && !on[i]; d += 1) on[i] = inkAt(r + d);
+    // sin/cos once per angle (was once per radius sample), points inlined —
+    // the arithmetic order matches polar() exactly, so the sampled pixels
+    // (and the scores) are bit-identical
+    const th = (deg * Math.PI) / 180;
+    const along = Math.cos(th) * dir;
+    const across = Math.sin(th) * side;
+    for (let d = -tol; d <= tol && !on[i]; d += 1) {
+      const rr = r + d;
+      const x = Math.round(axis === 'h' ? hx + along * rr : hx + across * rr);
+      const y = Math.round(axis === 'h' ? hy + across * rr : hy + along * rr);
+      on[i] = at(x, y);
+    }
     if (!on[i]) continue;
-    for (let d = 1.5 * tol; d <= 3.5 * tol && !off[i]; d += 1) off[i] = inkAt(r - d) || inkAt(r + d);
+    for (let d = 1.5 * tol; d <= 3.5 * tol && !off[i]; d += 1) {
+      const rr = r - d;
+      const x = Math.round(axis === 'h' ? hx + along * rr : hx + across * rr);
+      const y = Math.round(axis === 'h' ? hy + across * rr : hy + along * rr);
+      const v = at(x, y);
+      if (v) { off[i] = v; continue; }
+      const r2 = r + d;
+      const x2 = Math.round(axis === 'h' ? hx + along * r2 : hx + across * r2);
+      const y2 = Math.round(axis === 'h' ? hy + across * r2 : hy + along * r2);
+      off[i] = at(x2, y2);
+    }
   }
   // 2 = clean, 1 = ambiguous, 0 = miss
   const hit = new Uint8Array(n);
@@ -1491,12 +1521,13 @@ interface SolidRegion {
 function labelSolidRegions(solid: Uint8Array, w: number, h: number): { label: Int32Array; regions: SolidRegion[] } {
   const label = new Int32Array(w * h);
   const regions: SolidRegion[] = [];
-  const stack: number[] = [];
+  // flat preallocated stack (see dropSmallBlobs): same visit order
+  let stack = new Int32Array(1024);
   for (let start = 0; start < solid.length; start++) {
     if (solid[start] || label[start]) continue;
     const id = regions.length + 1;
-    stack.length = 0;
-    stack.push(start);
+    let sp = 0;
+    stack[sp++] = start;
     label[start] = id;
     let area = 0;
     let x0 = w;
@@ -1506,8 +1537,9 @@ function labelSolidRegions(solid: Uint8Array, w: number, h: number): { label: In
     let edge = false;
     let sx = 0;
     let sy = 0;
-    while (stack.length) {
-      const i = stack.pop()!;
+    while (sp > 0) {
+      if (sp + 4 > stack.length) stack = growStack(stack, sp + 4);
+      const i = stack[--sp];
       const x = i % w;
       const y = (i / w) | 0;
       area++;
@@ -1518,12 +1550,10 @@ function labelSolidRegions(solid: Uint8Array, w: number, h: number): { label: In
       if (y < y0) y0 = y;
       if (y > y1) y1 = y;
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
-      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
-      for (const j of nb) {
-        if (j < 0 || solid[j] || label[j]) continue;
-        label[j] = id;
-        stack.push(j);
-      }
+      if (x > 0) { const j = i - 1; if (!solid[j] && !label[j]) { label[j] = id; stack[sp++] = j; } }
+      if (x < w - 1) { const j = i + 1; if (!solid[j] && !label[j]) { label[j] = id; stack[sp++] = j; } }
+      if (y > 0) { const j = i - w; if (!solid[j] && !label[j]) { label[j] = id; stack[sp++] = j; } }
+      if (y < h - 1) { const j = i + w; if (!solid[j] && !label[j]) { label[j] = id; stack[sp++] = j; } }
     }
     regions.push({ id, area, x0, y0, x1, y1, edge, cx: sx / area, cy: sy / area });
   }

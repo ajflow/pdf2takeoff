@@ -212,12 +212,12 @@ function exportCsv(): void {
 }
 
 /** Export the takeoff as an Excel workbook. Also used by demo mode. */
-export function exportXlsx(): void {
+export async function exportXlsx(): Promise<void> {
   if (!state.markups.length) return;
   download(
     `${baseName()}-takeoff.xlsx`,
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    xlsxBytes(buildMatrix(takeoffData())),
+    await xlsxBytes(buildMatrix(takeoffData())),
   );
 }
 

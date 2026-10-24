@@ -93,11 +93,32 @@ const DIMENSION_CHARS = "0123456789.,'\"-xXmMcCnNiIfFtT";
 const PSM_SPARSE = '11';
 const PSM_BLOCK = '6';
 
+/**
+ * Binary PPM (P6) of a canvas: header, then row-major RGB bytes. Tesseract.js
+ * writes the bytes straight to its in-memory FS, where leptonica's built-in
+ * PNM reader picks them up — an uncompressed stand-in for the PNG encode
+ * every recognise call paid for (about 137 ms on a page-size crop).
+ * Tesseract greys the RGB itself, with the same values the PNG carried, so
+ * it reads identical pixels. PPM has no alpha, so a canvas with any
+ * transparency (a transparent PNG input) returns null and stays a PNG.
+ */
+function ppmOf(cnv: Canvas): Buffer | null {
+  const { data, width, height } = cnv.getContext('2d').getImageData(0, 0, cnv.width, cnv.height);
+  const rgb = Buffer.allocUnsafe(width * height * 3);
+  for (let i = 0, p = 0; i < rgb.length; p += 4) {
+    if (data[p + 3] !== 255) return null;
+    rgb[i++] = data[p];
+    rgb[i++] = data[p + 1];
+    rgb[i++] = data[p + 2];
+  }
+  return Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), rgb]);
+}
+
 async function recognize(cnv: Canvas, psm: string, whitelist = '', langs = 'eng'): Promise<RawWord[]> {
   const worker = await getWorker(langs);
   // one shared worker: whitelist and segmentation mode are set per call
   await worker.setParameters({ tessedit_char_whitelist: whitelist, tessedit_pageseg_mode: psm as never });
-  const { data } = await worker.recognize(cnv.toBuffer('image/png'), {}, { blocks: true, text: true });
+  const { data } = await worker.recognize(ppmOf(cnv) ?? cnv.toBuffer('image/png'), {}, { blocks: true, text: true });
   const raw: RawWord[] = [];
   for (const block of data.blocks ?? []) {
     for (const para of block.paragraphs ?? []) {
@@ -591,6 +612,15 @@ function dropNonGlyphs(ctx: SKRSContext2D, w: number, h: number, scale: number, 
   dropComponents(ctx, w, h, 128, (cw, chh, px) => chh > maxH || cw > maxW || (cw > 3.5 * chh && cw > minLine) || (chh > 3.5 * cw && chh > minLine) || px < speck);
 }
 
+/** Doubles a flat flood-fill stack until it holds `need` slots. */
+function growInt32(stack: Int32Array<ArrayBuffer>, need: number): Int32Array<ArrayBuffer> {
+  let n = stack.length || 1024;
+  while (n < need) n *= 2;
+  const out = new Int32Array(n);
+  out.set(stack);
+  return out;
+}
+
 /** White out every connected ink component (4-connected, darker than `threshold`) for which `drop(width, height, pixels)` holds. */
 function dropComponents(ctx: SKRSContext2D, w: number, h: number, threshold: number, drop: (cw: number, ch: number, px: number, x0: number, y0: number) => boolean): void {
   const img = ctx.getImageData(0, 0, w, h);
@@ -600,43 +630,40 @@ function dropComponents(ctx: SKRSContext2D, w: number, h: number, threshold: num
     mask[i] = (d[p] * 299 + d[p + 1] * 587 + d[p + 2] * 114) / 1000 < threshold ? 1 : 0;
   }
   const seen = new Uint8Array(w * h);
-  const stack: number[] = [];
+  // preallocated flat stack and member list (doubling): the number[] stack
+  // and the per-pixel neighbour tuples dominated this pass; visit order is
+  // the same (neighbours still read left, right, up, down)
+  let stack = new Int32Array(1024);
+  let pxs = new Int32Array(1024);
   for (let start = 0; start < mask.length; start++) {
     if (!mask[start] || seen[start]) continue;
-    stack.length = 0;
-    stack.push(start);
+    let sp = 0;
+    let np = 0;
+    stack[sp++] = start;
     seen[start] = 1;
-    const pxs: number[] = [];
     let x0 = w;
     let y0 = h;
     let x1 = 0;
     let y1 = 0;
-    while (stack.length) {
-      const i = stack.pop()!;
-      pxs.push(i);
+    while (sp > 0) {
+      if (sp + 4 > stack.length) stack = growInt32(stack, sp + 4);
+      const i = stack[--sp];
+      if (np === pxs.length) pxs = growInt32(pxs, np + 1);
+      pxs[np++] = i;
       const x = i % w;
       const y = (i / w) | 0;
       if (x < x0) x0 = x;
       if (x > x1) x1 = x;
       if (y < y0) y0 = y;
       if (y > y1) y1 = y;
-      for (const [nx, ny] of [
-        [x - 1, y],
-        [x + 1, y],
-        [x, y - 1],
-        [x, y + 1],
-      ] as const) {
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const ni = ny * w + nx;
-        if (mask[ni] && !seen[ni]) {
-          seen[ni] = 1;
-          stack.push(ni);
-        }
-      }
+      if (x > 0) { const ni = i - 1; if (mask[ni] && !seen[ni]) { seen[ni] = 1; stack[sp++] = ni; } }
+      if (x < w - 1) { const ni = i + 1; if (mask[ni] && !seen[ni]) { seen[ni] = 1; stack[sp++] = ni; } }
+      if (y > 0) { const ni = i - w; if (mask[ni] && !seen[ni]) { seen[ni] = 1; stack[sp++] = ni; } }
+      if (y < h - 1) { const ni = i + w; if (mask[ni] && !seen[ni]) { seen[ni] = 1; stack[sp++] = ni; } }
     }
-    if (!drop(x1 - x0 + 1, y1 - y0 + 1, pxs.length, x0, y0)) continue;
-    for (const i of pxs) {
-      const p = i * 4;
+    if (!drop(x1 - x0 + 1, y1 - y0 + 1, np, x0, y0)) continue;
+    for (let k = 0; k < np; k++) {
+      const p = pxs[k] * 4;
       d[p] = d[p + 1] = d[p + 2] = 255;
     }
   }

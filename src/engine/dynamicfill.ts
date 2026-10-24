@@ -250,7 +250,7 @@ interface SheetDoors {
  * (a downlight's flat top edge looks like a short heavy wall end) are
  * isolated pieces, so they never anchor a closing.
  */
-function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number, pxPerPt: number): { thr: Uint8Array; doors: () => SheetDoors } {
+function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: number, structPx: number, pxPerPt: number): { thr: Uint8Array; doors: () => SheetDoors; doorsOn: (inkNow: Uint8Array) => SheetDoors } {
   const minDoorPx = Math.floor(MIN_DOOR_PT * pxPerPt);
   const thr = new Uint8Array(w * h).fill(NEVER);
   // interior wall-end gaps (t < NEVER on an interior run means bridgeable),
@@ -407,7 +407,12 @@ function closingThresholds(ink: Uint8Array, w: number, h: number, heavyPx: numbe
   for (let x = 0; x < w; x++) if (runStart[x] >= 0) flush(x, h);
   // the doorway reading is only needed without a scale (and for scale checks)
   let doors: SheetDoors | undefined;
-  return { thr, doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)) };
+  return {
+    thr,
+    doors: () => (doors ??= sheetDoors(rowGaps, colGaps, ink, w, h, minDoorPx)),
+    // the same reading over a changed copy of the ink (dynamicFill's arc put-back)
+    doorsOn: (inkNow) => sheetDoors(rowGaps, colGaps, inkNow, w, h, minDoorPx),
+  };
 }
 
 /**
@@ -932,6 +937,13 @@ function exteriorGaps(thr: Uint8Array, w: number, h: number, R: number): Uint8Ar
 function inkOf(raster: RasterPage, tolerance: number): Uint8Array {
   const data = raster.data;
   const ink = new Uint8Array(raster.width * raster.height);
+  // integer tolerances drop the per-pixel division: sum/1000 < t and
+  // sum < t*1000 agree exactly when t is an integer (both sides integers)
+  if (Number.isInteger(tolerance)) {
+    const thr = tolerance * 1000;
+    for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114 < thr ? 1 : 0;
+    return ink;
+  }
   for (let i = 0, p = 0; i < ink.length; i++, p += 4) ink[i] = (data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000 < tolerance ? 1 : 0;
   return ink;
 }
@@ -953,17 +965,52 @@ export function sheetDoorWidthPx(raster: RasterPage, tolerance = 150): number {
   return doorPx >= MIN_DOOR_CHECK_PT * pxPerPt ? doorPx : 0;
 }
 
-export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
+/**
+ * Page-wide fill state, shared by every fill on one raster: the ink mask
+ * (after the host's bridges and text-box erases, the swing-arc erase and
+ * the chord draw), the marks those steps left, the swing arcs, the closing
+ * thresholds and the sheet-door reading. None of it depends on the click
+ * point, yet it was about 70% of every fill. `ink` stays pristine — a call
+ * that would mutate it (putting the arcs back) works on a copy.
+ */
+interface PageFill {
+  /** Strided FNV-1a of the pixel bytes when this was built (see rasterFingerprint). */
+  fingerprint: string;
+  ink: Uint8Array;
+  bridgePx: Uint8Array | null;
+  swingPx: Uint8Array | null;
+  arcs: Swing[];
+  pxPerPt: number;
+  thr: Uint8Array;
+  doors: () => SheetDoors;
+  doorsOn: (inkNow: Uint8Array) => SheetDoors;
+}
+
+/**
+ * Strided FNV-1a over the RGBA bytes (the fileHash pattern): a cheap check
+ * that the raster still holds the pixels the cached state was built from —
+ * hosts may reuse one RasterPage object across fills, and some (the checks)
+ * redraw its pixels in place between them. A strided hash misses only
+ * changes that touch none of the sampled bytes.
+ */
+function rasterFingerprint(raster: RasterPage): string {
+  const d = raster.data;
+  let h = 0x811c9dc5;
+  const stride = Math.max(1, Math.floor(d.length / 65536));
+  for (let i = 0; i < d.length; i += stride) {
+    h ^= d[i];
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${d.length.toString(36)}-${h.toString(36)}`;
+}
+
+/** Builds the page-wide state, in the order the per-click code did it. */
+function pageFill(raster: RasterPage, tolerance: number, hints: FillHints): PageFill {
   const w = raster.width;
   const h = raster.height;
-  const data = raster.data;
-  const s = raster.toRaster(seed.x, seed.y);
-  const sx = Math.round(s.x);
-  const sy = Math.round(s.y);
-  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { error: 'click inside the drawing' };
-  const lum = (i: number) => (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
-  if (lum(sy * w + sx) < tolerance) return { error: 'you clicked on a line — click inside the region' };
-
+  const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
+  const heavyPx = Math.max(2, Math.round(HEAVY_PT * pxPerPt));
+  const structPx = Math.round(STRUCT_PT * pxPerPt);
   // ink mask once; each retry only thickens the gap-closing on top of it
   const ink = inkOf(raster, tolerance);
   // vector doorway bridges become ink: 3 px wide so 4-connected fills can't
@@ -974,21 +1021,6 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
     const c = raster.toRaster(b.x2, b.y2);
     drawBridge(ink, bridgePx!, w, h, a.x, a.y, c.x, c.y);
   }
-
-  const unbounded = (): FillResult => ({
-    error: 'that region is not bounded by lines on all sides — draw around it with the Area tool instead',
-  });
-
-  // flood fill (4-connectivity keeps the boundary tight), boundary = ink with
-  // gaps up to 2r closed; the ladder escalates while the fill leaks, and
-  // past that while a wider rung still cuts a room-sized part off (below).
-  // A fill stops the moment it passes the cap: a leak is a leak, however far
-  // it would run.
-  const cap = MAX_FILL_FRACTION * w * h;
-  const pxPerPt = Math.hypot(raster.toRaster(1, 0).x - raster.toRaster(0, 0).x, raster.toRaster(1, 0).y - raster.toRaster(0, 0).y) || 1;
-  const heavyPx = Math.max(2, Math.round(HEAVY_PT * pxPerPt));
-  const structPx = Math.round(STRUCT_PT * pxPerPt);
-
   // Thin curvy ink: strokes no thicker than a third of the dominant stroke
   // (walls on a filled-wall plan; on a thin-line plan the line weight
   // itself) that lie on no straight run. Glyphs inside the host's text
@@ -1022,6 +1054,50 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   const swingPx = arcs.length ? new Uint8Array(w * h) : null;
   for (const a of arcs) for (const i of a.px) ink[i] = 0;
   for (const a of arcs) for (const e of a.ends) drawBridge(ink, swingPx!, w, h, a.hx, a.hy, e.x, e.y, 0.85, 1.15);
+  const { thr, doors, doorsOn } = closingThresholds(ink, w, h, heavyPx, structPx, pxPerPt);
+  return { fingerprint: rasterFingerprint(raster), ink, bridgePx, swingPx, arcs, pxPerPt, thr, doors, doorsOn };
+}
+
+/** Per-raster cache of the page-wide state, keyed by the options that change it. */
+const fillCaches = new WeakMap<RasterPage, Map<string, PageFill>>();
+
+export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints: FillHints = {}): FillResult {
+  const w = raster.width;
+  const h = raster.height;
+  const data = raster.data;
+  const s = raster.toRaster(seed.x, seed.y);
+  const sx = Math.round(s.x);
+  const sy = Math.round(s.y);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return { error: 'click inside the drawing' };
+  const lum = (i: number) => (data[i * 4] * 299 + data[i * 4 + 1] * 587 + data[i * 4 + 2] * 114) / 1000;
+  if (lum(sy * w + sx) < tolerance) return { error: 'you clicked on a line — click inside the region' };
+
+  // the page-wide state is cached per raster and option set: a second fill
+  // on the same sheet (the next room, a retry) skips straight to the flood
+  let byOpts = fillCaches.get(raster);
+  if (!byOpts) {
+    byOpts = new Map();
+    fillCaches.set(raster, byOpts);
+  }
+  const key = JSON.stringify([tolerance, hints.bridges ?? [], hints.textBoxes ?? [], hints.metersPerPt ?? null]);
+  let pf = byOpts.get(key);
+  if (!pf || pf.fingerprint !== rasterFingerprint(raster)) {
+    pf = pageFill(raster, tolerance, hints);
+    byOpts.set(key, pf);
+  }
+  const { ink, bridgePx, swingPx, arcs, pxPerPt, thr: thr0, doors, doorsOn } = pf;
+  let sheet = doors;
+
+  const unbounded = (): FillResult => ({
+    error: 'that region is not bounded by lines on all sides — draw around it with the Area tool instead',
+  });
+
+  // flood fill (4-connectivity keeps the boundary tight), boundary = ink with
+  // gaps up to 2r closed; the ladder escalates while the fill leaks, and
+  // past that while a wider rung still cuts a room-sized part off (below).
+  // A fill stops the moment it passes the cap: a leak is a leak, however far
+  // it would run.
+  const cap = MAX_FILL_FRACTION * w * h;
 
   // a known scale puts the doorway rung on the ladder and starts there
   // (every smaller rung only closes a subset of what it closes), and adds
@@ -1185,7 +1261,6 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   }
   return best;
   };
-  const { thr: thr0, doors } = closingThresholds(ink, w, h, heavyPx, structPx, pxPerPt);
   let thr = thr0;
   let best = climb(thr, null, ladderTo(thr, wideR), wideR);
   if (best && best.rung > wideR) {
@@ -1201,10 +1276,15 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   }
   if (!best && arcs.length) {
     // nothing bounds even with the swing chords drawn: put the arcs back
-    // (a swing may be the only ink sealing an odd doorway) and climb again
-    for (const a of arcs) for (const i of a.px) ink[i] = 1;
-    thr = closingThresholds(ink, w, h, heavyPx, structPx, pxPerPt).thr;
+    // (a swing may be the only ink sealing an odd doorway) and climb again —
+    // on a copy, so the cached ink stays pristine
+    const inkBack = ink.slice();
+    for (const a of arcs) for (const i of a.px) inkBack[i] = 1;
+    thr = closingThresholds(inkBack, w, h, Math.max(2, Math.round(HEAVY_PT * pxPerPt)), Math.round(STRUCT_PT * pxPerPt), pxPerPt).thr;
     best = climb(thr, null, ladderTo(thr, wideR), wideR);
+    // the doorway reading below then sees the arcs too, as it did when the
+    // put-back changed the ink in place
+    sheet = () => doorsOn(inkBack);
   }
   // Without a scale, each doorway width the sheet shows is tried in turn
   // (narrowest first) beyond the rung reached so far: it is kept when it
@@ -1214,7 +1294,7 @@ export function dynamicFill(raster: RasterPage, seed: Pt, tolerance = 150, hints
   // sheet shows can break a fill that was already bounded.
   let sheetRung = 0;
   if (!hints.metersPerPt) {
-    for (const width of doors().widths) {
+    for (const width of sheet().widths) {
       const r = Math.min(NEVER - 1, Math.ceil((DOOR_SLACK * width) / 2));
       if (best && r <= best.rung) continue;
       const trial = climb(thr, null, [r], r, best, true);

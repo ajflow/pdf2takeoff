@@ -8,7 +8,7 @@
 // the field it counted in, or why it added nothing. Markups in, counts and
 // decisions out; environment-agnostic like the rest of engine/.
 
-import type { DoorType, GlazingType, ItemAttrs, ItemKind, Markup, SpaceKind, WetKind } from './types.ts';
+import type { DoorType, GlazingType, ItemAttrs, ItemKind, ItemSource, Markup, SpaceKind, WetKind } from './types.ts';
 
 export type CountField = 'Door' | 'Window' | 'Space' | 'Bedroom' | 'Toilet';
 export const COUNT_FIELDS: readonly CountField[] = ['Door', 'Window', 'Space', 'Bedroom', 'Toilet'];
@@ -80,11 +80,132 @@ const WET_KIND_DEFAULT: WetKind = 'none';
 const spaced = (s: string) => s.replace(/_/g, ' ');
 const hasText = (s: string | undefined) => !!s && s.trim().length > 0;
 
+// Item attributes ride in the PDF annotation's comment as a tag such as
+// "[item:k=Door;dt=double_swing;lv=2;src=model]", so a takeoff saved to PDF
+// reopens with its types and recounts under any preset. Values are
+// URI-encoded (room labels may hold any character); short keys keep the
+// comment readable in Revu and Acrobat.
+const ITEM_KINDS: readonly ItemKind[] = ['Door', 'Window', 'Space'];
+const ITEM_SOURCES: readonly ItemSource[] = ['model', 'vector', 'cv', 'ocr', 'user'];
+const DOOR_TYPES: readonly DoorType[] = ['swing', 'double_swing', 'sliding', 'pocket', 'bifold', 'garage', 'french_glazed', 'other'];
+const GLAZING_TYPES: readonly GlazingType[] = ['unit', 'sliding_glass_door', 'french_door', 'glazed_opening', 'other'];
+const SPACE_KINDS: readonly SpaceKind[] = ['room', 'open_plan_zone', 'hallway', 'closet', 'storage_utility', 'wet', 'stair', 'outdoor', 'garage', 'other'];
+const WET_KINDS: readonly WetKind[] = ['none', 'wc', 'bathroom', 'shower', 'sauna', 'washroom', 'lavatory'];
+
+/** The "[item:...]" comment tag for an item. */
+export function itemTag(item: ItemAttrs): string {
+  const parts: [string, string | number | boolean | undefined][] = [
+    ['k', item.kind],
+    ['src', item.source],
+    ['dt', item.doorType],
+    ['lv', item.leaves],
+    ['cl', item.closet],
+    ['gt', item.glazingType],
+    ['g', item.group],
+    ['sk', item.spaceKind],
+    ['rl', item.roomLabel],
+    ['en', item.enclosed],
+    ['bd', item.bedroom],
+    ['wk', item.wetKind],
+    ['ag', item.agreement ? `${item.agreement.runs}/${item.agreement.of}` : undefined],
+  ];
+  const fields = parts
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${encodeURIComponent(typeof v === 'boolean' ? (v ? '1' : '0') : String(v))}`);
+  return `[item:${fields.join(';')}]`;
+}
+
+/** Attributes from the inside of an "[item:...]" tag; undefined when the kind
+ *  is missing or unknown. Unknown values are dropped, never guessed. */
+export function parseItemTag(payload: string): ItemAttrs | undefined {
+  const f = new Map<string, string>();
+  for (const part of payload.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    try {
+      f.set(part.slice(0, eq), decodeURIComponent(part.slice(eq + 1)));
+    } catch {
+      // a malformed escape: skip the field
+    }
+  }
+  const pick = <T extends string>(key: string, allowed: readonly T[]): T | undefined => {
+    const v = f.get(key);
+    return v !== undefined && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
+  };
+  const flag = (key: string): boolean | undefined => (f.get(key) === '1' ? true : f.get(key) === '0' ? false : undefined);
+  const kind = pick('k', ITEM_KINDS);
+  if (!kind) return undefined;
+  const item: ItemAttrs = { kind, source: pick('src', ITEM_SOURCES) ?? 'user' };
+  const leaves = Number(f.get('lv'));
+  const ag = /^(\d+)\/(\d+)$/.exec(f.get('ag') ?? '');
+  const extra: Partial<ItemAttrs> = {
+    doorType: pick('dt', DOOR_TYPES),
+    leaves: Number.isInteger(leaves) && leaves >= 1 ? leaves : undefined,
+    closet: flag('cl'),
+    glazingType: pick('gt', GLAZING_TYPES),
+    group: f.get('g'),
+    spaceKind: pick('sk', SPACE_KINDS),
+    roomLabel: f.get('rl'),
+    enclosed: flag('en'),
+    bedroom: flag('bd'),
+    wetKind: pick('wk', WET_KINDS),
+    agreement: ag && +ag[1] <= +ag[2] ? { runs: +ag[1], of: +ag[2] } : undefined,
+  };
+  for (const [k, v] of Object.entries(extra)) if (v !== undefined) (item as unknown as Record<string, unknown>)[k] = v;
+  return item;
+}
+
 export function itemLabel(item: ItemAttrs): string {
   if (item.kind === 'Door') return `Door (${spaced(item.doorType ?? DOOR_TYPE_DEFAULT)})`;
   if (item.kind === 'Window') return `Window (${spaced(item.glazingType ?? GLAZING_TYPE_DEFAULT)})`;
   if (hasText(item.roomLabel)) return `Space: ${item.roomLabel}`;
   return `Space (${spaced(item.spaceKind ?? SPACE_KIND_DEFAULT)})`;
+}
+
+/** One proposed item as an agent or model gives it: kind, centre in PDF
+ *  points, and the kind's attributes. `label` names the markup itself
+ *  (itemLabel decides when absent); everything else lands in the item attrs. */
+export interface ProposedItem {
+  kind: ItemKind;
+  at: [number, number];
+  doorType?: DoorType;
+  leaves?: number;
+  closet?: boolean;
+  glazingType?: GlazingType;
+  group?: string;
+  spaceKind?: SpaceKind;
+  roomLabel?: string;
+  enclosed?: boolean;
+  bedroom?: boolean;
+  wetKind?: WetKind;
+  label?: string;
+  agreement?: { runs: number; of: number };
+}
+
+// drop keys explicitly set to undefined, so attrs carry only real fields
+function defined<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+}
+
+/** Flagged (status 'check') count markups for proposed items, one per item.
+ *  The shared proposal→markup path: however items arrive (an agent over MCP,
+ *  a vision model over the CLI), the markups they become are identical, and
+ *  counting stays a job for countItems under an explicit preset. */
+export function proposalMarkups(items: readonly ProposedItem[], page: number, source: ItemSource, makeId: () => string, now: number = Date.now()): Markup[] {
+  return items.map((it) => {
+    const { kind, at, label, agreement, ...flags } = it;
+    const attrs: ItemAttrs = { kind, source, ...defined(flags), ...(agreement ? { agreement } : {}) };
+    return {
+      id: makeId(),
+      page,
+      type: 'count',
+      label: label ?? itemLabel(attrs),
+      points: [{ x: at[0], y: at[1] }],
+      createdAt: now,
+      status: 'check',
+      item: attrs,
+    };
+  });
 }
 
 export function countItems(markups: readonly Markup[], preset: CountPreset): CountResult {

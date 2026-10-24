@@ -1,12 +1,14 @@
-// pdf2takeoff CLI — headless takeoff on Node. Local-only: no network calls,
-// no telemetry. Deterministic JSON on stdout; errors on stderr with exit 1.
+// pdf2takeoff CLI — headless takeoff on Node. Local-only: no network calls
+// and no telemetry, except ai-count, which sends one rendered page to the AI
+// provider you name, with your own key. Deterministic JSON on stdout; errors
+// on stderr with exit 1.
 
 import { parseArgs } from 'node:util';
 import { readFileSync, writeFileSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { openPdf } from './pdfjs-node.ts';
 import { openAny, imageToPdf, sniffImage, imageKindByExt } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
+import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders } from './ops.ts';
 import { ocrRaster, terminateOcr } from './ocr-node.ts';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { findScaleRatio } from '../engine/ocr.ts';
@@ -16,6 +18,9 @@ import { parseMarkups, type AnnotationLike } from '../engine/read.ts';
 import { buildAnnotatedPdf } from '../engine/annotate.ts';
 import { buildMatrix, toDelimited, xlsxBytes, groupsOf } from '../engine/export.ts';
 import { nextId, defaultLabel } from '../engine/geometry.ts';
+import { countItems, COUNT_PRESETS, presetById, proposalMarkups } from '../engine/inventory.ts';
+import { PROVIDER_PRESETS, presetConfig, type ProviderConfig } from '../ai/providers.ts';
+import { runInventory } from '../ai/run.ts';
 import type { DisplayUnit } from '../engine/units.ts';
 import type { Calibration, Markup } from '../engine/types.ts';
 import { parseSpec, parseScaleSpec, parseRunSpec } from './spec.ts';
@@ -67,11 +72,23 @@ Usage:
       binarises soft scans. First use fetches the English language pack
       (about 3 MB) into ~/.cache/pdf2takeoff/tessdata; set PDF2TAKEOFF_TESSDATA
       to a folder holding eng.traineddata to run fully offline.
+  pdf2takeoff ai-count <file.pdf> --model MODEL [--provider NAME] [--page N]
+      [--preset aecv|schedule] [--items] [-o out.pdf]
+      Ask a vision model you choose to inventory one sheet: doors, Windows
+      and spaces come back as flagged proposals, counted under --preset.
+      --provider openrouter (default; one key, any model), openai, gemini,
+      zai, ollama, lmstudio — any other OpenAI-compatible server through
+      --base-url. Keys come from environment variables only (the provider's
+      OPENROUTER_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / ZAI_API_KEY, or
+      PDF2TAKEOFF_AI_KEY for any of them); ollama and lmstudio are local and
+      need no key. --items lists the proposals; -o writes them into the PDF
+      for review. Accuracy depends on the model — review before trusting.
   pdf2takeoff mcp
       Start the MCP server on stdio (for AI agents; see specs/headless-engine.md).
 
 Everything runs locally; drawings never leave the machine (OCR fetches only
-its language pack, once).
+its language pack, once) — except ai-count, which sends the page you choose
+to the provider you choose (or nowhere, with --provider ollama or lmstudio).
 `;
 
 export { openPdf, renderRasterNode };
@@ -173,6 +190,104 @@ async function cmdOcr(file: string, pageArg: string, regionArg: string | undefin
     scaleRatio: scale ? { ratio: scale.ratio, source: scale.source } : null,
     rooms: rooms.counts,
     roomLabels: rooms.labels.map((l) => ({ ...l, xPt: r2(l.xPt), yPt: r2(l.yPt) })),
+  };
+}
+
+/** One rendered page through a user-chosen vision model — the only command
+ *  that talks to the network. The model's inventory lands as flagged item
+ *  proposals replacing this page's unconfirmed ones, recounted under the
+ *  chosen preset; -o writes them into a PDF for human review. */
+async function cmdAiCount(
+  file: string,
+  o: {
+    model: string;
+    provider: string;
+    baseUrl?: string;
+    page: string;
+    preset: string;
+    structured: string;
+    maxSide: string;
+    maxTokens: string;
+    timeout: string;
+    items: boolean;
+    out?: string;
+  },
+): Promise<unknown> {
+  const presetDef = presetById(o.preset);
+  if (!presetDef) throw new Error(`unknown counting preset "${o.preset}" — available: ${COUNT_PRESETS.map((p) => p.id).join(', ')}`);
+  const providerPreset = PROVIDER_PRESETS[o.provider];
+  if (!providerPreset) throw new Error(`unknown provider "${o.provider}" — available: ${Object.keys(PROVIDER_PRESETS).join(', ')}`);
+  if (!['auto', 'json_schema', 'json_object', 'none'].includes(o.structured)) {
+    throw new Error('--structured must be auto, json_schema, json_object or none');
+  }
+  const page = parseInt(o.page, 10);
+  if (!Number.isInteger(page) || page < 1) throw new Error('--page must be a positive integer');
+  const maxSide = parseFloat(o.maxSide);
+  if (!Number.isFinite(maxSide) || maxSide <= 0) throw new Error('--max-side must be a positive number of pixels');
+  const maxTokens = parseInt(o.maxTokens, 10);
+  if (!Number.isInteger(maxTokens) || maxTokens <= 0) throw new Error('--max-tokens must be a positive integer');
+  const timeoutS = parseFloat(o.timeout);
+  if (!Number.isFinite(timeoutS) || timeoutS <= 0) throw new Error('--timeout must be a positive number of seconds');
+
+  const { doc, bytes } = await openAny(file);
+  if (page > doc.numPages) throw new Error(`page ${page} out of range (1..${doc.numPages})`);
+  const vp = (await doc.getPage(page)).getViewport({ scale: 1 });
+  // the key never travels as an argument: env only
+  const apiKey = process.env.PDF2TAKEOFF_AI_KEY || (providerPreset.keyEnv ? process.env[providerPreset.keyEnv] : undefined);
+  if (!apiKey && !providerPreset.local && !o.baseUrl) {
+    throw new Error(`no API key: set ${providerPreset.keyEnv} (or PDF2TAKEOFF_AI_KEY)`);
+  }
+
+  // fit the sheet into max-side, capped at the renderer's scale limit
+  const scale = Math.min(4, maxSide / Math.max(vp.width, vp.height));
+  const { png, widthPx, heightPx } = await renderPagePng(doc, page, scale);
+  const run = await runInventory(
+    presetConfig(o.provider, {
+      model: o.model,
+      apiKey,
+      baseUrl: o.baseUrl,
+      structured: o.structured as ProviderConfig['structured'],
+      timeoutMs: timeoutS * 1000,
+    }),
+    { base64: png.toString('base64'), mime: 'image/png' },
+    { widthPt: vp.width, heightPt: vp.height },
+    { maxTokens },
+  );
+
+  // the model's proposals replace this page's unconfirmed ones, like a
+  // propose_items replace:true round trip; confirmed items stay
+  const existing = await readMarkups(doc);
+  const kept = existing.filter((m) => !(m.page === page && m.item && m.status === 'check'));
+  const proposals = proposalMarkups(run.items, page, 'model', () => nextId('ai'));
+  const all = [...kept, ...proposals];
+  const counted = countItems(
+    all.filter((m) => m.page === page),
+    presetDef,
+  );
+  if (o.out) {
+    writeFileSync(o.out, await buildAnnotatedPdf({ bytes, markups: all, calibrations: new Map(), displayUnit: 'm' }));
+  }
+  return {
+    file,
+    page,
+    provider: o.provider,
+    model: run.result.model,
+    structured: run.result.structured,
+    latencyMs: run.result.latencyMs,
+    usage: run.result.usage,
+    preset: o.preset,
+    counts: counted.counts,
+    unconfirmed: counted.unconfirmed,
+    items: run.items.length,
+    byKind: {
+      Door: run.items.filter((i) => i.kind === 'Door').length,
+      Window: run.items.filter((i) => i.kind === 'Window').length,
+      Space: run.items.filter((i) => i.kind === 'Space').length,
+    },
+    modelCounts: run.inventory.counts,
+    imagePx: [widthPx, heightPx],
+    ...(o.items ? { proposals: run.items } : {}),
+    ...(o.out ? { output: o.out } : {}),
   };
 }
 
@@ -450,6 +565,50 @@ export async function run(argv: string[]): Promise<void> {
       } finally {
         await terminateOcr(); // the recogniser's worker thread would otherwise keep the process alive
       }
+      return;
+    }
+    if (cmd === 'ai-count') {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: {
+          model: { type: 'string' },
+          provider: { type: 'string', default: 'openrouter' },
+          'base-url': { type: 'string' },
+          page: { type: 'string', default: '1' },
+          preset: { type: 'string', default: 'aecv' },
+          structured: { type: 'string', default: 'auto' },
+          'max-side': { type: 'string', default: '2048' },
+          'max-tokens': { type: 'string', default: '16000' },
+          timeout: { type: 'string', default: '300' },
+          items: { type: 'boolean', default: false },
+          o: { type: 'string' },
+        },
+      });
+      if (positionals.length !== 1 || !values.model) {
+        throw new Error(
+          'usage: pdf2takeoff ai-count <file.pdf> --model MODEL [--provider openrouter|openai|gemini|zai|ollama|lmstudio] [--base-url URL] [--page N] [--preset aecv|schedule] [--structured auto|json_schema|json_object|none] [--max-side 2048] [--max-tokens 16000] [--timeout 300] [--items] [-o out.pdf]',
+        );
+      }
+      process.stdout.write(
+        JSON.stringify(
+          await cmdAiCount(positionals[0], {
+            model: values.model,
+            provider: values.provider,
+            baseUrl: values['base-url'],
+            page: values.page,
+            preset: values.preset,
+            structured: values.structured,
+            maxSide: values['max-side'],
+            maxTokens: values['max-tokens'],
+            timeout: values.timeout,
+            items: values.items,
+            out: values.o,
+          }),
+          null,
+          2,
+        ) + '\n',
+      );
       return;
     }
     if (cmd === 'mcp') {

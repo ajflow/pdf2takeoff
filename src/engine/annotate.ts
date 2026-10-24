@@ -7,6 +7,7 @@ import type { Calibration, Markup, Pt } from './types.ts';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle } from './geometry.ts';
 import { formatLength, formatArea, formatVolume, type DisplayUnit } from './units.ts';
 import { resolveCalibration, type Viewport } from './viewports.ts';
+import { itemTag } from './inventory.ts';
 
 export const ANNOTATION_AUTHOR = 'pdf2takeoff';
 
@@ -29,6 +30,8 @@ function pdfDate(): string {
 
 function contentsFor(m: Markup, calibrations: Map<number, Calibration>, displayUnit: DisplayUnit, viewports: Viewport[] = []): string {
   const tags = [
+    // item attributes first: read.ts strips status and layer from the end, then the item tag
+    ...(m.type === 'count' && m.item ? [itemTag(m.item)] : []),
     ...(m.status ? [`[${m.status}]`] : []),
     ...(m.layer ? [`[layer:${m.layer}]`] : []),
   ];

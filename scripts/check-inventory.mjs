@@ -11,6 +11,8 @@ import {
   SCHEDULE_PRESET,
   countItems,
   itemLabel,
+  itemTag,
+  parseItemTag,
   presetById,
 } from '../src/engine/inventory.ts';
 
@@ -122,8 +124,25 @@ eq('label roomLabel', itemLabel({ kind: 'Space', source: 'model', roomLabel: 'Ki
 eq('label spaceKind', itemLabel({ kind: 'Space', source: 'model', spaceKind: 'storage_utility' }), 'Space (storage utility)');
 eq('label door default', itemLabel({ kind: 'Door', source: 'model' }), 'Door (other)');
 
+// "[item:...]" comment tags: what a saved PDF carries so items recount after reopening
+const roundTrip = [
+  { kind: 'Door', source: 'model', doorType: 'double_swing', leaves: 2, closet: false, agreement: { runs: 2, of: 3 } },
+  { kind: 'Window', source: 'model', glazingType: 'unit', group: 'g 1;=]' },
+  { kind: 'Space', source: 'user', spaceKind: 'wet', roomLabel: 'Bed; 2 [main]=x', enclosed: true, bedroom: false, wetKind: 'wc' },
+  { kind: 'Space', source: 'model' },
+];
+for (const item of roundTrip) {
+  const tag = itemTag(item);
+  eq(`item tag is one bracketed token (${item.kind})`, /^\[item:[^\]]*\]$/.test(tag), true);
+  eq(`item tag round trip (${item.kind}, ${item.roomLabel ?? item.group ?? item.doorType ?? 'bare'})`, JSON.stringify(parseItemTag(tag.slice(6, -1))), JSON.stringify(item));
+}
+eq('item tag: unknown kind is rejected', parseItemTag('k=Roof;src=model'), undefined);
+eq('item tag: unknown door type is dropped, not guessed', JSON.stringify(parseItemTag('k=Door;src=model;dt=revolving;lv=0')), JSON.stringify({ kind: 'Door', source: 'model' }));
+eq('item tag: agreement runs above of is dropped', parseItemTag('k=Door;src=model;ag=4/3')?.agreement, undefined);
+eq('item tag: malformed escape is skipped', parseItemTag('k=Space;src=model;rl=%E0%A4%A')?.roomLabel, undefined);
+
 if (failures > 0) {
   console.error(`inventory check: ${failures} failure(s)`);
   process.exit(1);
 }
-console.log('PASS: inventory counting matches the hand-computed expectations (both presets, custom flags, decisions, labels)');
+console.log('PASS: inventory counting matches the hand-computed expectations (both presets, custom flags, decisions, labels, item tags)');

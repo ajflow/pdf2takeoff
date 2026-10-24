@@ -389,6 +389,20 @@ const plan = [
   ...lights.flatMap(([x, y]) => ['  0', 'INSERT', '  8', 'LIGHTS', '  2', 'DL', ' 10', String(x), ' 20', String(y)]),
   '  0', 'TEXT', '  8', 'TEXT', ' 10', '1500', ' 20', '2800', ' 40', '250', '  1', 'OFFICE',
   '  0', 'MTEXT', '  8', 'TEXT', ' 10', '8000', ' 20', '4000', ' 40', '250', ' 71', '5', '  1', 'MEETING\\Proom',
+  // a solid hatch (a column) and a pattern hatch: a ring of line edges around a polyline island
+  '  0', 'HATCH', '  8', 'HATCH', '  2', 'SOLID', ' 70', '1', ' 71', '0', ' 91', '1',
+  ' 92', '2', ' 72', '0', ' 73', '1', ' 93', '4', ' 10', '11000', ' 20', '7400', ' 10', '11300', ' 20', '7400', ' 10', '11300', ' 20', '7700', ' 10', '11000', ' 20', '7700', ' 97', '0',
+  ' 75', '0', ' 76', '1', ' 98', '0',
+  '  0', 'HATCH', '  8', 'HATCH', '  2', 'ANSI31', ' 70', '0', ' 71', '0', ' 91', '2',
+  ' 92', '1', ' 93', '4',
+  ' 72', '1', ' 10', '5000', ' 20', '1000', ' 11', '7000', ' 21', '1000',
+  ' 72', '1', ' 10', '7000', ' 20', '1000', ' 11', '7000', ' 21', '3000',
+  ' 72', '1', ' 10', '7000', ' 20', '3000', ' 11', '5000', ' 21', '3000',
+  ' 72', '1', ' 10', '5000', ' 20', '3000', ' 11', '5000', ' 21', '1000', ' 97', '0',
+  ' 92', '2', ' 72', '0', ' 73', '1', ' 93', '4', ' 10', '5500', ' 20', '1500', ' 10', '6500', ' 20', '1500', ' 10', '6500', ' 20', '2500', ' 10', '5500', ' 20', '2500', ' 97', '0',
+  ' 75', '0', ' 76', '1', ' 52', '0', ' 41', '1', ' 78', '1', ' 53', '45', ' 43', '0', ' 44', '0', ' 45', '-2.24', ' 46', '2.24', ' 79', '0', ' 98', '0',
+  // an MTEXT note in a 2,000 mm box: it wraps
+  '  0', 'MTEXT', '  8', 'TEXT', ' 10', '8000', ' 20', '2400', ' 40', '200', ' 41', '2000', ' 71', '1', '  1', 'SEE NOTES FOR THE DOWNLIGHT SCHEDULE',
   // left out: a frozen layer and paper space (either would widen the page if drawn)
   '  0', 'LINE', '  8', 'FROZEN', ' 10', '0', ' 20', '0', ' 11', '50000', ' 21', '0',
   '  0', 'LINE', '  8', 'WALLS', ' 67', '1', ' 10', '0', ' 20', '0', ' 11', '0', ' 21', '90000',
@@ -413,7 +427,12 @@ const inkNear = (r, [cx, cy]) => {
   return false;
 };
 check('dxf: walls, the bulged arc and a block insert draw where they belong', inkNear(dr, toPx(0, 4000)) && inkNear(dr, toPx(4000, 3000)) && inkNear(dr, toPx(7000, 6000)) && inkNear(dr, toPx(2000, 1650)) && !inkNear(dr, toPx(7000, 7000)), `wall ${inkNear(dr, toPx(0, 4000))} arc ${inkNear(dr, toPx(7000, 6000))} light ${inkNear(dr, toPx(2000, 1650))}`);
-const words = (await (await dxfOpened.getPage(1)).getTextContent()).items.map((i) => i.str).join(' ');
+const grey = (r, at) => px(r, ...at)[0];
+check('dxf: a solid hatch fills mid grey, a pattern hatch a light tone around its island (left white)', Math.abs(grey(dr, toPx(11150, 7550)) - 140) < 25 && Math.abs(grey(dr, toPx(5200, 2000)) - 219) < 20 && grey(dr, toPx(6000, 2000)) > 245, `column ${grey(dr, toPx(11150, 7550))} ring ${grey(dr, toPx(5200, 2000))} island ${grey(dr, toPx(6000, 2000))}`);
+const items = (await (await dxfOpened.getPage(1)).getTextContent()).items;
+const note = items.filter((i) => /SEE|NOTES|DOWNLIGHT|SCHEDULE/.test(i.str));
+check('dxf: an MTEXT note wraps to its 2,000 mm box', note.length >= 2 && note.every((i) => i.width <= 2000 * k50 * 1.03), note.map((i) => `${i.str}@${i.width.toFixed(1)}`).join(' | '));
+const words = items.map((i) => i.str).join(' ');
 check('dxf: TEXT and MTEXT become real text (no OCR needed)', /OFFICE/.test(words) && /MEETING/.test(words) && /room/.test(words), words);
 const blockScan = await scanDocAt(dxfOpened, 1, { x: (2000 + 480) * k50 + 150 * k50, y: (1500 + 480) * k50 });
 check('dxf: Scan finds all 8 inserts of the light block', 'hits' in blockScan && blockScan.hits.length === 8, JSON.stringify('hits' in blockScan ? { n: blockScan.hits.length, provider: blockScan.provider } : blockScan));

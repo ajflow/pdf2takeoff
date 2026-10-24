@@ -1,9 +1,11 @@
 // DXF (ASCII) into a vector PDF page at a standard drawing scale. The model
 // space is drawn monochrome, as a plot would be: lines, polylines (bulges as
 // arcs), circles, arcs, ellipses and splines as true curves, solids filled,
-// text and mtext as real text (so the engine reads room names without OCR),
-// and blocks expanded through their inserts (doors and fixtures defined
-// once, so Scan matches them exactly), dimensions included. Hatches, paper
+// hatches as tones beneath the line work (solid mid grey, patterns light, so
+// a large area fill never blacks out what is drawn over it), text and mtext
+// as real text wrapped to its box (so the engine reads room names without
+// OCR), and blocks expanded through their inserts (doors and fixtures
+// defined once, so Scan matches them exactly), dimensions included. Paper
 // space, frozen and off layers are left out.
 //
 // The drawing's units ($INSUNITS) give its real size; the page is that size
@@ -139,6 +141,8 @@ interface Path {
   segs: Seg[];
   width: number; // lineweight in mm on paper
   fill?: boolean;
+  /** hatches: filled even-odd in a grey tone, before everything else */
+  tone?: number;
 }
 interface Text {
   x: number;
@@ -147,10 +151,16 @@ interface Text {
   h: number;
   rot: number;
   lines: string[];
-  /** 0 left, 0.5 centre, 1 right; 0 baseline-bottom, 0.5 middle, 1 top (of the first line) */
+  /** 0 left, 0.5 centre, 1 right; 0 bottom (last baseline), 0.5 middle, 1 top of the block */
   ax: number;
   ay: number;
+  /** MTEXT: the box width to wrap paragraphs to (model units, already scaled), and its line spacing factor */
+  wrap?: number;
+  spacing?: number;
 }
+
+const SOLID_TONE = 0.55;
+const PATTERN_TONE = 0.86;
 
 /**
  * Cubic segments for an elliptical arc (radii rx, ry, rotated by rot) about
@@ -369,9 +379,18 @@ class Drawing {
         const dx = num(e, 11, NaN);
         const rot = Number.isFinite(dx) ? (Math.atan2(num(e, 21), dx) * 180) / Math.PI : num(e, 50);
         const lines = mtextLines(raw).filter((l, i, a) => l || i < a.length - 1);
-        if (lines.some((l) => l)) this.text(m, num(e, 10), num(e, 20), h, rot, lines, [0, 0.5, 1][(att - 1) % 3], [1, 0.5, 0][Math.floor((att - 1) / 3)]);
+        if (lines.some((l) => l)) {
+          this.text(m, num(e, 10), num(e, 20), h, rot, lines, [0, 0.5, 1][(att - 1) % 3], [1, 0.5, 0][Math.floor((att - 1) / 3)]);
+          const t = this.texts[this.texts.length - 1];
+          const s = Math.hypot(m[0], m[1]) || 1;
+          if (num(e, 41) > 0) t.wrap = num(e, 41) * s;
+          t.spacing = num(e, 44, 1) || 1;
+        }
         break;
       }
+      case 'HATCH':
+        this.hatch(e, m);
+        break;
       case 'INSERT':
       case 'DIMENSION': {
         if (depth >= MAX_DEPTH) break;
@@ -401,7 +420,7 @@ class Drawing {
         break;
       }
       default:
-        break; // HATCH, POINT, 3DFACE, IMAGE, VIEWPORT and the rest are left out
+        break; // POINT, 3DFACE, IMAGE, VIEWPORT and the rest are left out
     }
   }
 
@@ -433,6 +452,109 @@ class Drawing {
     }
     if (closed) segs.push(['Z']);
     this.paths.push({ segs, width: w });
+  }
+
+  /**
+   * A hatch's boundary loops (polylines with bulges, or line, arc and ellipse
+   * edges; spline edges by their control polygon) as one even-odd path, so
+   * islands stay open. Read in order: the boundary data is positional.
+   */
+  private hatch(e: Entity, m: M): void {
+    const p = e.pairs;
+    let i = p.findIndex(([c]) => c === 91);
+    if (i < 0) return;
+    const solid = num(e, 70) === 1 && !p.some(([c, v]) => c === 450 && v.trim() === '1');
+    const loops = parseInt(p[i][1], 10) || 0;
+    i++;
+    const val = (code: number): number => {
+      // the next value with this code, from the cursor on
+      while (i < p.length && p[i][0] !== code) i++;
+      return i < p.length ? parseFloat(p[i++][1]) : NaN;
+    };
+    const segs: Seg[] = [];
+    for (let l = 0; l < loops && i < p.length; l++) {
+      const flags = val(92);
+      if (Number.isNaN(flags)) break;
+      if (flags & 2) {
+        // polyline loop
+        const hasBulge = val(72) === 1;
+        val(73);
+        const n = val(93);
+        const pts: [number, number][] = [];
+        const bulges: number[] = [];
+        for (let v = 0; v < n; v++) {
+          pts.push([val(10), val(20)]);
+          bulges.push(hasBulge && p[i]?.[0] === 42 ? parseFloat(p[i++][1]) : 0);
+        }
+        const loop = this.loopSegs(m, pts, bulges);
+        segs.push(...loop);
+      } else {
+        const n = val(93);
+        let started = false;
+        for (let k = 0; k < n; k++) {
+          const type = val(72);
+          if (type === 1) {
+            const a = apply(m, val(10), val(20));
+            const b = apply(m, val(11), val(21));
+            if (!started) segs.push(['M', ...a]);
+            segs.push(['L', ...b]);
+          } else if (type === 2 || type === 3) {
+            const cx = val(10);
+            const cy = val(20);
+            let rx: number;
+            let ry: number;
+            let rot = 0;
+            if (type === 2) {
+              rx = ry = val(40);
+            } else {
+              const mx = val(11);
+              const my = val(21);
+              rx = Math.hypot(mx, my);
+              ry = rx * val(40);
+              rot = Math.atan2(my, mx);
+            }
+            let a0 = (val(50) * Math.PI) / 180;
+            let a1 = (val(51) * Math.PI) / 180;
+            const ccw = p[i]?.[0] === 73 ? parseInt(p[i++][1], 10) !== 0 : true;
+            // a clockwise edge stores its angles mirrored
+            if (!ccw) [a0, a1] = [-a0, -a1];
+            if (ccw) while (a1 <= a0) a1 += 2 * Math.PI;
+            else while (a1 >= a0) a1 -= 2 * Math.PI;
+            const arc = arcSegs(m, cx, cy, rx, ry, rot, a0, a1, !started);
+            segs.push(...arc);
+          } else if (type === 4) {
+            const deg = val(94);
+            const rational = val(73) === 1;
+            val(74);
+            const nk = val(95);
+            const nc = val(96);
+            const knots: number[] = [];
+            for (let q = 0; q < nk; q++) knots.push(val(40));
+            const ctrl: [number, number][] = [];
+            const weights: number[] = [];
+            for (let q = 0; q < nc; q++) {
+              ctrl.push([val(10), val(20)]);
+              if (rational && p[i]?.[0] === 42) weights.push(parseFloat(p[i++][1]));
+            }
+            const pts = splinePoints(deg, knots, ctrl, weights).map(([x, y]) => apply(m, x, y));
+            pts.forEach((pt, q) => segs.push([!started && q === 0 ? 'M' : 'L', ...pt]));
+          } else break;
+          started = true;
+        }
+        if (started) segs.push(['Z']);
+      }
+      // skip the loop's source-object references
+      const refs = p[i]?.[0] === 97 ? parseInt(p[i++][1], 10) : 0;
+      for (let r = 0; r < refs && p[i]?.[0] === 330; r++) i++;
+    }
+    if (segs.length) this.paths.push({ segs, width: 0, fill: true, tone: solid ? SOLID_TONE : PATTERN_TONE });
+  }
+
+  /** A closed polyline loop (with bulges) as segments, starting with a move. */
+  private loopSegs(m: M, pts: [number, number][], bulges: number[]): Seg[] {
+    const before = this.paths.length;
+    this.bulged(m, pts, bulges, true, 0);
+    return before < this.paths.length ? this.paths.pop()!.segs : [];
   }
 
   private text(m: M, x: number, y: number, h: number, rotDeg: number, lines: string[], ax: number, ay: number): void {
@@ -541,13 +663,7 @@ export async function addDxfPage(out: PDFDocument, text: string, fontCache: { fo
   const Y = (y: number) => fmt((y - y0 + margin) * k);
 
   const ops: string[] = ['q', '0 0 0 RG', '0 0 0 rg', '1 J', '1 j'];
-  let lastW = -1;
-  for (const p of drawing.paths) {
-    const lw = (p.width / 25.4) * 72;
-    if (lw !== lastW) {
-      ops.push(`${fmt(lw)} w`);
-      lastW = lw;
-    }
+  const pathOps = (p: Path) => {
     const parts: string[] = [];
     for (const s of p.segs) {
       if (s[0] === 'M') parts.push(`${X(s[1])} ${Y(s[2])} m`);
@@ -555,8 +671,28 @@ export async function addDxfPage(out: PDFDocument, text: string, fontCache: { fo
       else if (s[0] === 'C') parts.push(`${X(s[1])} ${Y(s[2])} ${X(s[3])} ${Y(s[4])} ${X(s[5])} ${Y(s[6])} c`);
       else parts.push('h');
     }
-    parts.push(p.fill ? 'f' : 'S');
-    ops.push(parts.join(' '));
+    return parts.join(' ');
+  };
+  // hatches first, as tones, so lines and text stay on top
+  let lastTone = -1;
+  for (const p of drawing.paths) {
+    if (p.tone === undefined) continue;
+    if (p.tone !== lastTone) {
+      ops.push(`${fmt(p.tone)} g`);
+      lastTone = p.tone;
+    }
+    ops.push(`${pathOps(p)} f*`);
+  }
+  ops.push('0 0 0 rg');
+  let lastW = -1;
+  for (const p of drawing.paths) {
+    if (p.tone !== undefined) continue;
+    const lw = (p.width / 25.4) * 72;
+    if (lw !== lastW) {
+      ops.push(`${fmt(lw)} w`);
+      lastW = lw;
+    }
+    ops.push(`${pathOps(p)} ${p.fill ? 'f' : 'S'}`);
   }
   ops.push('Q');
 
@@ -570,13 +706,29 @@ export async function addDxfPage(out: PDFDocument, text: string, fontCache: { fo
       if (!(size > 0.2)) continue;
       const r = (t.rot * Math.PI) / 180;
       const [c, sn] = [Math.cos(r), Math.sin(r)];
-      t.lines.forEach((line, i) => {
-        const textLine = safe(line);
+      // MTEXT paragraphs wrap at word breaks to the box width
+      const limit = t.wrap ? t.wrap * k : Infinity;
+      const lines: string[] = [];
+      for (const para of t.lines.map(safe)) {
+        let line = '';
+        for (const word of para.split(/(\s+)/)) {
+          const next = line + word;
+          if (line.trim() && font.widthOfTextAtSize(next.trimEnd(), size) > limit) {
+            lines.push(line.trimEnd());
+            line = word.trimStart();
+          } else line = next;
+        }
+        lines.push(line.trimEnd());
+      }
+      // AutoCAD's spacing (5/3 of the height, times the factor); the block anchors as a whole
+      const advance = size * (t.wrap !== undefined || t.spacing !== undefined ? (5 / 3) * (t.spacing ?? 1) : 1.4);
+      const cap = size * 0.72;
+      const blockH = (lines.length - 1) * advance + cap;
+      lines.forEach((textLine, i) => {
         if (!textLine) return;
         const width = font.widthOfTextAtSize(textLine, size);
-        // anchor: ax along the line, ay against the first line's cap height; later lines step down
         const dx = -t.ax * width;
-        const dy = -t.ay * size * 0.72 - i * size * 1.4;
+        const dy = (1 - t.ay) * blockH - cap - i * advance;
         const tx = (t.x - x0 + margin) * k + dx * c - dy * sn;
         const ty = (t.y - y0 + margin) * k + dx * sn + dy * c;
         ops.push(`BT ${name.toString()} ${fmt(size)} Tf ${fmt(c)} ${fmt(sn)} ${fmt(-sn)} ${fmt(c)} ${fmt(tx)} ${fmt(ty)} Tm ${font.encodeText(textLine).toString()} Tj ET`);

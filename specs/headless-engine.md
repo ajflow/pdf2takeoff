@@ -216,6 +216,8 @@ any MCP client). Package: `@modelcontextprotocol/sdk` (MIT).
 | `measure` | `doc, page, type: length\|area\|count, points[], label?` | value, unit, markup id, `provenance` |
 | `fill_area` | `doc, page, at: [x,y], label?, ocr?` | room area by Dynamic Fill (stops at doorways using the scale, room labels, vector door bridges, or on an uncalibrated sheet the door width the sheet itself shows; text-layer words are masked out of the boundary, OCR words too with `ocr`; door swing arcs are erased and their door lines drawn), markup id, `provenance` with the gap closed and the `doorwayRule` in force |
 | `scan_symbol` | `doc, page, at: [x,y], label?` or `{class}` (ONNX) | hits with coordinates, count, `provenance` (method, truncated) |
+| `propose_items` | `doc, page, items[] (kind: Door\|Window\|Space, at, type-specific fields), source?, replace?, preset?` | one flagged count markup per proposal (status "check") for human review; added/removed, markup ids, counts and `unconfirmed` under the preset |
+| `count_items` | `doc, page?, preset?, include_decisions?` | deterministic counts per field, `unconfirmed`, items considered and excluded, per-item decisions with reasons when `include_decisions` — switching preset recounts, no re-detection |
 | `compare_revisions` | `path_a, path_b` | changed sheets, changed regions, summary |
 | `list_markups` / `delete_markup` | `doc` / `doc, id` | markups table / confirmation |
 | `export` | `doc, format: csv\|xlsx, out_path` | written file path |

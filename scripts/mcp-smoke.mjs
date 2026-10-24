@@ -187,5 +187,48 @@ check(
   JSON.stringify(folderCompare.totals),
 );
 
+// --- item proposals + deterministic counting (propose_items / count_items) ---
+const proposed = textOf(
+  await call('propose_items', {
+    id: docId,
+    page: 1,
+    items: [
+      { kind: 'Door', at: [100, 100], doorType: 'double_swing', leaves: 2 },
+      { kind: 'Door', at: [130, 100], doorType: 'sliding', closet: true },
+      { kind: 'Window', at: [160, 100], glazingType: 'unit', group: 'a' },
+      { kind: 'Window', at: [180, 100], glazingType: 'unit', group: 'a' },
+      { kind: 'Space', at: [220, 150], spaceKind: 'room', roomLabel: 'Bedroom 1', bedroom: true },
+    ],
+  }),
+);
+check('propose_items: 5 proposals added', proposed.added === 5 && proposed.removed === 0 && proposed.markupIds.length === 5, JSON.stringify(proposed));
+
+const itemCounted = textOf(await call('count_items', { id: docId, page: 1, preset: 'aecv' }));
+// unconfirmed is 3, not 4: the sliding closet door is excluded under aecv and
+// the second group-'a' Window is grouped away, so 3 of the 5 proposals count
+check(
+  'count_items (aecv): leaves count, grouped Window = 1, space + bedroom',
+  itemCounted.counts.Door === 2 && itemCounted.counts.Window === 1 && itemCounted.counts.Space === 1 && itemCounted.counts.Bedroom === 1 && itemCounted.counts.Toilet === 0 && itemCounted.unconfirmed === 3,
+  JSON.stringify(itemCounted),
+);
+
+const scheduled = textOf(await call('count_items', { id: docId, page: 1, preset: 'schedule' }));
+check('count_items (schedule): one per doorset, every Window unit separate', scheduled.counts.Door === 2 && scheduled.counts.Window === 2, JSON.stringify(scheduled.counts));
+
+const replaced = textOf(
+  await call('propose_items', {
+    id: docId,
+    page: 1,
+    replace: true,
+    items: [{ kind: 'Door', at: [100, 100], doorType: 'swing' }],
+  }),
+);
+check('propose_items (replace): 5 unconfirmed proposals replaced by 1', replaced.removed === 5 && replaced.added === 1, JSON.stringify({ added: replaced.added, removed: replaced.removed }));
+const afterReplace = textOf(await call('count_items', { id: docId, page: 1, preset: 'aecv' }));
+check('count_items after replace: Door 1', afterReplace.counts.Door === 1, JSON.stringify(afterReplace.counts));
+
+const rejected = await call('propose_items', { id: docId, page: 1, items: [{ kind: 'Door', at: [-5, 10] }] });
+check('propose_items: an item off the page is a tool error', rejected.isError === true, JSON.stringify(rejected).slice(0, 300));
+
 proc.kill();
 console.log('\nMCP smoke test: all steps passed');

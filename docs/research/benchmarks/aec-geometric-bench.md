@@ -31,8 +31,9 @@ Full per-class output in `bench/aec-geometric-bench/results/score.txt`.
 
 ## Reading
 
-- **Walls are the headline: 0.519 pixel F1, more than double every published
-  frontier VLM on the identical sheets.** Precision 0.784 / recall 0.388 — the
+- **Walls are the headline: 0.519 pixel F1, about 1.8× the best published
+  frontier VLM on the identical sheets (Claude Fable 5 0.287, Gemini 3.1 Pro
+  0.182).** Precision 0.784 / recall 0.388 — the
   estimator finds the walls it finds cleanly and misses the rest (thin
   partitions below the pen-weight floor, hatch-filled walls the closing
   cannot fuse). This is the task a takeoff actually needs walls for, and a

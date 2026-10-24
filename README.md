@@ -24,7 +24,7 @@ usable by anyone, including to beat us):
   deterministic engine and **no vision model**; bedroom/toilet counts at
   0.708/0.500 from a label dictionary + OCR alone
 - **AEC-Geometric-Bench** (external, released scorer): **wall pixel F1 0.519
-  — more than double any frontier VLM** on the identical sheets (0.18–0.29),
+  — about 1.8× the best frontier VLM** on the identical sheets (0.18–0.29),
   area precision 0.943, object F1 0.031 at the frontier-VLM range; a
   click-free deterministic engine, no GPU, ~23 s per sheet
 - ~**100 ms** CV scan, **1.6 s** cached in-browser ONNX scan, 76 MB model —
@@ -35,7 +35,7 @@ usable by anyone, including to beat us):
 Everything regenerates from this repo with one command per table — see
 [evals/README.md](evals/README.md).
 
-> Phase plan: the [Roadmap](#roadmap) below. Feature-by-feature position against Bluebeam Revu, and what we deliberately won't build: [docs/feature-comparison.md](docs/feature-comparison.md). Licensing rationale: [Why open source?](#why-open-source).
+> Phase plan: the [Roadmap](#roadmap) below. Feature-by-feature position against Bluebeam Revu, and what we deliberately won't build: [docs/feature-comparison.md](docs/feature-comparison.md). Hosting cost model: [docs/hosting-cost-controls.md](docs/hosting-cost-controls.md). Licensing rationale: [Why open source?](#why-open-source).
 
 ## What it does today
 
@@ -43,7 +43,7 @@ Everything regenerates from this repo with one command per table — see
 - **Scale calibration**: click both ends of a known dimension and type its real length, or pick a preset (1:50 … 1:500, 1/8″ = 1′-0″, 1/4″ = 1′-0″, 1″ = 10′/20′/30′). Each page keeps its own scale. Metric and imperial. Multi-scale viewports (W): outline a region drawn at a different scale (a 1:20 detail on a 1:100 sheet) and measurements inside it resolve to that scale automatically.
 - **OCR auto-read**: click both ends of a printed dimension and hit *Auto-read from sheet* — the value ("12.00") or the title-block scale ("1:100") is read straight off the drawing. First use fetches the OCR language pack (~4 MB, then cached); drawings still never leave your machine.
 - **Takeoff tools**: Length (segmented runs), Area, Perimeter, Volume (area × depth), Angle (scale-free) and Count, with live measurements on the drawing and per-label group totals
-- **Scan (auto-count)**: press `S` and click one instance of a repeated symbol: a local computer-vision pass (rasterize → binarize → connected components → shape matching) finds and counts every match on the page in ~100 ms, no model download and nothing uploaded. Drop a trained detector (`symbols.onnx` + `symbols.json`) into `public/models/` and the same click upgrades to an in-browser ONNX detector (via `onnxruntime-web`, WASM) that labels hits by class and handles cluttered sheets, with automatic fallback to the CV pass if the model is missing or fails. Train one with the pipeline in [`training/`](training/README.md).
+- **Scan (auto-count)**: press `S` and click one instance of a repeated symbol: a local computer-vision pass (rasterize → binarize → connected components → shape matching) finds and counts every match on the page in ~100 ms, no model download and nothing uploaded. Hits land as **flagged proposals** (⚑) — confirm (✓) or delete them, and the totals show a live **kept-rate** per label (kept/proposed: every deletion is a judged false positive), so the tool's accuracy on *your* symbols is always visible. A trained **v1 detector ships with the site** (five classes: downlight, GPO, switch, smoke alarm, diffuser — manifest in [`public/models/symbols.json`](public/models/symbols.json)): on cluttered sheets the same click upgrades automatically to an in-browser ONNX detector (`onnxruntime-web`, WASM) that labels hits by class, with automatic fallback to the CV pass if the model can't load. The ~76 MB model is fetched once from GitHub and cached; drawings still never leave your machine. Self-hosting or retraining: drop your own `symbols.onnx` + `symbols.json` into `public/models/` — the pipeline is in [`training/`](training/README.md).
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
@@ -100,9 +100,10 @@ npm run cli -- ocr scan.pdf --page 1 [--region x,y,w,h]  # scanned sheet: OCR wo
 ```
 
 `run` is takeoff-as-code: the spec names the scale, one click-point per
-symbol type (a `class:` field activates automatically once a model ships),
-and the exports. Re-run it on every revision with `--prev` to see exactly
-which quantities changed — the CI-friendly revision loop.
+symbol type (a `class:` field is reserved for when the ONNX detector runs
+headless; today the CLI scans with the CV tier), and the exports. Re-run it on
+every revision with `--prev` to see exactly which quantities changed — the
+CI-friendly revision loop.
 
 Every `<file.pdf>` above also takes a PNG or JPG directly (the MCP
 `open_document` included), as well as image-only (scanned) PDFs: an image is
@@ -120,14 +121,20 @@ writes the binarised OCR crops to a folder for debugging.
 
 ## Agent API (MCP)
 
-`pdf2takeoff mcp` starts a local MCP server on stdio with thirteen tools —
+`pdf2takeoff mcp` starts a local MCP server on stdio with fifteen tools —
 `open_document`, `render_page` (the agent's eyes: a PNG of any sheet),
 `read_text` (the sanctioned way to read printed scales/dimensions/labels —
 exact, positioned, never off the rendered image), `set_scale`, `measure`,
-`fill_area`, `scan_symbol`, `compare_revisions`, `list_markups`,
-`set_status`, `delete_markup`, `export`, `save_annotated` — so an AI agent
-can run a whole takeoff and hand the marked-up PDF to a human for review.
-Local process, local files, nothing uploaded.
+`fill_area`, `scan_symbol`, `propose_items`, `count_items`,
+`compare_revisions`, `list_markups`, `set_status`, `delete_markup`,
+`export`, `save_annotated` — so an AI agent can run a whole takeoff and hand
+the marked-up PDF to a human for review. Local process, local files, nothing
+uploaded.
+
+Proposed doors, Windows and spaces land as flagged count markups a human can
+confirm or delete, and `count_items` derives every quantity from those items
+under a counting preset (`aecv`, `schedule`) — switching the counting
+convention recounts instantly, with no new detection pass.
 
 Register it with any MCP client (ZCode, Claude Desktop, Cursor):
 
@@ -157,10 +164,13 @@ percent, MAPE, exact counts, change-set F1, hallucination rate) and
 benchmark README: near perfect on the vector half, with the raster half
 showing where the engine's scan and OCR paths still fall short.
 
+[`evals/`](evals/README.md) is a public, reproducible benchmark suite: room-area fill scored against analytic ground truth, detector precision/recall with every miss attributed to the gate that dropped it, an MCP workflow conformance bench, a perf bench, and a committed baseline that fails CI on any regression — plus a manual anchor on the external AEC-Geometric-Bench. Numbers are published with their run logs under [`evals/runs/`](evals/runs/).
+
 ## Architecture
 
-- **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and, upcoming, headless in Node (CLI + MCP — see [specs/headless-engine.md](specs/headless-engine.md)).
+- **`src/engine/`** — the takeoff engine: measurement geometry, scan CV + ONNX decode, compare blend, PDF annotation IO, quantity export. Pure TypeScript with zero DOM/bundler imports (enforced in CI via a no-DOM typecheck + import guard) so the same code runs in the browser and headless in Node.
 - **`src/app/`** — the browser UI: PDF.js viewer, tools, markups table, report, persistence. Wires the engine's ports (`RasterPage`, `DetectorSession`) to browser adapters.
+- **`src/headless/`** — the Node side: the CLI (`cli.ts`, launched by `bin/pdf2takeoff.js`), the MCP server (`mcp.ts`), the takeoff-as-code spec loader, and the PDF.js/raster adapters that wire the engine's ports to Node. Design: [specs/headless-engine.md](specs/headless-engine.md).
 
 ## Keyboard
 
@@ -181,8 +191,10 @@ showing where the engine's scan and OCR paths still fall short.
 1. ~~Viewer + scale calibration~~ ✅
 2. ~~Length / area / count + markups list + CSV export~~ ✅
 3. ~~Revision overlay compare (colour-blend the difference between two revisions)~~ ✅
-4. ~~Live multi-user sessions~~ phase 1 shipped (same-machine, experimental — see above); next: cross-machine relay + edit propagation
-5. Plugin API: AI takeoff, ML symbol detection (ONNX Runtime Web / WebGPU), quote generation as add-ons anyone can write
+4. ~~Headless engine: Node CLI, MCP agent API, takeoff-as-code~~ ✅ ([specs/headless-engine.md](specs/headless-engine.md))
+5. ~~ML symbol detection in the browser (ONNX Runtime Web, WASM)~~ ✅ v1 shipped (five classes); v2 retrain next — FloorPlanCAD transfer stage and the tile contract for large sheets ([training/](training/README.md), [specs/detector-tiling.md](specs/detector-tiling.md))
+6. Live multi-user sessions — phase 1 shipped (same-machine, experimental — see above); next: cross-machine relay
+7. Plugin API: AI takeoff helpers, quote generation and trade-specific tools as add-ons anyone can write
 
 ## Why open source?
 
@@ -191,7 +203,8 @@ There is no real open-source Bluebeam for construction yet. An open core lets bu
 ## Contributing
 
 Issues and PRs welcome; read [CONTRIBUTING.md](CONTRIBUTING.md) first (short version:
-issue before PR, small scoped changes, CI green). Trade-specific feature ideas
+issue before PR, small scoped changes, CI green, and the contributor licence
+terms under *Licensing your contribution*). Trade-specific feature ideas
 (what does your takeoff actually look like?) are the most valuable input of all.
 
 ## Licence

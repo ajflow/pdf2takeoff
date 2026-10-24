@@ -1,0 +1,28 @@
+{
+  "engine_sha256": "9541f40b3c271570b215f5b3d220d3f254f1ce127405dfaf7b0e48d27f8bc0a9",
+  "orientation": {
+    "horizontal_bridge_pixel": 0,
+    "transposed_vertical_bridge_pixel": 1,
+    "horizontal_output_ink": 0,
+    "vertical_output_ink": 100,
+    "mismatched_pixels": 100,
+    "expected": "Both bridge pixels = 1; mismatched_pixels = 0."
+  },
+  "radius_gate": {
+    "gap_200_flanks_140_r112": 1,
+    "gap_200_flanks_140_r128": 1,
+    "gap_200_flanks_140_r144": 0,
+    "gap_256_flanks_200_r112": 0,
+    "gap_256_flanks_200_r128": 1,
+    "expected": "1,1,0,0,1: widening can REMOVE a previously eligible bridge."
+  },
+  "bounded_merger": {
+    "returns_polygon_at_r0": true,
+    "reaches_both_sides_of_divider": true,
+    "expected": "A successful bounded fill can span two rooms without exhausting the ladder."
+  },
+  "weak_ring_validation": {
+    "accepts_nonadjacent_repeated_vertex": true,
+    "expected": false
+  }
+}

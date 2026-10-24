@@ -1,0 +1,19 @@
+{
+  "scorer_sha256": "e338b71e3de5f781067fb9f3532aa421557ffa480f804f39a29dec9796aac767",
+  "predictions_sha256": "631038116593c0034126d56f857feeacb0576f4f125395e67b447b02fab85f2f",
+  "prediction_geometry_only": {
+    "input_rings": 28,
+    "invalid_rings": 12,
+    "components_after_repair": 43,
+    "components_after_merge": 39
+  },
+  "synthetic_scorer_contract": {
+    "shared_edge_instances": 1,
+    "one_pixel_separation_instances": 2,
+    "exact_half_iou_tp_fp_fn": [
+      0,
+      1,
+      1
+    ]
+  }
+}

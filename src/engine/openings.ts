@@ -759,9 +759,12 @@ function upsample(src: Uint8Array, w: number, h: number, s: number): Uint8Array 
 
 /**
  * Wall mask and thickness at one working scale. `scale` multiplies the
- * closing radii (given at page scale) and the thickness floor.
+ * closing radii (given at page scale) and the thickness floor. `floor` (page
+ * px) overrides the pen-derived wall floor: the ink-dominated retry at the
+ * end re-enters with the dominant long-run bin, so thickness is read from
+ * the real wall class instead of the pen-weight quantile.
  */
-function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions, scale: number): WallEstimate {
+function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions, scale: number, floor?: number): WallEstimate {
   let inkCount = 0;
   for (let i = 0; i < ink.length; i++) inkCount += ink[i];
   const radii = (o.closeRadius !== undefined ? [o.closeRadius] : o.closeRadii).map((r) => r * scale);
@@ -776,6 +779,8 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
   let liveBest: WallEstimate | null = null;
   // thickness analysis is in page pixels whatever the working scale
   let minWall = Math.max(o.minWallPx, Math.round((o.minWallFraction * Math.max(w, h)) / scale));
+  const baseMinWall = minWall;
+  if (floor !== undefined) minWall = Math.max(minWall, floor);
   let pen = 1;
   let countHistogram: Float64Array = new Float64Array(0);
   // every trial's cell floor uses the unclosed thickness, so cell counts
@@ -792,7 +797,8 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
       // a sheet with little thin ink reaches the pen share only at a wall
       // width; a pen at half the heaviest class above it is no pen
       if (pen >= 0.5 * heaviestPeak(hist.long, Math.ceil(o.penGain * pen) + 1)) pen = 1;
-      minWall = Math.max(minWall, Math.ceil(o.penGain * pen));
+      // with an explicit floor the pen raise is what mis-set the floor
+      if (floor === undefined) minWall = Math.max(minWall, Math.ceil(o.penGain * pen));
       countHistogram = hist.count;
     }
     const histogram = hist.long;
@@ -859,6 +865,22 @@ function estimateWalls(ink: Uint8Array, w: number, h: number, o: OpeningOptions,
     const closed = close(ink, w, h, best.r);
     best = { ...best, closed, wall: open(closed, w, h, (best.k - 1) / 2) };
     dropSmallBlobs(best.wall, w, h, Math.round(o.minWallBlobT * best.t));
+  }
+  // Ink-dominated renders (walls are nearly all of the ink): the pen weight
+  // lands inside the wall band itself, the pen floor sits above the real
+  // walls, thickness latches onto junction-blob bins and the opening kernel
+  // erases every band, so the chosen estimate comes back with no wall-scored
+  // ink at all. When thin ink holds under half the ink (on pen-dominated
+  // sheets the pen model's assumptions hold and an empty mask has other
+  // causes) and the floor sits above a real dominant long-run class, that
+  // class is the wall stock: retry with it as the floor.
+  if (floor === undefined && o.wallThicknessPx === undefined && best.score === 0) {
+    const dom = heaviestPeak(plain.histogram, baseMinWall);
+    if (plain.histogram[dom] > 0 && dom < minWall) {
+      let thinInk = 0;
+      for (let i = 1; i < dom; i++) thinInk += countHistogram[i];
+      if (inkCount > 0 && 2 * thinInk < inkCount) return estimateWalls(ink, w, h, o, scale, dom);
+    }
   }
   best.tried = tried.map((e) => ({ r: e.r, t: e.t, k: e.k, score: e.score, cells: e.cells, histogram: e.histogram }));
   best.pen = pen;

@@ -124,12 +124,12 @@ export async function runMcpServer(): Promise<void> {
     'open_document',
     {
       description:
-        'Open a local PDF drawing for takeoff (an image works too, PNG, JPG, TIFF, WebP, GIF, BMP, AVIF or SVG: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
+        'Open a local PDF drawing for takeoff (an image works too, PNG, JPG, TIFF, WebP, GIF, BMP, AVIF or SVG: it opens as one page of width/3 x height/3 points, so render_page at scale 3 returns the native pixels; so does an ASCII DXF, as a vector page at a standard scale that is set from its units, no set_scale needed). Returns a document id, page sizes in PDF points, and any pdf2takeoff markups already embedded in the file (they load back in). Coordinates everywhere are PDF points, origin bottom-left.',
       inputSchema: { path: z.string().describe('path to the PDF (or PNG/JPG) on this machine') },
     },
     async ({ path }) => {
       // images come back wrapped as PDF bytes so save_annotated still works
-      const { doc, bytes } = await openAny(path);
+      const { doc, bytes, scales } = await openAny(path);
       const id = `doc-${++docSeq}`;
       const markups = await readMarkups(doc);
       const pages: { page: number; widthPt: number; heightPt: number }[] = [];
@@ -137,14 +137,18 @@ export async function runMcpServer(): Promise<void> {
         const vp = (await doc.getPage(p)).getViewport({ scale: 1 });
         pages.push({ page: p, widthPt: Math.round(vp.width), heightPt: Math.round(vp.height) });
       }
-      docs.set(id, { id, path, bytes, doc, calibrations: new Map(), markups });
+      // a DXF knows its units: its pages arrive with their scale set
+      const calibrations = new Map<number, { metersPerPt: number; source: string }>();
+      for (const [p, s] of scales ?? []) calibrations.set(p, { metersPerPt: METERS_PER_PT * s.ratio, source: `drawing units (${s.unit}${s.assumed ? ', assumed' : ''}) at 1:${s.ratio}` });
+      docs.set(id, { id, path, bytes, doc, calibrations, markups });
       return text({
         id,
         fileName: basename(path),
         pageCount: doc.numPages,
         pages,
         restoredMarkups: markups.length,
-        next: 'render_page to see a sheet, then set_scale before measuring',
+        ...(calibrations.size ? { drawingScale: [...(scales ?? [])].map(([page, s]) => ({ page, ratio: `1:${s.ratio}`, unit: s.unit, assumed: s.assumed })) } : {}),
+        next: calibrations.size ? 'render_page to see a sheet; the scale is already set from the drawing units' : 'render_page to see a sheet, then set_scale before measuring',
       });
     },
   );

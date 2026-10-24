@@ -215,7 +215,12 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
     // Where the read has letters, assert fully; where it does not, skip the
     // pixel pins rather than gate a deploy on a container that cannot read.
     const letters = words.filter((x) => /[A-Za-z]{3,}/.test(x.text)).length;
-    const pixelPins = letters >= 3;
+    // the Cloudflare Pages builder has also read letters that are not the
+    // sheet's ("goooooo" for every label, on a commit a retry then passed), so
+    // there the pins need the read to find the sheet's own words; CI and local
+    // runs keep the letters rule and assert fully
+    const anchors = words.filter((x) => /^(BEDROOM|KITCHEN|BATH|LAVATORY|SCALE)/i.test(x.text)).length;
+    const pixelPins = process.env.CF_PAGES ? letters >= 3 && anchors >= 2 : letters >= 3;
     if (!pixelPins) console.log(`SKIP: this builder's OCR read ${words.length} words with no letters (${words.map((x) => x.text).join(' ')}) — degenerate raster/language environment; the pixel-reading pins assert where the pipeline reads`);
     const rooms = countRoomsByClass(words);
     const seen = rooms.labels.map((l) => `${l.cls}:${l.text}`).join(', ') + ' | words: ' + words.map((x) => `${x.text}@${Math.round(x.conf)}`).join(' ');
@@ -257,8 +262,8 @@ check('picker: decimal metres keep their zero', pickCorridorReading([[word('0.45
     // words at all in the corridor crop (a retry of the same commit passes),
     // so assert the value wherever the read has words and skip with the
     // evidence where it has none
-    if (corridor.length) check('ocr: corridor read finds the dimension along the line', dim?.value === 3600 && dim.unit === 'mm', JSON.stringify(corridor.map((x) => x.text)));
-    else console.log('SKIP: this builder read no words in the corridor crop; the dimension pin asserts where the read has words');
+    if (corridor.length && pixelPins) check('ocr: corridor read finds the dimension along the line', dim?.value === 3600 && dim.unit === 'mm', JSON.stringify(corridor.map((x) => x.text)));
+    else console.log('SKIP: this builder could not read the corridor crop (no words, or a page read that missed the sheet); the dimension pin asserts where it reads');
     await terminateOcr();
   }
 }

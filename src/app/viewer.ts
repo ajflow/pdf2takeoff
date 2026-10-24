@@ -8,7 +8,8 @@ import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, PageViewport, RenderTask } from 'pdfjs-dist';
 import { state, emit } from './state';
 import { vectorize, type VecPage } from '../engine/vector';
-import { parseImagePages, PAPER_KEY } from '../engine/inputs';
+import { parseImagePages, parseScales, PAPER_KEY, SCALE_KEY } from '../engine/inputs';
+import { METERS_PER_PT } from '../engine/units';
 
 /**
  * Where pdf.js finds its WebAssembly decoders (CCITT fax, JBIG2, JPEG 2000:
@@ -86,6 +87,10 @@ export async function loadPdf(bytes: Uint8Array, name: string): Promise<void> {
   const meta = await doc.getMetadata().catch(() => null);
   const custom = (meta?.info as { Custom?: Record<string, unknown> } | undefined)?.Custom;
   state.imagePages = parseImagePages(custom?.[PAPER_KEY]);
+  // a DXF knows its units: its pages arrive with their scale set
+  for (const [p, s] of parseScales(custom?.[SCALE_KEY])) {
+    state.calibrations.set(p, { metersPerPt: METERS_PER_PT * s.ratio, source: `drawing units (${s.unit}${s.assumed ? ', assumed' : ''}) at 1:${s.ratio}` });
+  }
   state.zoom = fitWidthZoom();
   emit();
 }

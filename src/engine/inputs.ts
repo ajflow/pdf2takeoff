@@ -35,6 +35,9 @@ export type InputKind =
 /** Raster and vector image kinds that become one page each. */
 export const IMAGE_KINDS: ReadonlySet<InputKind> = new Set(['png', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg', 'tiff', 'heic']);
 
+/** Everything buildDocument can turn into pages. */
+export const OPENABLE_KINDS: ReadonlySet<InputKind> = new Set(['pdf', 'dxf', ...IMAGE_KINDS]);
+
 export const MIME_BY_KIND: Readonly<Partial<Record<InputKind, string>>> = {
   pdf: 'application/pdf',
   png: 'image/png',
@@ -114,7 +117,7 @@ export function unsupportedMessage(kind: InputKind, name: string): string {
     case 'dwg':
       return `${file} is a DWG, which the browser can't read. In your CAD app, export the sheet as a PDF (or DXF) and open that.`;
     case 'dxf':
-      return `${file} is a DXF. Plot it to PDF from your CAD app and open that; direct DXF support is coming.`;
+      return `${file} is a binary DXF. Save it as an ASCII DXF (or plot it to PDF) from your CAD app and open that.`;
     case 'heic':
       return `This browser can't read HEIC photos (Safari can). Export the photo as a JPEG, or open it in Safari.`;
     default:
@@ -229,6 +232,8 @@ export interface BuiltDocument {
   pageCount: number;
   /** 1-based page number to stated dpi (0 = unknown) for every image page. */
   imagePages: Map<number, number>;
+  /** 1-based page number to the drawing scale every DXF page was laid out at. */
+  scales: Map<number, DrawingScale>;
   /** Images the platform had to shrink to decode, with the scale used. */
   shrunk: { name: string; scale: number }[];
 }
@@ -243,10 +248,12 @@ export const PAPER_KEY = 'Pdf2takeoffImagePages';
 export async function buildDocument(files: InputFile[], transcode: ImageTranscoder): Promise<BuiltDocument> {
   const kinds = files.map((f) => f.kind ?? sniffInput(f.bytes, f.name));
   if (files.length === 1 && kinds[0] === 'pdf') {
-    return { bytes: files[0].bytes, pageCount: 0, imagePages: new Map(), shrunk: [] };
+    return { bytes: files[0].bytes, pageCount: 0, imagePages: new Map(), scales: new Map(), shrunk: [] };
   }
   const out = await PDFDocument.create({ updateMetadata: false });
   const imagePages = new Map<number, number>();
+  const scales: BuiltDocument['scales'] = new Map();
+  const fontCache = {};
   const shrunk: BuiltDocument['shrunk'] = [];
   for (let f = 0; f < files.length; f++) {
     const { bytes, name } = files[f];
@@ -254,6 +261,13 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
     if (kind === 'pdf') {
       const src = await PDFDocument.load(bytes, { updateMetadata: false });
       for (const page of await out.copyPages(src, src.getPageIndices())) out.addPage(page);
+      continue;
+    }
+    if (kind === 'dxf') {
+      // a vector page at a standard scale, which the PDF then carries
+      if (ascii(bytes, 0, 18) === 'AutoCAD Binary DXF') throw new Error(unsupportedMessage('dxf', name));
+      const { addDxfPage, dxfText } = await import('./dxf.ts');
+      scales.set(out.getPageCount() + 1, await addDxfPage(out, dxfText(bytes), fontCache));
       continue;
     }
     if (!IMAGE_KINDS.has(kind)) throw new Error(unsupportedMessage(kind, name));
@@ -286,6 +300,7 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
     out.addPage([w, h]).drawImage(image, { x: 0, y: 0, width: w, height: h });
     imagePages.set(out.getPageCount(), dpi);
   }
+  if (scales.size) (await import('./dxf.ts')).writeScales(out, scales);
   if (imagePages.size) {
     const entry = Object.fromEntries([...imagePages].map(([p, d]) => [String(p), d]));
     // (PDFDocument.getInfoDict is private; this is what it does)
@@ -294,7 +309,34 @@ export async function buildDocument(files: InputFile[], transcode: ImageTranscod
     if (!(existing instanceof PDFDict)) out.context.trailerInfo.Info = out.context.register(info);
     info.set(PDFName.of(PAPER_KEY), PDFString.of(JSON.stringify(entry)));
   }
-  return { bytes: await out.save(), pageCount: out.getPageCount(), imagePages, shrunk };
+  return { bytes: await out.save(), pageCount: out.getPageCount(), imagePages, scales, shrunk };
+}
+
+/** Info-dictionary key: per page, the drawing scale a DXF was laid out at. */
+export const SCALE_KEY = 'Pdf2takeoffDrawingScale';
+
+export interface DrawingScale {
+  /** The page is the drawing at 1:ratio. */
+  ratio: number;
+  /** The unit the drawing was in, as written ('mm', 'm', 'in', 'ft', ...). */
+  unit: string;
+  /** True when the file did not say and the unit was inferred from its size. */
+  assumed: boolean;
+}
+
+/** Parse SCALE_KEY (as pdf.js reports it) back into page -> scale. */
+export function parseScales(value: unknown): Map<number, DrawingScale> {
+  const out = new Map<number, DrawingScale>();
+  if (typeof value !== 'string') return out;
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(value) as Record<string, DrawingScale>)) {
+      const page = Number(k);
+      if (Number.isInteger(page) && page > 0 && v && v.ratio > 0) out.set(page, { ratio: v.ratio, unit: String(v.unit), assumed: !!v.assumed });
+    }
+  } catch {
+    /* not ours */
+  }
+  return out;
 }
 
 /** Parse the PAPER_KEY entry (as pdf.js reports it) back into page -> dpi. */

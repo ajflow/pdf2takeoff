@@ -19,6 +19,7 @@ import { basename } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { RASTER_SCALE } from '../engine/ports.ts';
 import { buildDocument, sniffInput, unsupportedMessage, type ImageTranscoder, type InputKind } from '../engine/inputs.ts';
+import type { DrawingScale } from '../engine/inputs.ts';
 import { openPdf } from './pdfjs-node.ts';
 
 /** Image kinds the headless engine reads: @napi-rs/canvas decodes these, and TIFF has its own reader (HEIC neither). */
@@ -136,9 +137,11 @@ export async function imageToPdf(bytes: Uint8Array, kind?: ImageKind): Promise<U
 
 export interface OpenedDocument {
   doc: PDFDocumentProxy;
-  /** PDF bytes: the file itself, or the image wrapped as a one-page PDF. */
+  /** PDF bytes: the file itself, or the image or DXF wrapped as a PDF. */
   bytes: Uint8Array;
-  kind: 'pdf' | 'image';
+  kind: 'pdf' | 'image' | 'dxf';
+  /** DXF pages: the drawing scale each was laid out at (its units make it exact). */
+  scales?: Map<number, DrawingScale>;
 }
 
 /** Open a PDF or an image file (by magic bytes, then extension). */
@@ -153,6 +156,10 @@ export async function openAny(path: string): Promise<OpenedDocument> {
   if (NODE_IMAGE_KINDS.has(kind)) {
     const bytes = await imageToPdf(raw, kind as ImageKind);
     return { doc: await openPdf(bytes), bytes, kind: 'image' };
+  }
+  if (kind === 'dxf') {
+    const built = await buildDocument([{ bytes: raw, name: basename(path), kind }], nodeTranscoder);
+    return { doc: await openPdf(built.bytes), bytes: built.bytes, kind: 'dxf', scales: built.scales };
   }
   if (kind === 'pdf' || kind === 'unknown') return { doc: await openPdf(raw), bytes: raw, kind: 'pdf' };
   throw new Error(unsupportedMessage(kind, basename(path)));

@@ -13,6 +13,11 @@
 //   5. TIFF: a Group 4 scan passes through untouched (single strip or many)
 //      and renders black on white at its stated 300 dpi; a colour LZW scan
 //      is decoded; a multi-page TIFF gives a page each
+//   7. DXF: a vector page at a standard scale set from its units (mm here,
+//      1:50 on an A3-sized sheet), lines, bulged polylines and blocks drawn
+//      where they belong, text as real text, frozen layers and paper space
+//      left out, Scan finding all 8 inserts of a block; unitless and metre
+//      drawings, and a binary DXF's message
 //   6. scanned-PDF codecs pdf.js decodes with WebAssembly (CCITT fax via the
 //      Group 4 page above, and JPEG 2000 here) render: without the wasm they
 //      came out blank
@@ -26,6 +31,8 @@ import { createCanvas } from '@napi-rs/canvas';
 import { PDFDocument } from 'pdf-lib';
 import { sniffInput, buildDocument, imageDpi, parseImagePages, paperFactor, PAPER_KEY, unsupportedMessage } from '../src/engine/inputs.ts';
 import { nodeTranscoder, openAny } from '../src/headless/image-node.ts';
+import { scanDocAt } from '../src/headless/ops.ts';
+import { parseScales, SCALE_KEY } from '../src/engine/inputs.ts';
 import { openPdf } from '../src/headless/pdfjs-node.ts';
 import { renderRasterNode } from '../src/headless/raster-node.ts';
 
@@ -355,5 +362,79 @@ try {
   check('scanned PDF: a JPEG 2000 image renders (frame dark, inside white)', dark(r, 7, 40) && dark(r, 61, 20) && !dark(r, 30, 40), `frame ${px(r, 7, 40)} inside ${px(r, 30, 40)}`);
 }
 
+// --- 7. DXF ------------------------------------------------------------------------
+
+const dxf = (body, units = 4) =>
+  enc(
+    [
+      '  0', 'SECTION', '  2', 'HEADER', '  9', '$INSUNITS', ' 70', String(units), '  0', 'ENDSEC',
+      '  0', 'SECTION', '  2', 'TABLES', '  0', 'TABLE', '  2', 'LAYER',
+      '  0', 'LAYER', '  2', 'FROZEN', ' 70', '1', ' 62', '7',
+      '  0', 'ENDTAB', '  0', 'ENDSEC',
+      '  0', 'SECTION', '  2', 'BLOCKS',
+      '  0', 'BLOCK', '  8', '0', '  2', 'DL', ' 70', '0', ' 10', '0', ' 20', '0',
+      '  0', 'CIRCLE', '  8', '0', ' 10', '0', ' 20', '0', ' 40', '150',
+      '  0', 'LINE', '  8', '0', ' 10', '-100', ' 20', '0', ' 11', '100', ' 21', '0',
+      '  0', 'ENDBLK', '  0', 'ENDSEC',
+      '  0', 'SECTION', '  2', 'ENTITIES', ...body, '  0', 'ENDSEC', '  0', 'EOF',
+    ].join('\r\n'),
+  );
+const lights = [[1000, 1500], [2000, 1500], [3000, 1500], [1000, 4000], [3000, 4000], [1000, 6500], [2000, 6500], [3000, 6500]];
+const plan = [
+  '  0', 'LWPOLYLINE', '  8', 'WALLS', ' 90', '4', ' 70', '1', ' 10', '0', ' 20', '0', ' 10', '12000', ' 20', '0', ' 10', '12000', ' 20', '8000', ' 10', '0', ' 20', '8000',
+  '  0', 'LINE', '  8', 'WALLS', ' 10', '4000', ' 20', '0', ' 11', '4000', ' 21', '6000',
+  '  0', 'ARC', '  8', 'DOORS', ' 10', '4000', ' 20', '6000', ' 40', '900', ' 50', '270', ' 51', '360',
+  // a bulged polyline: a half circle from (6000, 7000) to (8000, 7000) through (7000, 6000)
+  '  0', 'LWPOLYLINE', '  8', 'WALLS', ' 90', '2', ' 70', '0', ' 10', '6000', ' 20', '7000', ' 42', '1', ' 10', '8000', ' 20', '7000',
+  ...lights.flatMap(([x, y]) => ['  0', 'INSERT', '  8', 'LIGHTS', '  2', 'DL', ' 10', String(x), ' 20', String(y)]),
+  '  0', 'TEXT', '  8', 'TEXT', ' 10', '1500', ' 20', '2800', ' 40', '250', '  1', 'OFFICE',
+  '  0', 'MTEXT', '  8', 'TEXT', ' 10', '8000', ' 20', '4000', ' 40', '250', ' 71', '5', '  1', 'MEETING\\Proom',
+  // left out: a frozen layer and paper space (either would widen the page if drawn)
+  '  0', 'LINE', '  8', 'FROZEN', ' 10', '0', ' 20', '0', ' 11', '50000', ' 21', '0',
+  '  0', 'LINE', '  8', 'WALLS', ' 67', '1', ' 10', '0', ' 20', '0', ' 11', '0', ' 21', '90000',
+];
+const planDxf = dxf(plan);
+check('dxf: sniffed by its text', sniffInput(planDxf, 'plan.bin') === 'dxf');
+const dxfDoc = await buildDocument([{ bytes: planDxf, name: 'plan.dxf' }], nodeTranscoder);
+const sc = dxfDoc.scales.get(1);
+check('dxf: laid out at 1:50 from its millimetres (12 m fits an A3 sheet)', sc && sc.ratio === 50 && sc.unit === 'mm' && !sc.assumed, JSON.stringify(sc));
+const dxfPdf = await PDFDocument.load(dxfDoc.bytes);
+const k50 = (0.001 / 50) * (72 / 0.0254); // pt per mm at 1:50
+const pageW = dxfPdf.getPage(0).getWidth();
+const pageH = dxfPdf.getPage(0).getHeight();
+check('dxf: the page is the drawing (with a 4% margin) at 1:50; frozen and paper-space lines left out', near(pageW, 12960 * k50, 0.05) && near(pageH, 8960 * k50, 0.05), `${pageW} x ${pageH}`);
+const dxfOpened = await openPdf(dxfDoc.bytes);
+const dmeta = await dxfOpened.getMetadata();
+check('dxf: the scale rides in the PDF and pdf.js reads it back', parseScales(dmeta.info?.Custom?.[SCALE_KEY]).get(1)?.ratio === 50);
+const dr = await renderRasterNode(dxfOpened, 1, 3);
+const toPx = (x, y) => [Math.round((x + 480) * k50 * 3), Math.round((pageH - (y + 480) * k50) * 3)];
+const inkNear = (r, [cx, cy]) => {
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (dark(r, cx + dx, cy + dy)) return true;
+  return false;
+};
+check('dxf: walls, the bulged arc and a block insert draw where they belong', inkNear(dr, toPx(0, 4000)) && inkNear(dr, toPx(4000, 3000)) && inkNear(dr, toPx(7000, 6000)) && inkNear(dr, toPx(2000, 1650)) && !inkNear(dr, toPx(7000, 7000)), `wall ${inkNear(dr, toPx(0, 4000))} arc ${inkNear(dr, toPx(7000, 6000))} light ${inkNear(dr, toPx(2000, 1650))}`);
+const words = (await (await dxfOpened.getPage(1)).getTextContent()).items.map((i) => i.str).join(' ');
+check('dxf: TEXT and MTEXT become real text (no OCR needed)', /OFFICE/.test(words) && /MEETING/.test(words) && /room/.test(words), words);
+const blockScan = await scanDocAt(dxfOpened, 1, { x: (2000 + 480) * k50 + 150 * k50, y: (1500 + 480) * k50 });
+check('dxf: Scan finds all 8 inserts of the light block', 'hits' in blockScan && blockScan.hits.length === 8, JSON.stringify('hits' in blockScan ? { n: blockScan.hits.length, provider: blockScan.provider } : blockScan));
+const unitless = await buildDocument([{ bytes: dxf(plan, 0), name: 'old.dxf' }], nodeTranscoder);
+check('dxf: no units stated, a 12000-wide drawing reads as millimetres (flagged as assumed)', unitless.scales.get(1)?.unit === 'mm' && unitless.scales.get(1)?.assumed === true);
+const metres = await buildDocument([{ bytes: dxf(['  0', 'LWPOLYLINE', '  8', 'W', ' 90', '4', ' 70', '1', ' 10', '0', ' 20', '0', ' 10', '30', ' 20', '0', ' 10', '30', ' 20', '20', ' 10', '0', ' 20', '20'], 6), name: 'site.dxf' }], nodeTranscoder);
+check('dxf: a 30 m building drawn in metres comes out at 1:100', metres.scales.get(1)?.ratio === 100 && metres.scales.get(1)?.unit === 'm', JSON.stringify(metres.scales.get(1)));
+let binErr = '';
+await buildDocument([{ bytes: enc('AutoCAD Binary DXF\r\n\x1a\0'), name: 'bin.dxf' }], nodeTranscoder).catch((e) => (binErr = e.message));
+check('dxf: a binary DXF says to save it as ASCII', /ASCII DXF/.test(binErr), binErr);
+{
+  const dd = mkdtempSync(join(tmpdir(), 'p2t-dxf-'));
+  try {
+    const f = join(dd, 'plan.dxf');
+    writeFileSync(f, planDxf);
+    const o = await openAny(f);
+    check('openAny: a .dxf opens as a vector page with its scale', o.kind === 'dxf' && o.scales?.get(1)?.ratio === 50 && o.doc.numPages === 1);
+  } finally {
+    rmSync(dd, { recursive: true, force: true });
+  }
+}
+
 if (failed) process.exit(1);
-console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny, TIFF, scanned-PDF codecs)');
+console.log('PASS: input files (recognising kinds, one PDF from images and PDFs, scan resolution, headless openAny, TIFF, scanned-PDF codecs, DXF)');

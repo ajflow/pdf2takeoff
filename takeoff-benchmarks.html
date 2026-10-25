@@ -147,7 +147,7 @@
           <div class="prose">
             <h2>Every benchmark at a glance</h2>
             <div class="table-wrap">
-              <table class="bench">
+              <table class="bench stack">
                 <thead><tr><th>Benchmark</th><th>What it tests</th><th>pdf2takeoff</th><th>For comparison</th></tr></thead>
                 <tbody>
                   <tr><td><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/docs/research/benchmarks/aecv-bench.md">AECV-Bench</a></td><td>Counting doors, windows and rooms on 120 floor plans (five-field exact match)</td><td><b>0.295</b><span class="muted">engine alone, no AI model</span><b>0.585</b><span class="muted">with the opt-in AI count on GPT-6.1 Sol</span></td><td><b>0.572</b><span class="muted">same model, the benchmark's own prompt</span><b>0.543</b><span class="muted">best published model</span></td></tr>
@@ -167,7 +167,7 @@
             </ol>
 
             <h2>AECV-Bench: can it count doors, windows and rooms?</h2>
-            <p>With no vision model, the engine scores 0.295 five-field exact match: bedrooms are right 71% of the time, but doors and windows only about 11%. With the opt-in AI count on GPT-6.1 Sol it scores 0.585, against 0.572 for the same model on the benchmark's own prompt and 0.543 for the best published model. Most of that gain is the model, not pdf2takeoff. pdf2takeoff adds checkability: each count arrives as items on the drawing for a person to confirm, and when repeated runs disagree, the count is right only 25% of the time, against 75% when they agree.</p>
+            <p>With no vision model, the engine scores 0.295 five-field exact match: bedrooms are right 71% of the time, but doors and windows only 11 to 12%. With the opt-in AI count on GPT-6.1 Sol it scores 0.585, against 0.572 for the same model on the benchmark's own prompt and 0.543 for the best published model. Most of that gain is the model, not pdf2takeoff. pdf2takeoff adds checkability: each count arrives as items on the drawing for a person to confirm, and when repeated runs disagree, the count is right only 25% of the time, against 75% when they agree.</p>
 
             <h2>AEC-Geometric-Bench: can it find walls?</h2>
             <p>On 15 construction sheets the engine finds walls with a pixel F1 of 0.519, about 1.8 times the best general AI model (0.287), with no clicks. A production pipeline built for these sheets scores 0.931, and our object score is poor (F1 0.031): the door finder over-fires on real drawings, and fixtures are not attempted.</p>

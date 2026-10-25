@@ -40,7 +40,7 @@
         "tool": [
           {
             "@type": "HowToTool",
-            "name": "pdf2takeoff Dynamic Fill"
+            "name": "pdf2takeoff Fill tool"
           }
         ],
         "step": [
@@ -57,7 +57,7 @@
           {
             "@type": "HowToStep",
             "name": "Click inside a room",
-            "text": "Press D and click anywhere inside the room. Dynamic Fill traces the walls, bridges the door gaps and shows the area on the drawing."
+            "text": "Press D and click anywhere inside the room. The Fill tool traces the walls, bridges the door gaps and shows the area on the drawing."
           },
           {
             "@type": "HowToStep",
@@ -100,7 +100,7 @@
           },
           {
             "@type": "Question",
-            "name": "Does Dynamic Fill work on scanned drawings?",
+            "name": "Does the Fill tool work on scanned drawings?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text": "Yes. It works on the rendered page, so scans fill too, and door gaps close from the door width the sheet shows when there is no scale or text layer. Heavy speckle or a skewed scan can break the wall outline; trace those rooms with the Area tool."
@@ -111,7 +111,7 @@
             "name": "Which wall face does the room area measure to?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Dynamic Fill measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead."
+              "text": "The Fill tool measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead."
             }
           },
           {
@@ -147,7 +147,7 @@
           <span class="badge-pill">Free &amp; open source · files never uploaded</span>
           <h1>Measure area on a PDF drawing, free, in your browser</h1>
           <p class="lead">
-            You can measure the area of a room on a PDF drawing for free in your browser with pdf2takeoff: set the scale once, then <strong>click inside the room and Dynamic Fill reads its area off the walls</strong>, or trace the outline with the Area tool. Lengths and perimeters work the same way, totals group by label, and the drawing never leaves your computer.
+            You can measure the area of a room on a PDF drawing for free in your browser with pdf2takeoff: set the scale once, then <strong>click inside the room and the Fill tool reads its area off the walls</strong>, or trace the outline with the Area tool. Lengths and perimeters work the same way, totals group by label, and the drawing never leaves your computer.
           </p>
 
           <div class="fact-strip">
@@ -168,18 +168,18 @@
             <ol>
               <li><strong>Open the drawing.</strong> Drop a PDF floor plan into pdf2takeoff, or open an image or a DXF. It renders on your machine; nothing is uploaded.</li>
               <li><strong>Set the scale.</strong> Press C, click both ends of a dimension you know and type its length, pick a preset such as 1:100, or click <em>Auto-read from sheet</em> to take the scale from the title block.</li>
-              <li><strong>Click inside a room.</strong> Press D and click anywhere inside the room. Dynamic Fill traces the walls, bridges the door gaps and shows the area on the drawing.</li>
+              <li><strong>Click inside a room.</strong> Press D and click anywhere inside the room. The Fill tool traces the walls, bridges the door gaps and shows the area on the drawing.</li>
               <li><strong>Trace what will not fill.</strong> For a space that is not closed on every side, press A and click its corners, then double-click or press Enter to finish.</li>
               <li><strong>Add lengths and perimeters.</strong> Press L for a length, in one or more segments, or P for a perimeter. Each measurement shows its value and joins the totals for its label.</li>
               <li><strong>Export.</strong> Export to Excel or CSV, print the quantity report, or save the markups into the PDF to open in Bluebeam Revu or Acrobat.</li>
             </ol>
 
-            <h2>How does Dynamic Fill find a room's area?</h2>
+            <h2>How does the Fill tool find a room's area?</h2>
             <p>Click inside a room and pdf2takeoff floods outward from that point until it meets the walls, then traces the boundary into an area markup, in about 150 ms. The area is the floor inside the wall lines, measured to their inside face.</p>
             <p>Doorways are the hard part, because a gap in a wall lets the fill leak into the next room. pdf2takeoff closes door gaps using the calibrated scale, the room labels in the text layer, the drawing's vector linework or, on an uncalibrated scan with none of those, the door width the sheet itself shows. Wide openings into open-plan areas stay open on purpose.</p>
 
             <h2>When should I trace an area by hand?</h2>
-            <p>Dynamic Fill needs a boundary to stop at. A lobby or open-plan zone that is not closed by lines on every side will not fill cleanly, and a diagonal doorway on a scan with no vector layer can still leak. For those, press <em>A</em> and click around the space. Every fill is an ordinary area markup, so you can drag its corners to adjust it, and Ctrl+Z puts back the shape from before the drag.</p>
+            <p>The Fill tool needs a boundary to stop at. A lobby or open-plan zone that is not closed by lines on every side will not fill cleanly, and a diagonal doorway on a scan with no vector layer can still leak. For those, press <em>A</em> and click around the space. Every fill is an ordinary area markup, so you can drag its corners to adjust it, and Ctrl+Z puts back the shape from before the drag.</p>
 
             <h2>What else can I measure?</h2>
             <ul>
@@ -201,12 +201,12 @@
                 <p>Yes, for real-world units. Set it once per sheet from a known dimension, a preset or the title block. Angles and counts are the only measurements that work without a scale.</p>
               </details>
               <details>
-                <summary>Does Dynamic Fill work on scanned drawings?</summary>
+                <summary>Does the Fill tool work on scanned drawings?</summary>
                 <p>Yes. It works on the rendered page, so scans fill too, and door gaps close from the door width the sheet shows when there is no scale or text layer. Heavy speckle or a skewed scan can break the wall outline; trace those rooms with the Area tool.</p>
               </details>
               <details>
                 <summary>Which wall face does the room area measure to?</summary>
-                <p>Dynamic Fill measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead.</p>
+                <p>The Fill tool measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead.</p>
               </details>
               <details>
                 <summary>Can I export the areas to Excel?</summary>

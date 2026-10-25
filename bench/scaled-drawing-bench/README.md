@@ -164,7 +164,7 @@ Vector half (100 sheets, 980 answerable questions, 37 unanswerable by design):
 | compare | 8 | 8 | n/a | n/a | n/a | n/a | 100% | 100% | n/a |
 | all | 980 | 978 | 100% | 100% | 0.2% | 99.2% | 100% | 99.8% | 0/37 |
 
-Raster half (100 sheets, 968 answerable, 55 unanswerable by design; pixels decoded directly from the image PDFs because the engine's image render crashed, see the notes in the results file):
+Raster half (100 sheets, 968 answerable, 55 unanswerable by design; pixels decoded directly from the image PDFs because the engine's image render crashed, see the notes in the results file). This is the first reference run; the current engine scores **37.3%** on the raster half, still with 0/55 hallucinated, in [`results/pdf2takeoff-stabilized.md`](results/pdf2takeoff-stabilized.md):
 
 | Type | Answerable | Answered | Within 2% | Within 5% | MAPE | Exact | Set F1 | Accuracy | Hallucinated / unanswerable |
 |---|---|---|---|---|---|---|---|---|---|

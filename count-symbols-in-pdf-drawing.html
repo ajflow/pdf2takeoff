@@ -29,14 +29,45 @@
           "@type": "Organization",
           "name": "Flowtivity",
           "url": "https://flowtivity.ai",
-          "address": { "@type": "PostalAddress", "addressLocality": "Gold Coast", "addressRegion": "QLD", "addressCountry": "AU" }
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
         },
-        "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff scan" }],
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff scan"
+          }
+        ],
         "step": [
-          { "@type": "HowToStep", "name": "Open the drawing", "text": "Open any PDF floor plan in pdf2takeoff. The drawing is rendered on your machine; nothing is uploaded." },
-          { "@type": "HowToStep", "name": "Press S and click one symbol", "text": "Activate the Scan tool and click directly on one instance of the symbol you want counted: a downlight, a power point, a smoke alarm." },
-          { "@type": "HowToStep", "name": "Read the count", "text": "The scan matches every instance of that symbol on the page in about 100 ms and drops a numbered count marker on each one." },
-          { "@type": "HowToStep", "name": "Group and export", "text": "Rename the group to your specification name (e.g. 'Downlight DL-100') and export the counts to CSV, Excel, or the printable report." }
+          {
+            "@type": "HowToStep",
+            "name": "Open the drawing",
+            "text": "Drag any PDF floor plan into pdf2takeoff."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Click one symbol",
+            "text": "Press S (Scan) and click directly on one instance of the symbol: a downlight, a power point, a smoke alarm."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Every match gets counted",
+            "text": "The scan finds all instances of that symbol on the sheet and places a numbered marker on each, in reading order."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Group by spec name",
+            "text": "Rename the group (e.g. Downlight DL-100) and scan the next symbol type; the list keeps one total per group."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Export",
+            "text": "Take the counts to CSV or Excel, print the quantity report, or save the count markers into the PDF itself."
+          }
         ]
       }
     </script>
@@ -47,28 +78,35 @@
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "How does the auto-count work?",
-            "acceptedAnswer": { "@type": "Answer", "text": "You click one instance of a repeated symbol. The tool rasterizes the sheet, extracts the symbol's shape, and matches every other symbol on the page by size, aspect, fill and a normalized shape signature, all locally in your browser, in about 100 ms." }
+            "name": "Is it really automatic?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "One click teaches the scan what to count; every match on the page is found and marked automatically after that."
+            }
           },
           {
             "@type": "Question",
-            "name": "Which symbols can it count?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Any repeated symbol that appears as a distinct shape on the drawing: downlights, GPOs/power points, switches, smoke alarms, ceiling diffusers, hydrants, columns and similar fixtures. It works best on isolated symbols in vector CAD plots; symbols that touch wall lines on cluttered or scanned sheets are handled by the ML detector that is being trained." }
+            "name": "Does it work on scanned drawings?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Clear scans of distinct symbols usually work. Dense or low-contrast scans are where the ML detector (in training) will take over."
+            }
           },
           {
             "@type": "Question",
-            "name": "Is the symbol count free?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes, completely free and open source (Apache-2.0), no page limits, no account, nothing uploaded." }
+            "name": "Can I count symbols on all pages?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes: scan each sheet, and the markups list totals every label across the whole set for the Excel export."
+            }
           },
           {
             "@type": "Question",
-            "name": "Do I need to upload my drawings?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. The scan runs on your own machine with local computer vision; no model download, no server, nothing uploaded. Confidential tender drawings stay private by design." }
-          },
-          {
-            "@type": "Question",
-            "name": "Can it count across all sheets of a set?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Scan each sheet with one click; the markups list groups counts by label across the whole set, and the totals feed straight into the Excel export and the printable report." }
+            "name": "Do the count markers show in Bluebeam?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Save into the PDF and the count markers become standard PDF annotations that open in Bluebeam Revu and Acrobat."
+            }
           }
         ]
       }

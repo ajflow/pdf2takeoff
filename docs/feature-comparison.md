@@ -110,7 +110,7 @@ pdf2takeoff runs in any modern browser on any OS.
 | Feature | Bluebeam tier | pdf2takeoff | Notes |
 |---|---|---|---|
 | Private, no-upload AI | — | ⭐ | Nothing uploads — ever; Bluebeam's Max AI is cloud-connected |
-| Agent API (MCP) | Max (AU$979) | ⭐ | Shipped: twelve local stdio tools (open, render, read_text, scale, measure, scan, compare, markups, status, export, save) — free, local, open source |
+| Agent API (MCP) | Max (AU$979) | ⭐ | Shipped: fifteen local stdio tools (open, render, read_text, scale, fill, measure, scan, propose, count, compare, markups, status, delete, export, save) — free, local, open source |
 | Cross-platform CLI & scripting | Complete (Windows scripting) | ✅ | Shipped: Node CLI (`info`, `scan`, `compare`, `export`, `annotate`, `run`, `set`, `mcp`) — runs anywhere, no network calls |
 | Takeoff-as-code in CI | — | ✅ | Committed `takeoff.yaml` + `run` regenerate quantities per revision; CI-smoked |
 | Cloud AI drawing review | Max (Smart Review) | ➖ | Local-first by design; privacy-first AI is the differentiator (see below) |

@@ -29,15 +29,45 @@
           "@type": "Organization",
           "name": "Flowtivity",
           "url": "https://flowtivity.ai",
-          "address": { "@type": "PostalAddress", "addressLocality": "Gold Coast", "addressRegion": "QLD", "addressCountry": "AU" }
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
         },
-        "tool": [{ "@type": "HowToTool", "name": "pdf2takeoff overlay compare" }],
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff overlay compare"
+          }
+        ],
         "step": [
-          { "@type": "HowToStep", "name": "Open revision A", "text": "Open the current drawing in pdf2takeoff, then click Compare. The open file becomes revision A." },
-          { "@type": "HowToStep", "name": "Choose revision B", "text": "Pick the newer revision. The two sheets are overlay-blended instantly." },
-          { "@type": "HowToStep", "name": "Read the colours", "text": "Red appears only in revision A (removed), blue only in revision B (added), and unchanged linework stays dark." },
-          { "@type": "HowToStep", "name": "Align the sheets", "text": "Nudge revision B with the arrow buttons until the sheets line up, or let pdf2takeoff fit B to A's page size automatically." },
-          { "@type": "HowToStep", "name": "Focus on changes", "text": "Turn on Changes only to fade unchanged linework to grey so additions and deletions stand out." }
+          {
+            "@type": "HowToStep",
+            "name": "Open revision A",
+            "text": "Open the current drawing in pdf2takeoff and click Compare; the open file becomes revision A."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Choose revision B",
+            "text": "Pick the newer sheet; the overlay blend appears instantly."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Read the colours",
+            "text": "Red exists only in A (deleted in the new revision); blue exists only in B (new); dark ink is unchanged."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Align",
+            "text": "Fit B to A scales B onto A's page size automatically; the nudge arrows fine-tune alignment to the millimetre."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Isolate the changes",
+            "text": "Turn on Changes only to fade everything unchanged to grey."
+          }
         ]
       }
     </script>
@@ -48,23 +78,35 @@
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "Is the revision comparison free?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes, completely free and open source (Apache-2.0), with no page limits or account." }
+            "name": "Is it free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes: free, Apache-2.0 licensed open source, no limits and no account."
+            }
           },
           {
             "@type": "Question",
-            "name": "Are my drawings uploaded to compare them?",
-            "acceptedAnswer": { "@type": "Answer", "text": "No. Both PDFs are rendered and blended locally in your browser; nothing is sent anywhere." }
+            "name": "Are my drawings private?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The comparison runs 100% in your browser; your PDFs never leave your machine."
+            }
           },
           {
             "@type": "Question",
-            "name": "How does the colour coding work?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Ink that exists only in revision A shows red (removed in the newer drawing), ink only in revision B shows blue (added), and matching linework blends to dark." }
+            "name": "Does it work with scanned drawings?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The blend works on rendered pixels, so scanned sheets compare just as well as vector CAD plots."
+            }
           },
           {
             "@type": "Question",
-            "name": "Can it compare sheets of different paper sizes?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. With Fit B to A enabled, revision B is scaled onto revision A's page box before blending; fine alignment is done with the nudge buttons." }
+            "name": "Can I measure on the compared result?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Compare and takeoff are one tool: exit compare and your calibrated measurements are still there, on either revision."
+            }
           }
         ]
       }

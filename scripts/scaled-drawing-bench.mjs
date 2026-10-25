@@ -9,7 +9,7 @@
 //   node --experimental-strip-types scripts/scaled-drawing-bench.mjs reference --set <dir> [--half vector|raster|all] [--ocr on|off] [--out results/pdf2takeoff-reference]
 //
 // The reference solver answers every question with the pdf2takeoff engine
-// and no model: text-layer (or OCR) scale notes, Dynamic Fill for areas,
+// and no model: text-layer (or OCR) scale notes, Magic Fill for areas,
 // vector geometry or ink runs for lengths, the scan tiers for counts and the
 // revision-diff path for compare questions. Raster sheets run in a child
 // process per sheet so an engine crash costs one sheet, not the run.

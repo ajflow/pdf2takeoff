@@ -2,7 +2,7 @@
 // Takeoff accuracy bench (patch-plan-2 P12). Builds vector PDFs with known
 // answers (rooms, doors, furniture, symbols, scale notes) using pdf-lib,
 // runs them through the same Node raster and text-layer paths the CLI and
-// MCP use, and scores each case: room areas (Dynamic Fill), symbol counts
+// MCP use, and scores each case: room areas (Magic Fill), symbol counts
 // (scan), and drawing scale (text layer).
 //
 // Every case states what it expects. A case marked `known` documents a gap a

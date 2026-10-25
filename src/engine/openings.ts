@@ -5,7 +5,7 @@
 // Why a separate pass: the click-exemplar scan (scan-cv.ts) matches isolated
 // repeated symbols, and door swing arcs are never isolated. The arc, the leaf
 // and the wall ink form one connected component, so there is no exemplar to
-// click. Dynamic Fill (dynamicfill.ts, fill-vector.ts) already finds door
+// click. Magic Fill (dynamicfill.ts, fill-vector.ts) already finds door
 // gaps between wall ends to close them; this module runs the same idea in
 // the other direction, finds every gap in the wall mask and classifies what
 // is drawn across it.

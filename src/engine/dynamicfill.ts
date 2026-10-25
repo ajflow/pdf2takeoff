@@ -1,4 +1,4 @@
-// Dynamic Fill: click inside a bounded region and get its area as a polygon.
+// Magic Fill: click inside a bounded region and get its area as a polygon.
 // Flood-fills the page raster from the click (ink acts as the boundary),
 // traces the filled region's outline, simplifies it, and returns PDF-space
 // points ready to become a normal area markup. Pure typed-array math.

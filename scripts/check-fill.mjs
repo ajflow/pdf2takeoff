@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Behavioural check for the gap-closing Dynamic Fill. Builds a 300x200
+// Behavioural check for the gap-closing Magic Fill. Builds a 300x200
 // raster: a room with a 25px door gap in its left wall, plus a fully sealed
 // room as the control case, then asserts: the gapped room bounds through the
 // gap with area within 12% of ideal, the sealed room is unchanged, and an

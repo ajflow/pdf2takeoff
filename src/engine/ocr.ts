@@ -195,7 +195,7 @@ const NOT_ROOM_NAMES = /^(dn|up|ffl|fl|rl|ssl|tos|tow|cl|eq|eq\.|typ\.?|typical|
  * "KITCHEN", "WC"): at least two letters, and not a scale note, a dimension
  * with a unit ("1200mm", "2.4 m"), a level ("RL 10.5") or a common
  * annotation word ("DN", "TYP."). One point per text item, so a two-word
- * label counts once. Dynamic Fill uses these to tell that a fill has merged
+ * label counts once. Magic Fill uses these to tell that a fill has merged
  * rooms; a finish note that slips through ("CARPET") can only split off a
  * room-sized part (see dynamicFill), never an alcove.
  */

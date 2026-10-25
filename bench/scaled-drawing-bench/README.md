@@ -138,7 +138,7 @@ Model-based systems should also state whether they saw the provenance field
 `reference` answers every question with the engine and nothing else:
 
 - scale: `findScaleRatio` over the text layer (vector) or tesseract.js OCR words (raster); failing that, the graphic scale bar (numbered ticks measured against their paper distance) or printed dimensions measured against their drawn dimension line, combined with `scale.ts` dimension votes and consensus;
-- area and perimeter: Dynamic Fill from a click beside the room label, with the label, scale and vector doorway-bridge hints the app passes;
+- area and perimeter: Magic Fill from a click beside the room label, with the label, scale and vector doorway-bridge hints the app passes;
 - length: filled wall rectangles from the vector layer; on rasters, ink runs on the page (the automated equivalent of clicking the two ends of a wall);
 - count: one click on the legend symbol through the scan tiers (vector match on born-digital sheets, tier-1 CV on rasters), legend instance excluded, hits inside the filled room for per-room counts;
 - dimension_read: the printed value nearest the named side of the filled room;
@@ -185,7 +185,7 @@ limits of the current raster path, in order of damage:
 
 - **Counts, 0 percent.** The tier-1 CV scan matches components by a 20 x 20 coverage signature with an L1 tolerance of 0.16, which only pixel-identical components pass; anti-aliased instances of the same 9 pt symbol at different sub-pixel offsets differ by more than that, so a legend click finds 1 to 3 of 8 to 21 instances even on a clean render. The ONNX detector tier is not reachable headless (ops.ts never calls it).
 - **Scale, 34 percent.** OCR (tesseract.js, as in the browser) reads ratio and imperial title-block notes on most sheets, but 7 pt scale-bar labels and dimension strings vanish under blur and speckle, so bar-only and dimension-only raster sheets mostly abstain. Every failure is an abstention, never a wrong ratio.
-- **Lengths, 17 percent, and areas, 26 percent.** Mostly downstream of a missing scale; skewed scans also defeat the row and column ink-run wall finder, and speckle breaks Dynamic Fill's wall closing.
+- **Lengths, 17 percent, and areas, 26 percent.** Mostly downstream of a missing scale; skewed scans also defeat the row and column ink-run wall finder, and speckle breaks Magic Fill's wall closing.
 - **Printed dimensions, 10 percent.** Small text under degradation, and west-side (vertical) text, which OCR does not read.
 - **Compare, F1 38 percent.** Pixel diffs between two independently degraded scans are mostly noise; symbol removals are still caught through re-scans.
 

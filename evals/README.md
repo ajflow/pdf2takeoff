@@ -43,7 +43,7 @@ and in the research notes under
   because raster scores are comparable only within one rendering stack; the
   vector half is pure geometry and reproduces byte-for-byte everywhere.
 - **The reference solver is our own engine** — text-layer reading, OCR, the
-  CV/ONNX scan tiers, Dynamic Fill for areas, the revision-diff path — with
+  CV/ONNX scan tiers, Magic Fill for areas, the revision-diff path — with
   no model download and no network beyond a one-time OCR language pack.
   Answers are stripped from the questions before solving; the solver sees
   only the sheet's identity, never the key.

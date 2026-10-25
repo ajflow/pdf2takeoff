@@ -5,7 +5,7 @@
 //                  (raster); else the graphic scale bar or printed dimensions
 //                  measured against their drawn length (scale.ts dimension
 //                  votes + consensus);
-//   area/perimeter Dynamic Fill (dynamicfill.ts) at the room label, with
+//   area/perimeter Magic Fill (dynamicfill.ts) at the room label, with
 //                  label, scale and vector doorway-bridge hints, as the app;
 //   length         vector-layer wall geometry (vector.ts), or ink-run
 //                  measurement on the page raster where there is no vector
@@ -757,7 +757,7 @@ async function answerQuestion(ctx, q) {
       const fill = await fillRoom(ctx, m[1]);
       if (!fill) return { answer: UNANS, note: 'room not filled' };
       const v = q.type === 'area' ? polyArea(fill.points) * ctx.mpp * ctx.mpp : polyPerimeter(fill.points) * ctx.mpp;
-      return { answer: round(fromMetres(v, q.unit)), note: `Dynamic Fill, ${fill.points.length} vertices` };
+      return { answer: round(fromMetres(v, q.unit)), note: `Magic Fill, ${fill.points.length} vertices` };
     }
     case 'count': {
       const cls = PLURAL_TO_CLASS.find(([re]) => re.test(text))?.[1];

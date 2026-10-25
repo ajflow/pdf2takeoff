@@ -222,9 +222,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 6-3 11H6L3 9z"/></svg>
           <span class="tip" aria-hidden="true">Area <kbd>A</kbd></span>
         </button>
-        <button class="tool" type="button" data-tool="fill" aria-label="Dynamic fill: click inside a room to read its area (D)">
+        <button class="tool" type="button" data-tool="fill" aria-label="Magic Fill: click inside a room to read its area (D)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 15l3-8 6 3 5-4-2 12-7 1z" fill="currentColor" fill-opacity="0.18"/></svg>
-          <span class="tip" aria-hidden="true">Fill a room <kbd>D</kbd></span>
+          <span class="tip" aria-hidden="true">Magic Fill <kbd>D</kbd></span>
         </button>
         <button class="tool" type="button" data-tool="perimeter" aria-label="Measure perimeter (P)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 5h14v14H5z" stroke-dasharray="0"/><path d="M5 5l4-2M19 5l2 4M19 19l-4 2M5 19l-2-4" opacity="0.55"/></svg>
@@ -568,7 +568,7 @@
                   <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="rgb(214 225 234)" stroke-width=".6"/></pattern>
                 </defs>
                 <rect width="760" height="400" fill="url(#grid)"/>
-                <!-- room fill (Dynamic Fill) -->
+                <!-- room fill (Magic Fill) -->
                 <g id="vgFill"><rect x="84" y="96" width="228" height="216" fill="rgb(14 165 160 / .13)" stroke="rgb(9 131 126)" stroke-width="2" stroke-dasharray="6 4"/></g>
                 <!-- walls -->
                 <path d="M80 92 H 600 V 316 H 80 Z" fill="none" stroke="rgb(16 36 58)" stroke-width="7"/>
@@ -664,7 +664,7 @@
           </div>
           <div class="features">
             <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 17h18M3 17v-3M21 17v-3M7.5 17v-2M12 17v-3M16.5 17v-2"/><path d="M5 9h6"/></svg><h3>Scale from the sheet</h3><p>Reads "SCALE 1:100" or a printed dimension, metric or imperial.</p></div>
-            <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 4l16 16" opacity=".4"/><path d="M8 4v16M4 12h16" opacity=".4"/></svg><h3>Room area in one click</h3><p>Dynamic Fill traces the walls and bridges door gaps.</p></div>
+            <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 4l16 16" opacity=".4"/><path d="M8 4v16M4 12h16" opacity=".4"/></svg><h3>Room area in one click</h3><p>Magic Fill traces the walls and bridges door gaps.</p></div>
             <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="17" r="2.5"/><circle cx="12" cy="12" r="2.5"/></svg><h3>Symbol scan</h3><p>Click one downlight; every match is counted in about a tenth of a second.</p></div>
             <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="12" height="14" rx="1"/><rect x="9" y="3" width="12" height="14" rx="1" opacity=".55"/></svg><h3>Revision compare</h3><p>Overlay revision A on B: removed in red, added in blue.</p></div>
             <div class="feature"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><h3>Excel, CSV and report</h3><p>A real .xlsx workbook, formula columns for waste and rates.</p></div>

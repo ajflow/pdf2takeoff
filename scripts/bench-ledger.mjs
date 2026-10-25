@@ -14,7 +14,7 @@
 //   3. FloorPlanCAD synthetic bench scripts/make-floorplancad-sample.py (seed 7, 3 drawings) ->
 //                                   scripts/floorplancad-convert.py --counts-only ->
 //                                   scripts/floorplancad-count-bench.mjs: exact rate, recall, stairs recall
-//   4. scripts/check-fill.mjs       Dynamic Fill behavioural check: cases, median area error
+//   4. scripts/check-fill.mjs       Magic Fill behavioural check: cases, median area error
 // Step 3 needs a Python with cairosvg: --python <bin> or PDF2TAKEOFF_PYTHON (default python3),
 // --cairosvg <bin> or CAIROSVG (default: next to the Python, else on PATH). Without them the
 // line records floorplancad: null and says why.

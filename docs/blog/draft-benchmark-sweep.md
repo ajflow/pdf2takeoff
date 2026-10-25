@@ -143,7 +143,7 @@ notice where a builder's OCR cannot read, instead of gating a deploy on a
 container that can't. That's the evals mindset turning inward: the tests
 themselves are claims, and claims get method.
 
-Second, the benchmark branch had to merge with a parallel Dynamic Fill
+Second, the benchmark branch had to merge with a parallel Magic Fill
 rewrite that shipped meanwhile — two engines that solved the same doorway
 problems differently. The merged suite (both sides' tests, unioned) is what
 runs in CI today: 23 of 24 fill cases, with the one open case — a diagonal

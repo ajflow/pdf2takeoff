@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render ResPlan floor plans to benchmark PDFs for Dynamic Fill.
+"""Render ResPlan floor plans to benchmark PDFs for Magic Fill.
 
 ResPlan (Abouagour and Garyfallidis, arXiv 2508.14006, CC BY 4.0) ships
 17,000 residential plans as shapely polygons (walls, doors, windows, rooms)

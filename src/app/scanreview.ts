@@ -19,6 +19,7 @@ import { renderMarkups, scanStyle } from './render';
 import { syncUpsertMarkup, syncDeleteMarkup } from './session';
 import { pdfToView, viewSize, isTypingTarget } from './viewer';
 import type { ScanHit } from '../engine/types';
+import { noteScanKept } from './nudge';
 
 type Provider = 'cv' | 'detector' | 'vector';
 
@@ -69,6 +70,7 @@ function close(): void {
 function keepAll(): void {
   for (const m of live()) if (!session!.doubtful.has(m.id)) update(m, 'confirmed');
   close();
+  noteScanKept();
 }
 
 function undo(): void {

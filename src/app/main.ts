@@ -1,7 +1,7 @@
-// Bootstrap: wire DOM, viewer, tools and table together.
+// The app: wires DOM, viewer, tools and table together. Loaded on demand by
+// boot.ts (the page's entry), which also owns the landing buttons, drag and
+// drop and paste, and calls openFiles / openSample / startDemo here.
 
-import './styles.css';
-import './flowstate.css';
 import { state, subscribe, emit } from './state';
 import { initViewer, loadPdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf } from './viewer';
 import { initTools, setTool, setStatusHint } from './tools';
@@ -112,7 +112,7 @@ async function openBytes(bytes: Uint8Array, name: string, notes: string[] = []):
 }
 
 /** Open one or more files: a PDF as it is, images and mixed sets as one document. */
-async function openFiles(files: File[]): Promise<void> {
+export async function openFiles(files: File[]): Promise<void> {
   if (!files.length) return;
   $('loading').classList.remove('hidden');
   try {
@@ -143,40 +143,12 @@ function showMessage(text: string): void {
 
 fileInput.accept = ACCEPT;
 fileInput.multiple = true;
-fileInput.addEventListener('change', () => {
-  const files = [...(fileInput.files ?? [])];
-  fileInput.value = '';
-  void openFiles(files);
-});
 
-// paste a screenshot or a copied image (not while typing in a field)
-window.addEventListener('paste', (e) => {
-  const t = e.target as HTMLElement | null;
-  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-  const files = [...(e.clipboardData?.files ?? [])];
-  if (!files.length) return;
-  e.preventDefault();
-  void openFiles(files);
-});
-
-// every "Open a drawing" button across the landing page and the app topbar
-for (const id of ['openBtn', 'openBtnHero', 'openBtnHeroMain', 'openBtnHeader', 'openBtnClose']) {
-  document.getElementById(id)?.addEventListener('click', () => fileInput.click());
-}
-
-async function openSample(): Promise<void> {
+export async function openSample(): Promise<void> {
   const resp = await fetch('examples/sample-floor-plan.pdf');
   const buf = await resp.arrayBuffer();
   await openBytes(new Uint8Array(buf), 'sample-floor-plan.pdf');
 }
-
-document.getElementById('sampleBtnHero')?.addEventListener('click', () => void openSample());
-document.getElementById('sampleBtnClose')?.addEventListener('click', () => void openSample());
-document.getElementById('scrollCue')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  document.getElementById('how')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
-});
 
 // ?file=/path.pdf — open a same-origin drawing on load (deep links, tests).
 // Cross-origin URLs are refused on purpose: the privacy promise is that no
@@ -200,14 +172,10 @@ void (async () => {
 
 // --- demo mode ---
 
-document.getElementById('demoBtnHero')?.addEventListener('click', () => {
+export function startDemo(): void {
   updateLanding(); // the demo opens a document: leave landing mode now
   void playDemo();
-});
-document.getElementById('demoBtn')?.addEventListener('click', () => {
-  updateLanding();
-  void playDemo();
-});
+}
 document.getElementById('demoXlsx')?.addEventListener('click', () => exportXlsx());
 document.getElementById('demoTry')?.addEventListener('click', () => {
   stopDemo();
@@ -228,24 +196,6 @@ function updateLanding(): void {
   const landing = !hasDoc() && !compareState.active && !document.body.classList.contains('demo');
   document.body.classList.toggle('landing', landing);
 }
-
-// drag & drop anywhere on the page (landing and app alike)
-for (const evt of ['dragover', 'dragenter'] as const) {
-  window.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropzone.classList.add('drag');
-  });
-}
-for (const evt of ['dragleave', 'drop'] as const) {
-  window.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('drag');
-  });
-}
-window.addEventListener('drop', (e) => {
-  const files = [...(e.dataTransfer?.files ?? [])];
-  if (files.length) void openFiles(files);
-});
 
 // --- toolbar ---
 
@@ -502,10 +452,3 @@ initWonder();
 setTool('pan');
 $('toolHint').textContent = 'Open a PDF drawing to begin, or drop one anywhere in this window';
 emit();
-
-// the homepage's dither moments are decoration: load them once the page is idle
-const loadHomeFx = (): void => {
-  if (document.body.classList.contains('landing')) void import('./fx/home').then((m) => m.initHome());
-};
-if ('requestIdleCallback' in window) requestIdleCallback(loadHomeFx, { timeout: 2500 });
-else setTimeout(loadHomeFx, 1200);

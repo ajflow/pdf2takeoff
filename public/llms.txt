@@ -36,6 +36,17 @@ Sample revision B: https://pdf2takeoff.com/examples/sample-floor-plan-rev-b.pdf
 Source code: https://github.com/ajflow/pdf2takeoff
 Made by Flowtivity (https://flowtivity.ai), Gold Coast, Australia
 
+## Pages
+
+- https://pdf2takeoff.com/measure-area-on-pdf: measure room areas, lengths and perimeters on a PDF drawing; Dynamic Fill reads a room's area from one click inside it
+- https://pdf2takeoff.com/set-scale-on-pdf-drawing: set a drawing's scale from a known dimension, a preset or the title block (OCR), and the scale chip that says whether to trust it; per-page scales and viewports
+- https://pdf2takeoff.com/free-bluebeam-alternative: a fair comparison with Bluebeam Revu for PDF takeoff: what pdf2takeoff covers, what it deliberately does not do, and how its markups open in Revu
+- https://pdf2takeoff.com/dxf-takeoff: takeoff from an ASCII DXF without AutoCAD, with the scale set from the file's $INSUNITS and blocks counted exactly; DWG needs exporting to DXF or PDF first
+- https://pdf2takeoff.com/takeoff-from-photos-and-scans: takeoff from images, scanned PDFs, iPhone HEIC photos, TIFF scans and screenshots, and the limits of measuring a phone photo
+- https://pdf2takeoff.com/takeoff-without-uploading-drawings: how drawings stay on your computer (no upload, no account, no telemetry, offline once loaded) and the one opt-in exception, the AI count
+- https://pdf2takeoff.com/takeoff-benchmarks: every published benchmark (AECV-Bench, AEC-Geometric-Bench, ScaledDrawingBench, ResPlan-FP) with its numbers, weaknesses and a link to its method
+- https://pdf2takeoff.com/mcp-server-construction-takeoff: the MCP server (15 tools) and CLI that let Claude, Cursor, Codex or any MCP client run a takeoff locally; run it from GitHub with npx github:ajflow/pdf2takeoff (it is not published to the npm registry)
+
 ## How to do a takeoff from a PDF
 
 1. Open the drawing (drag and drop any PDF).

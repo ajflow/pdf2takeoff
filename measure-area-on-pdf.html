@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Measure area on a PDF drawing, free | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="Measure room areas, lengths and perimeters on a PDF drawing for free in your browser. Set the scale, then click inside a room to read its area. Nothing uploads."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/measure-area-on-pdf" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="Measure area on a PDF drawing, free | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Set the scale once, click inside a room and read its area off the walls. Free, in your browser, nothing uploaded."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/measure-area-on-pdf" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to measure the area of a room on a PDF drawing for free",
+        "totalTime": "PT2M",
+        "dateModified": "2026-10-25",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
+        },
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff Dynamic Fill"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Open the drawing",
+            "text": "Drop a PDF floor plan into pdf2takeoff, or open an image or a DXF. It renders on your machine; nothing is uploaded."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Set the scale",
+            "text": "Press C, click both ends of a dimension you know and type its length, pick a preset such as 1:100, or click Auto-read from sheet to take the scale from the title block."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Click inside a room",
+            "text": "Press D and click anywhere inside the room. Dynamic Fill traces the walls, bridges the door gaps and shows the area on the drawing."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Trace what will not fill",
+            "text": "For a space that is not closed on every side, press A and click its corners, then double-click or press Enter to finish."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Add lengths and perimeters",
+            "text": "Press L for a length, in one or more segments, or P for a perimeter. Each measurement shows its value and joins the totals for its label."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Export",
+            "text": "Export to Excel or CSV, print the quantity report, or save the markups into the PDF to open in Bluebeam Revu or Acrobat."
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is measuring area on a PDF free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. pdf2takeoff is free and open source (Apache-2.0), with no account, no paid tier and no file limits."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need to set the scale before measuring area?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, for real-world units. Set it once per sheet from a known dimension, a preset or the title block. Angles and counts are the only measurements that work without a scale."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Dynamic Fill work on scanned drawings?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. It works on the rendered page, so scans fill too, and door gaps close from the door width the sheet shows when there is no scale or text layer. Heavy speckle or a skewed scan can break the wall outline; trace those rooms with the Area tool."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which wall face does the room area measure to?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Dynamic Fill measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I export the areas to Excel?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Export a real .xlsx workbook or a CSV with totals by label, or save the markups into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · files never uploaded</span>
+          <h1>Measure area on a PDF drawing, free, in your browser</h1>
+          <p class="lead">
+            You can measure the area of a room on a PDF drawing for free in your browser with pdf2takeoff: set the scale once, then <strong>click inside the room and Dynamic Fill reads its area off the walls</strong>, or trace the outline with the Area tool. Lengths and perimeters work the same way, totals group by label, and the drawing never leaves your computer.
+          </p>
+
+          <div class="fact-strip">
+            <span>Free, no account</span>
+            <span>Files never uploaded</span>
+            <span>Metric and imperial</span>
+            <span>Open source · Apache-2.0</span>
+          </div>
+
+          <div class="hero-actions"><a class="btn btn-primary" href="/">Measure a drawing now</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to measure area on a PDF</h2>
+            <ol>
+              <li><strong>Open the drawing.</strong> Drop a PDF floor plan into pdf2takeoff, or open an image or a DXF. It renders on your machine; nothing is uploaded.</li>
+              <li><strong>Set the scale.</strong> Press C, click both ends of a dimension you know and type its length, pick a preset such as 1:100, or click <em>Auto-read from sheet</em> to take the scale from the title block.</li>
+              <li><strong>Click inside a room.</strong> Press D and click anywhere inside the room. Dynamic Fill traces the walls, bridges the door gaps and shows the area on the drawing.</li>
+              <li><strong>Trace what will not fill.</strong> For a space that is not closed on every side, press A and click its corners, then double-click or press Enter to finish.</li>
+              <li><strong>Add lengths and perimeters.</strong> Press L for a length, in one or more segments, or P for a perimeter. Each measurement shows its value and joins the totals for its label.</li>
+              <li><strong>Export.</strong> Export to Excel or CSV, print the quantity report, or save the markups into the PDF to open in Bluebeam Revu or Acrobat.</li>
+            </ol>
+
+            <h2>How does Dynamic Fill find a room's area?</h2>
+            <p>Click inside a room and pdf2takeoff floods outward from that point until it meets the walls, then traces the boundary into an area markup, in about 150 ms. The area is the floor inside the wall lines, measured to their inside face.</p>
+            <p>Doorways are the hard part, because a gap in a wall lets the fill leak into the next room. pdf2takeoff closes door gaps using the calibrated scale, the room labels in the text layer, the drawing's vector linework or, on an uncalibrated scan with none of those, the door width the sheet itself shows. Wide openings into open-plan areas stay open on purpose.</p>
+
+            <h2>When should I trace an area by hand?</h2>
+            <p>Dynamic Fill needs a boundary to stop at. A lobby or open-plan zone that is not closed by lines on every side will not fill cleanly, and a diagonal doorway on a scan with no vector layer can still leak. For those, press <em>A</em> and click around the space. Every fill is an ordinary area markup, so you can drag its corners to adjust it, and Ctrl+Z puts back the shape from before the drag.</p>
+
+            <h2>What else can I measure?</h2>
+            <ul>
+              <li><strong>Length</strong> for walls, skirting and cable runs, in one or more segments.</li>
+              <li><strong>Perimeter</strong> of any closed shape, for edging and set-out.</li>
+              <li><strong>Volume</strong>: an area times a depth you type, for slabs and footings.</li>
+              <li><strong>Angle</strong>, which works before you set a scale, and <strong>count</strong>.</li>
+            </ul>
+            <p>Give each measurement a label, such as <em>Carpet</em> or <em>Wet area tiles</em>, and totals group by label across every sheet. Formula columns add waste factors or rates, such as <code>value * 1.1</code>, and carry into every export. Each page keeps its own scale, so a 1:100 plan and a 1:50 detail sheet measure correctly in one set: see <a class="textlink" href="/set-scale-on-pdf-drawing">how to set the scale on a PDF drawing</a>.</p>
+
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>Is measuring area on a PDF free?</summary>
+                <p>Yes. pdf2takeoff is free and open source (Apache-2.0), with no account, no paid tier and no file limits.</p>
+              </details>
+              <details>
+                <summary>Do I need to set the scale before measuring area?</summary>
+                <p>Yes, for real-world units. Set it once per sheet from a known dimension, a preset or the title block. Angles and counts are the only measurements that work without a scale.</p>
+              </details>
+              <details>
+                <summary>Does Dynamic Fill work on scanned drawings?</summary>
+                <p>Yes. It works on the rendered page, so scans fill too, and door gaps close from the door width the sheet shows when there is no scale or text layer. Heavy speckle or a skewed scan can break the wall outline; trace those rooms with the Area tool.</p>
+              </details>
+              <details>
+                <summary>Which wall face does the room area measure to?</summary>
+                <p>Dynamic Fill measures the floor inside the walls, to the inside face of the wall lines. If your measuring rules differ, for example to wall centrelines, trace the outline with the Area tool instead.</p>
+              </details>
+              <details>
+                <summary>Can I export the areas to Excel?</summary>
+                <p>Yes. Export a real .xlsx workbook or a CSV with totals by label, or save the markups into the PDF as standard annotations that open in Bluebeam Revu and Adobe Acrobat.</p>
+              </details>
+            </div>
+
+            <h2>Measure your first room</h2>
+            <p>Open your own floor plan, or try the sample drawing: two sheets at 1:100 and 1:50, ready to fill and measure.</p>
+            <div class="hero-actions"><a class="btn btn-primary" href="/">Open a drawing</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+
+            <h2>Related guides</h2>
+            <ul>
+              <li><a class="textlink" href="/set-scale-on-pdf-drawing">Set the scale on a PDF drawing</a>: presets, Auto-read and the check that tells you whether to trust it.</li>
+              <li><a class="textlink" href="/count-symbols-in-pdf-drawing">Count symbols in a PDF drawing</a>: one click counts every downlight or power point on a sheet.</li>
+              <li><a class="textlink" href="/takeoff-from-photos-and-scans">Takeoff from photos and scans</a>: images, scanned PDFs, phone photos and screenshots.</li>
+              <li><a class="textlink" href="/">pdf2takeoff home</a>: free construction takeoff software that runs in your browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

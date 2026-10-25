@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Takeoff without uploading drawings | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="Do a construction takeoff without uploading your drawings. pdf2takeoff runs in your browser on your own computer: no account, no telemetry, works offline."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/takeoff-without-uploading-drawings" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="Takeoff without uploading your drawings | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Every PDF, scan and DXF is processed on your own computer. No account, no telemetry, and it works offline once loaded."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/takeoff-without-uploading-drawings" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to do a construction takeoff without uploading your drawings",
+        "totalTime": "PT2M",
+        "dateModified": "2026-10-25",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
+        },
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Load pdf2takeoff",
+            "text": "Open pdf2takeoff.com in any modern browser. There is nothing to sign up for or install."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Open the drawing from your disk",
+            "text": "Choose or drop a PDF, image or DXF. The browser reads it locally; it is not sent to any server."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Take off",
+            "text": "Set the scale, then measure, count and compare. All of the processing happens in the browser tab on your computer."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Export to your own disk",
+            "text": "Download Excel, CSV or the annotated PDF, or print the quantity report. Files are written straight to your computer."
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Are my drawings uploaded anywhere?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. pdf2takeoff runs in your browser and processes the PDF on your computer. It works offline once loaded. The only exception is the optional AI count, which sends a page image to the model provider you choose, and only when you ask it to."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does pdf2takeoff work offline?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, once the page has loaded. Auto-read and the ML detector download their data the first time you use them, so use them once while online if you plan to work offline."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need an account?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. There is no sign-up, no login and no paid tier."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is there tracking or telemetry?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. pdf2takeoff has no telemetry and does not track your drawings or what you measure."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can we host pdf2takeoff ourselves?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. It is open source (Apache-2.0) and builds to a static site that any web server can host, including one inside your own network."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it suitable for confidential tender drawings?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The drawings never leave your computer and no third party holds them, so it suits confidential tender documents."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · private by design</span>
+          <h1>Takeoff without uploading your drawings</h1>
+          <p class="lead">
+            You can do a construction takeoff without uploading your drawings with pdf2takeoff: it runs in your browser and <strong>processes every PDF, scan and DXF on your own computer</strong>, so the files never leave your machine. There is no account and no telemetry, and once the page has loaded it keeps working offline.
+          </p>
+
+          <div class="fact-strip">
+            <span>Nothing uploaded</span>
+            <span>No account</span>
+            <span>No telemetry</span>
+            <span>Works offline once loaded</span>
+          </div>
+
+          <div class="hero-actions"><a class="btn btn-primary" href="/">Start a private takeoff</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to take off without uploading</h2>
+            <ol>
+              <li><strong>Load pdf2takeoff.</strong> Open pdf2takeoff.com in any modern browser. There is nothing to sign up for or install.</li>
+              <li><strong>Open the drawing from your disk.</strong> Choose or drop a PDF, image or DXF. The browser reads it locally; it is not sent to any server.</li>
+              <li><strong>Take off.</strong> Set the scale, then measure, count and compare. All of the processing happens in the browser tab on your computer.</li>
+              <li><strong>Export to your own disk.</strong> Download Excel, CSV or the annotated PDF, or print the quantity report. Files are written straight to your computer.</li>
+            </ol>
+
+            <h2>What happens to my drawing?</h2>
+            <p>pdf2takeoff is a static website with no backend: there is no server-side processing to send a drawing to. The PDF is rendered by PDF.js inside your browser tab, measuring, scanning and comparing run in the same tab, and exports download straight to your disk. Your markups and calibrations autosave in your browser's own storage, keyed by the file's fingerprint, so a refresh brings the takeoff back; the drawing itself is never stored. Live sessions share a takeoff between tabs and windows on the same computer, not over the internet.</p>
+
+            <h2>Does it download anything?</h2>
+            <p>A few features fetch code or data the first time you use them, then cache it. These are downloads to your computer, not uploads of your drawing: the OCR language pack for Auto-read (about 4 MB) and, for the ML symbol detector, the ONNX runtime (about 4 MB) and the model itself (about 76 MB, from GitHub). The HEIC decoder loads only when you open an iPhone photo. Offline, Scan falls back to its computer-vision pass if the model is not cached, and Auto-read needs its language pack, so use it once while online.</p>
+
+            <h2>Is there any exception?</h2>
+            <p>One, and you have to ask for it. The optional AI count sends one rendered page image to the AI model provider you choose (OpenRouter, OpenAI, Gemini or Z.ai), with your own key, and only when you run it. It is available from the command line today. Point it at a local model through Ollama or LM Studio and nothing leaves the machine at all. If you connect an AI agent to the <a class="textlink" href="/mcp-server-construction-takeoff">pdf2takeoff MCP server</a>, the server runs locally, but the agent sends what it reads, such as page images, to its own model provider, as any agent does.</p>
+
+            <h2>How is this different from cloud takeoff tools?</h2>
+            <p>Many takeoff tools are cloud services: you upload the plan set to the vendor's servers to work on it. That suits some teams, but it puts the drawings outside your control, and some tender documents come with confidentiality terms that make uploading awkward. With pdf2takeoff no third party ever holds the files: they stay where they are. The code is open source under Apache-2.0, so your IT team can read exactly what it does, or host its own copy on an internal web server.</p>
+
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>Are my drawings uploaded anywhere?</summary>
+                <p>No. pdf2takeoff runs in your browser and processes the PDF on your computer. It works offline once loaded. The only exception is the optional AI count, which sends a page image to the model provider you choose, and only when you ask it to.</p>
+              </details>
+              <details>
+                <summary>Does pdf2takeoff work offline?</summary>
+                <p>Yes, once the page has loaded. Auto-read and the ML detector download their data the first time you use them, so use them once while online if you plan to work offline.</p>
+              </details>
+              <details>
+                <summary>Do I need an account?</summary>
+                <p>No. There is no sign-up, no login and no paid tier.</p>
+              </details>
+              <details>
+                <summary>Is there tracking or telemetry?</summary>
+                <p>No. pdf2takeoff has no telemetry and does not track your drawings or what you measure.</p>
+              </details>
+              <details>
+                <summary>Can we host pdf2takeoff ourselves?</summary>
+                <p>Yes. It is open source (Apache-2.0) and builds to a static site that any web server can host, including one inside your own network.</p>
+              </details>
+              <details>
+                <summary>Is it suitable for confidential tender drawings?</summary>
+                <p>Yes. The drawings never leave your computer and no third party holds them, so it suits confidential tender documents.</p>
+              </details>
+            </div>
+
+            <h2>Start a private takeoff</h2>
+            <p>Open a drawing from your own disk; nothing will be uploaded. Or try the sample drawing first.</p>
+            <div class="hero-actions"><a class="btn btn-primary" href="/">Open a drawing</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+
+            <h2>Related guides</h2>
+            <ul>
+              <li><a class="textlink" href="/free-bluebeam-alternative">A free Bluebeam Revu alternative</a>: what pdf2takeoff covers, and what it leaves out.</li>
+              <li><a class="textlink" href="/mcp-server-construction-takeoff">MCP server for construction takeoff</a>: let Claude, Cursor or Codex run the takeoff for you to review.</li>
+              <li><a class="textlink" href="/takeoff-from-photos-and-scans">Takeoff from photos and scans</a>: images, scanned PDFs, phone photos and screenshots.</li>
+              <li><a class="textlink" href="/">pdf2takeoff home</a>: free construction takeoff software that runs in your browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Takeoff benchmarks: how accurate is pdf2takeoff?</title>
+    <meta
+      name="description"
+      content="Every pdf2takeoff benchmark with its numbers and method: AECV-Bench, AEC-Geometric-Bench, ScaledDrawingBench and ResPlan-FP, weak results included."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/takeoff-benchmarks" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="How accurate is pdf2takeoff? Benchmarks" />
+    <meta
+      property="og:description"
+      content="Four benchmarks, three of them external. Every number links to its method, and the weak results are published with the strong ones."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/takeoff-benchmarks" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to reproduce the pdf2takeoff benchmark results",
+        "dateModified": "2026-10-25",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
+        },
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff benchmark harnesses"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Get the code",
+            "text": "Clone github.com/ajflow/pdf2takeoff and run npm install (Node 22.13 or later)."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Rebuild ScaledDrawingBench",
+            "text": "Run npm run bench:scaled -- generate to rebuild the 200 sheets from a fixed seed."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Score the engine",
+            "text": "Run npm run bench:scaled -- reference --set bench/scaled-drawing-bench/v0.1 to answer and score every question."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Run the external benchmarks",
+            "text": "Fetch each external dataset from its publisher and follow its method page, which names the harness and settings."
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How accurate is pdf2takeoff?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On PDFs exported from CAD, very: 99.8% on our ScaledDrawingBench. On degraded scans, 37.3%. Counting doors, windows and rooms is harder: 0.295 exact match for the engine alone, and 0.585 with an opt-in AI model."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can AI do a takeoff on its own?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Not reliably. The best published model gets 54.3% of floor plan counts exactly right on AECV-Bench. pdf2takeoff uses AI to propose items that a person confirms."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is the AI count score down to pdf2takeoff or the model?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Mostly the model. GPT-6.1 Sol scores 0.572 on the benchmark’s own prompt and 0.585 through pdf2takeoff, and that gap is within the margin of error."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why publish the weak results?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Because estimators need to know where to check, and a page that only shows wins cannot tell you when to trust a number."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Open methods · weak results included</span>
+          <h1>How accurate is pdf2takeoff? Every benchmark, published</h1>
+          <p class="lead">
+            pdf2takeoff is accurate at measuring from PDFs exported from CAD (99.8% on our ScaledDrawingBench) and much weaker on degraded scans (37.3%) and on counting doors, windows and rooms without an AI model. We test it on four benchmarks, three external, and publish every number with its method, <strong>including where it falls short</strong>.
+          </p>
+
+          <div class="fact-strip">
+            <span>4 benchmarks, 3 external</span>
+            <span>Methods linked</span>
+            <span>Weak results included</span>
+            <span>Updated 25 October 2026</span>
+          </div>
+
+          <div class="hero-actions"><a class="btn btn-primary" href="/">Test it on your drawing</a><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/evals/README.md">Read the methods on GitHub</a></div>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>Every benchmark at a glance</h2>
+            <div class="table-wrap">
+              <table class="bench">
+                <thead><tr><th>Benchmark</th><th>What it tests</th><th>pdf2takeoff</th><th>For comparison</th></tr></thead>
+                <tbody>
+                  <tr><td><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/docs/research/benchmarks/aecv-bench.md">AECV-Bench</a></td><td>Counting doors, windows and rooms on 120 floor plans (five-field exact match)</td><td><b>0.295</b><span class="muted">engine alone, no AI model</span><b>0.585</b><span class="muted">with the opt-in AI count on GPT-6.1 Sol</span></td><td><b>0.572</b><span class="muted">same model, the benchmark's own prompt</span><b>0.543</b><span class="muted">best published model</span></td></tr>
+                  <tr><td><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/docs/research/benchmarks/aec-geometric-bench.md">AEC-Geometric-Bench</a></td><td>Finding walls on 15 construction sheets (wall pixel F1)</td><td><b>0.519</b><span class="muted">no AI model, laptop CPU</span></td><td><b>0.287</b><span class="muted">best general AI model</span><b>0.931</b><span class="muted">a production pipeline built for these sheets</span></td></tr>
+                  <tr><td><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/bench/scaled-drawing-bench/README.md">ScaledDrawingBench</a> (ours)</td><td>Scale, length, area, count and revision questions on 200 sheets</td><td><b>99.8%</b><span class="muted">PDFs exported from CAD</span><b>37.3%</b><span class="muted">degraded scans</span><b>0 of 92</b><span class="muted">unanswerable questions answered anyway</span></td><td><span class="muted">No outside scores yet</span></td></tr>
+                  <tr><td><a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/docs/research/benchmarks/resplan-fp.md">ResPlan-FP</a></td><td>Wall geometry on the 1,000-plan test split (wall F1)</td><td><b>0.635</b><span class="muted">engine alone, no model</span></td><td><b>0.968</b><span class="muted">model fine-tuned for this dataset</span><b>0.811</b><span class="muted">Gemini 3.1 Pro, 200-plan subset</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h2>How to check these numbers yourself</h2>
+            <ol>
+              <li><strong>Get the code.</strong> Clone github.com/ajflow/pdf2takeoff and run npm install (Node 22.13 or later).</li>
+              <li><strong>Rebuild ScaledDrawingBench.</strong> Run npm run bench:scaled -- generate to rebuild the 200 sheets from a fixed seed.</li>
+              <li><strong>Score the engine.</strong> Run npm run bench:scaled -- reference --set bench/scaled-drawing-bench/v0.1 to answer and score every question.</li>
+              <li><strong>Run the external benchmarks.</strong> Fetch each external dataset from its publisher and follow its method page, which names the harness and settings.</li>
+            </ol>
+
+            <h2>AECV-Bench: can it count doors, windows and rooms?</h2>
+            <p>With no vision model, the engine scores 0.295 five-field exact match: bedrooms are right 71% of the time, but doors and windows only about 11%. With the opt-in AI count on GPT-6.1 Sol it scores 0.585, against 0.572 for the same model on the benchmark's own prompt and 0.543 for the best published model. Most of that gain is the model, not pdf2takeoff. pdf2takeoff adds checkability: each count arrives as items on the drawing for a person to confirm, and when repeated runs disagree, the count is right only 25% of the time, against 75% when they agree.</p>
+
+            <h2>AEC-Geometric-Bench: can it find walls?</h2>
+            <p>On 15 construction sheets the engine finds walls with a pixel F1 of 0.519, about 1.8 times the best general AI model (0.287), with no clicks. A production pipeline built for these sheets scores 0.931, and our object score is poor (F1 0.031): the door finder over-fires on real drawings, and fixtures are not attempted.</p>
+
+            <h2>ScaledDrawingBench: can it measure from a scaled drawing?</h2>
+            <p>No public benchmark tested measuring from a scaled drawing, so we built one and released it openly under CC BY 4.0: 200 synthetic sheets, half CAD-exported PDFs and half degraded scans, with about 2,000 questions. The engine scores 99.8% on the CAD half and 37.3% on the scans, where blur hurts most. On 92 questions with no valid answer it answered none: without a readable scale it abstains. It is synthetic and we wrote it, so it is not independent proof.</p>
+
+            <h2>ResPlan-FP: how does it compare with trained models?</h2>
+            <p>On the 1,000-plan test split of clean residential plans, the engine scores a wall F1 of 0.635. A model fine-tuned for this dataset scores 0.968, and Gemini 3.1 Pro 0.811 on a 200-plan subset, where we score 0.647. That is a published gap, not a lead.</p>
+
+            <h2>Data and licensing</h2>
+            <p>We publish numbers, predictions and harnesses, never images we have no right to share. AECV-Bench has no licence and most of its plans derive from CubiCasa5K (CC BY-NC 4.0), so we run it locally and publish scores and predicted counts only. The harnesses and our predictions are in the repository: see the <a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/evals/README.md">evals guide</a> and the <a class="textlink" href="https://github.com/ajflow/pdf2takeoff/blob/main/bench/scaled-drawing-bench/results/pdf2takeoff-stabilized.md">full ScaledDrawingBench results</a>.</p>
+
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>How accurate is pdf2takeoff?</summary>
+                <p>On PDFs exported from CAD, very: 99.8% on our ScaledDrawingBench. On degraded scans, 37.3%. Counting doors, windows and rooms is harder: 0.295 exact match for the engine alone, and 0.585 with an opt-in AI model.</p>
+              </details>
+              <details>
+                <summary>Can AI do a takeoff on its own?</summary>
+                <p>Not reliably. The best published model gets 54.3% of floor plan counts exactly right on AECV-Bench. pdf2takeoff uses AI to propose items that a person confirms.</p>
+              </details>
+              <details>
+                <summary>Is the AI count score down to pdf2takeoff or the model?</summary>
+                <p>Mostly the model. GPT-6.1 Sol scores 0.572 on the benchmark’s own prompt and 0.585 through pdf2takeoff, and that gap is within the margin of error.</p>
+              </details>
+              <details>
+                <summary>Why publish the weak results?</summary>
+                <p>Because estimators need to know where to check, and a page that only shows wins cannot tell you when to trust a number.</p>
+              </details>
+            </div>
+
+            <h2>See how it does on your drawings</h2>
+            <p>Benchmarks are averages: trust the engine on CAD-exported PDFs, and check it on scans and counts.</p>
+            <div class="hero-actions"><a class="btn btn-primary" href="/">Open a drawing</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+
+            <h2>Related guides</h2>
+            <ul>
+              <li><a class="textlink" href="/takeoff-from-photos-and-scans">Takeoff from photos and scans</a>: images, scanned PDFs, phone photos and screenshots.</li>
+              <li><a class="textlink" href="/mcp-server-construction-takeoff">MCP server for construction takeoff</a>: let Claude, Cursor or Codex run the takeoff for you to review.</li>
+              <li><a class="textlink" href="/set-scale-on-pdf-drawing">Set the scale on a PDF drawing</a>: presets, Auto-read and the check that tells you whether to trust it.</li>
+              <li><a class="textlink" href="/">pdf2takeoff home</a>: free construction takeoff software that runs in your browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

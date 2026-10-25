@@ -1,6 +1,6 @@
 # Room-area benchmark (ResPlan)
 
-Scores Dynamic Fill (`src/engine/dynamicfill.ts`) on real floor-plan geometry:
+Scores Magic Fill (`src/engine/dynamicfill.ts`) on real floor-plan geometry:
 200 ResPlan plans rendered to clean vector PDFs, one click per room, ground
 truth from the dataset's room polygons. Background, conventions and results:
 [docs/research/benchmarks/room-area-datasets.md](../../docs/research/benchmarks/room-area-datasets.md).

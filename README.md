@@ -21,7 +21,7 @@ It is free: no account, no file limits and no paid tier. Processing is local: dr
 - **Opens the files you're sent**: PDFs, including scanned PDFs (CCITT fax, JBIG2 and JPEG 2000 images); PNG, JPEG, HEIC (iPhone photos), TIFF (multi-page, Group 4 scans included), WebP, GIF, BMP, AVIF and SVG images; pasted screenshots; and several files at once as one set.
 - **CAD drawings (DXF)**: an ASCII DXF opens as a vector page with its scale already set from the file's units, and Scan counts its blocks exactly. For DWG, export a DXF or PDF first.
 - **Scale you can check**: pick a preset, click a known dimension, or let OCR read the title-block scale or a printed dimension off the sheet. A scale chip shows whether the current scale can be trusted.
-- **Measure**: length, area, perimeter, volume, angle and count. Dynamic Fill reads a room's area off the walls with one click inside it.
+- **Measure**: length, area, perimeter, volume, angle and count. Magic Fill reads a room's area off the walls with one click inside it.
 - **Scan (auto-count symbols)**: click one symbol and every match on the page is counted in about 100 ms by local computer vision, with an optional in-browser ONNX detector for cluttered sheets. Results arrive review-first (Keep all, Review, Undo), and doubtful hits stay flagged for a person to check.
 - **Bluebeam and Acrobat round-trip**: save markups into the PDF as standard annotations; reopen the file and the takeoff comes back.
 - **Export and organise**: CSV, Excel (.xlsx) and a printable quantity report; custom formula columns (waste factors, rates), statuses and layers.
@@ -84,7 +84,7 @@ Everything regenerates from this repo with one command per table; see
 - **Markups list**: rename labels, jump to page, delete; flag / confirm statuses that round-trip through the PDF; filter by status, search by label, sort; one-click Clear; export CSV, a real Excel workbook (.xlsx), or copy straight into a spreadsheet
 - **Printable report**: one click builds a print-ready quantity report: every marked sheet re-rendered with its markup overlay, per-sheet quantity tables, and group totals; print or save as PDF from the browser
 - **Editing**: drag whole markups or individual vertices with live value updates; Ctrl+Z restores the pre-drag geometry; calibrate once and apply the scale to every page in the set
-- **Dynamic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace). Doorways between wall ends close automatically: from the calibrated scale, from room labels in the text layer, from the vector layer (any angle), or, on an uncalibrated scan with none of those, from the door width the sheet itself shows. Wide open-plan openings stay open; a diagonal door on a scan with no vector layer can still leak
+- **Magic Fill**: click inside a room to read its area off the walls (flood fill + boundary trace). Doorways between wall ends close automatically: from the calibrated scale, from room labels in the text layer, from the vector layer (any angle), or, on an uncalibrated scan with none of those, from the door width the sheet itself shows. Wide open-plan openings stay open; a diagonal door on a scan with no vector layer can still leak
 - **Custom columns**: formula columns over quantities (waste factors, rates) in totals and every export; `value * 1.1` style, no code
 - **Notes**: pin a note anywhere (T); round-trips through the PDF
 - **Layers**: place per trade and hide layers while measuring the next; layer names ride inside the PDF
@@ -113,7 +113,7 @@ npm run sample     # regenerate public/examples/sample-floor-plan.pdf
 npm run bench      # takeoff accuracy bench on synthetic sheets (rooms, counts, scales)
 ```
 
-`npm run bench:rooms -- --dir <folder>` scores Dynamic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)). `npm run bench:ledger` runs the fast benches and appends their headline numbers, with the commit, to [bench/results/ledger.jsonl](bench/results/README.md) (`--compare` prints the delta against the previous run).
+`npm run bench:rooms -- --dir <folder>` scores Magic Fill room areas against the ResPlan floor-plan dataset (setup in [scripts/bench/README.md](scripts/bench/README.md)). `npm run bench:ledger` runs the fast benches and appends their headline numbers, with the commit, to [bench/results/ledger.jsonl](bench/results/README.md) (`--compare` prints the delta against the previous run).
 
 Deploy `dist/` to any static host. Cloudflare Pages is the reference target (`public/_headers` is included).
 

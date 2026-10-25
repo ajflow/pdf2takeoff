@@ -21,7 +21,7 @@ const TOOLS: [ToolId, string, string][] = [
   ['viewport', 'Viewport (a region at another scale)', 'W'],
   ['length', 'Length', 'L'],
   ['area', 'Area', 'A'],
-  ['fill', 'Fill a room', 'D'],
+  ['fill', 'Magic Fill (click inside a room)', 'D'],
   ['perimeter', 'Perimeter', 'P'],
   ['volume', 'Volume', 'O'],
   ['angle', 'Angle', 'G'],

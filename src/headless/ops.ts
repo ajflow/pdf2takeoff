@@ -213,7 +213,7 @@ function wordBox(raster: RasterPage, wd: OcrWord & { angleDeg?: number }): NonNu
 }
 
 /**
- * Everything Dynamic Fill takes from a sheet besides the click point: room
+ * Everything Magic Fill takes from a sheet besides the click point: room
  * label centres and word boxes from the text layer (the glyphs inside the
  * boxes are masked out of the fill boundary, so a label or dimension
  * string touching a wall makes no false neck), vector doorway bridges, the
@@ -383,7 +383,7 @@ function polyAreaPt2(points: Pt[]): number {
 /**
  * Re-run the pdf2takeoff markups saved in revision A on revision B: each
  * counted symbol type is re-scanned on B from its first instance, each area
- * is re-filled on B from a point inside it (Dynamic Fill with labels, vector
+ * is re-filled on B from a point inside it (Magic Fill with labels, vector
  * doorway bridges and the sheet's printed scale, so doorways close as they
  * did in A). Lengths and other drawn measures can't be re-derived from a
  * point, so they are listed as not re-measured.

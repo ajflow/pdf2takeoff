@@ -8,7 +8,7 @@
 // thin lines only bridge to another wall end, so a bench or fixture line
 // never gets closed onto a wall (the same rule as the raster gate).
 //
-// Dynamic Fill draws these bridges into its ink mask (FillHints.bridges).
+// Magic Fill draws these bridges into its ink mask (FillHints.bridges).
 
 import type { VecPage, VecSeg } from './vector.ts';
 

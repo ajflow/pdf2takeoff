@@ -339,7 +339,7 @@ export async function runMcpServer(): Promise<void> {
     'fill_area',
     {
       description:
-        'Measure a room by clicking inside it (Dynamic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value), room labels from the text layer and the vector layer to stop at doorways; on an uncalibrated sheet with none of those, the door width the sheet itself shows (its clustered wall-end gaps) is used and reported. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
+        'Measure a room by clicking inside it (Magic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value), room labels from the text layer and the vector layer to stop at doorways; on an uncalibrated sheet with none of those, the door width the sheet itself shows (its clustered wall-end gaps) is used and reported. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -380,7 +380,7 @@ export async function runMcpServer(): Promise<void> {
         calibrated: !!cal,
         vertices: result.points.length,
         provenance: {
-          method: 'dynamic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces; gapClosed* present only when a closed gap formed part of this room\'s boundary',
+          method: 'magic fill: flood fill from the point, gaps closed only between wall ends; boundary runs along the inner wall faces; gapClosed* present only when a closed gap formed part of this room\'s boundary',
           page,
           scale: scaleProvenance(cal),
           bbox: bboxOf(result.points),

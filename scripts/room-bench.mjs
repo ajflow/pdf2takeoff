@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Room-area bench for Dynamic Fill on rendered floor-plan datasets.
+// Room-area bench for Magic Fill on rendered floor-plan datasets.
 //
 // Takes a folder written by scripts/bench/resplan_to_pdf.py (`<id>_<variant>.pdf`
 // plus `<id>_tasks.json`), runs dynamicFill at every room's click point through

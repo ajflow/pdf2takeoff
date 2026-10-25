@@ -19,7 +19,7 @@ The short version, against Bluebeam's own tiers (AU$451–979 per user/year):
 - **Every Core-tier feature** — perimeter, volume, angle, per-page scales,
   multi-scale viewports, overlay compare
 - **Most of Complete** — batch compare across revision folders, OCR scale
-  auto-read, formula columns (waste factors, rates), Dynamic Fill, sets /
+  auto-read, formula columns (waste factors, rates), Magic Fill, sets /
   slip-sheeting, quantity diffing between revisions
 - **And the thing they charge the most for**: their new Max tier (AU$979) is
   built around an MCP integration for AI agents. We ship one free — eleven
@@ -116,7 +116,7 @@ generations behind the fixes they were supposed to verify. On fresh tabs,
 every operation synced both directions. Lesson: when a bug refuses to
 reproduce in isolation, suspect the test harness before the code.
 
-### Dynamic Fill leaked through doors (and we said so)
+### Magic Fill leaked through doors (and we said so)
 
 Click inside a room, flood-fill to the walls, read the area — it works in
 ~150 ms and creates a normal editable polygon. But floor-plan walls have

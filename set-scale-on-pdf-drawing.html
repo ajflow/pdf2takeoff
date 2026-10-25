@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Set the scale on a PDF drawing, free | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="Set the scale of a PDF drawing from a known dimension, a preset such as 1:100, or the title block read by OCR. A scale chip shows whether to trust it. Free."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/set-scale-on-pdf-drawing" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="Set the scale on a PDF drawing | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Calibrate from a dimension, a preset or the title block, then see at a glance whether the scale checks out."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/set-scale-on-pdf-drawing" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to set the scale of a PDF drawing",
+        "totalTime": "PT1M",
+        "dateModified": "2026-10-25",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
+        },
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff scale calibration"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Open the drawing",
+            "text": "Drop the PDF into pdf2takeoff. It renders on your machine; nothing is uploaded."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Click a known dimension",
+            "text": "Press C and click both ends of a long printed dimension or a length you know, such as a 6000 mm wall."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Enter the length, a preset or Auto-read",
+            "text": "Type the real length in mm, cm, m, in or ft, pick a standard scale from the list, or click Auto-read from sheet to read the printed dimension or the title-block scale."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Choose one page or the whole set",
+            "text": "Leave Apply this scale to every page in the set ticked for a uniform set, or untick it so this sheet keeps its own scale."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Check the scale chip",
+            "text": "The chip in the top bar shows the scale and where it came from. A tick means it matches the title block or the doors measure like doors; check scale means something disagrees."
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is the most accurate way to calibrate a PDF drawing?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Click the longest dimension you can find, end to end, and zoom in for the clicks: a small slip matters less over a long distance."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use a printed ratio like 1:100 on a scan or image?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Only when the scan states its resolution (300 dpi, for example), because a ratio needs the paper size. Most photos and screenshots do not, so pdf2takeoff refuses the preset rather than give wrong lengths, and you calibrate from a dimension instead."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What if the sheet was printed at a different size?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Calibrating from a dimension gives correct lengths whatever the print size. If the title block says 1:100 but the page is an A3 print of an A1 drawing, the chip shows check scale and names the likely cause, so trust the dimension, not the printed ratio."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do DXF files need calibrating?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. A DXF opens at a standard scale worked out from its own units, and the chip says from drawing units. If the file does not state its units, pdf2takeoff estimates them from the drawing size and asks you to check a known dimension."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · files never uploaded</span>
+          <h1>Set the scale on a PDF drawing, and know you can trust it</h1>
+          <p class="lead">
+            You set the scale of a PDF drawing in pdf2takeoff by clicking both ends of a dimension you know and typing its length, by picking a standard scale such as 1:100, or by letting it <strong>read the scale straight off the title block</strong>. It then checks your scale against the sheet and shows whether to trust it. Free, in your browser, with nothing uploaded.
+          </p>
+
+          <div class="fact-strip">
+            <span>Free, no account</span>
+            <span>Metric and imperial presets</span>
+            <span>OCR runs on your machine</span>
+            <span>A scale for every page</span>
+          </div>
+
+          <div class="hero-actions"><a class="btn btn-primary" href="/">Set a scale now</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to set the scale of a PDF drawing</h2>
+            <ol>
+              <li><strong>Open the drawing.</strong> Drop the PDF into pdf2takeoff. It renders on your machine; nothing is uploaded.</li>
+              <li><strong>Click a known dimension.</strong> Press C and click both ends of a long printed dimension or a length you know, such as a 6000 mm wall.</li>
+              <li><strong>Enter the length, a preset or Auto-read.</strong> Type the real length in mm, cm, m, in or ft, pick a standard scale from the list, or click <em>Auto-read from sheet</em> to read the printed dimension or the title-block scale.</li>
+              <li><strong>Choose one page or the whole set.</strong> Leave <em>Apply this scale to every page in the set</em> ticked for a uniform set, or untick it so this sheet keeps its own scale.</li>
+              <li><strong>Check the scale chip.</strong> The chip in the top bar shows the scale and where it came from. A tick means it matches the title block or the doors measure like doors; <em>check scale</em> means something disagrees.</li>
+            </ol>
+
+            <h2>Which scales are built in?</h2>
+            <p>Metric 1:50, 1:100, 1:200 and 1:500; imperial architectural 1/16″, 1/8″ and 1/4″ = 1′-0″; and engineering 1″ = 10′, 20′ and 30′. Anything else: calibrate from a dimension. A preset is only right at the paper size the drawing was made for, so a dimension is safer when a sheet may have been printed smaller.</p>
+
+            <h2>How does Auto-read work?</h2>
+            <p>Auto-read uses on-device OCR. If you have clicked a dimension, it reads the number printed beside it (for example <em>12.00</em>) and fills in the length for you to check before you apply it. If not, it looks for the scale note, such as <em>SCALE 1:100</em>, and applies that ratio. The first use downloads the OCR language pack (about 4 MB, then cached); the drawing itself never leaves your machine.</p>
+
+            <h2>How do I know the scale is right?</h2>
+            <p>Many takeoff errors start with a wrong scale. After you calibrate from a dimension, pdf2takeoff checks your scale against the sheet, and the chip in the top bar shows the result:</p>
+            <ul>
+              <li><strong>matches title block</strong>: your scale agrees with the scale printed on the sheet.</li>
+              <li><strong>doors check out</strong>: there is no printed scale to compare with, but the sheet's doorways come out door-sized at your scale.</li>
+              <li><strong>check scale</strong>: something disagrees. The message says by how much and names the likely slip: a sheet printed at reduced size, millimetres read as metres, inches as feet, or a dimension like 1200 misread as 1:200.</li>
+            </ul>
+            <p>Without a check, the chip says where the scale came from: <em>from title block</em>, <em>from a dimension</em>, <em>set by hand</em> or, for a DXF, <em>from drawing units</em>.</p>
+
+            <h2>Can one sheet have more than one scale?</h2>
+            <p>Yes. Every page keeps its own scale, so a set with a 1:100 plan and a 1:50 detail sheet measures correctly. When a detail drawn at another scale sits on the same sheet, press <em>W</em>, outline it as a viewport and pick its scale: measurements inside the region resolve to that scale automatically. The same 100 pt line reads 1.76 m inside a 1:50 viewport and 3.53 m at 1:100.</p>
+
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>What is the most accurate way to calibrate a PDF drawing?</summary>
+                <p>Click the longest dimension you can find, end to end, and zoom in for the clicks: a small slip matters less over a long distance.</p>
+              </details>
+              <details>
+                <summary>Can I use a printed ratio like 1:100 on a scan or image?</summary>
+                <p>Only when the scan states its resolution (300 dpi, for example), because a ratio needs the paper size. Most photos and screenshots do not, so pdf2takeoff refuses the preset rather than give wrong lengths, and you calibrate from a dimension instead.</p>
+              </details>
+              <details>
+                <summary>What if the sheet was printed at a different size?</summary>
+                <p>Calibrating from a dimension gives correct lengths whatever the print size. If the title block says 1:100 but the page is an A3 print of an A1 drawing, the chip shows <em>check scale</em> and names the likely cause, so trust the dimension, not the printed ratio.</p>
+              </details>
+              <details>
+                <summary>Do DXF files need calibrating?</summary>
+                <p>No. A DXF opens at a standard scale worked out from its own units, and the chip says <em>from drawing units</em>. If the file does not state its units, pdf2takeoff estimates them from the drawing size and asks you to check a known dimension.</p>
+              </details>
+            </div>
+
+            <h2>Calibrate your drawing</h2>
+            <p>Open a PDF and set its scale in under a minute, or try the sample drawing, which has two sheets at different scales.</p>
+            <div class="hero-actions"><a class="btn btn-primary" href="/">Open a drawing</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+
+            <h2>Related guides</h2>
+            <ul>
+              <li><a class="textlink" href="/measure-area-on-pdf">Measure area on a PDF drawing</a>: room areas in one click, plus lengths and perimeters.</li>
+              <li><a class="textlink" href="/dxf-takeoff">DXF takeoff without AutoCAD</a>: open a DXF with its scale already set.</li>
+              <li><a class="textlink" href="/takeoff-from-photos-and-scans">Takeoff from photos and scans</a>: images, scanned PDFs, phone photos and screenshots.</li>
+              <li><a class="textlink" href="/">pdf2takeoff home</a>: free construction takeoff software that runs in your browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

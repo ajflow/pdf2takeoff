@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MCP server for construction takeoff | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="Run construction takeoff from Claude, Cursor or Codex with the pdf2takeoff MCP server and CLI: 15 local tools and a marked-up PDF back for a person to review."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/mcp-server-construction-takeoff" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="An MCP server for construction takeoff | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Let Claude, Cursor, Codex or any MCP client run a takeoff on your machine and hand back a marked-up PDF for review."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/mcp-server-construction-takeoff" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to run a construction takeoff with an AI agent over MCP",
+        "totalTime": "PT5M",
+        "dateModified": "2026-10-25",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Flowtivity",
+          "url": "https://flowtivity.ai",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Gold Coast",
+            "addressRegion": "QLD",
+            "addressCountry": "AU"
+          }
+        },
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "pdf2takeoff MCP server"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "name": "Install Node",
+            "text": "Install Node.js 22.13 or later. Nothing else needs installing: npx runs pdf2takeoff straight from GitHub."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Add the MCP server",
+            "text": "In Claude Code, run claude mcp add pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp, or add the same command to the MCP settings of Cursor, Claude Desktop or another client."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Ask for a takeoff",
+            "text": "Give the agent a local drawing and the job, for example: open plan.pdf, read the scale, fill each room and count the downlights."
+          },
+          {
+            "@type": "HowToStep",
+            "name": "Review the marked-up PDF",
+            "text": "The agent saves an annotated PDF. Open it in pdf2takeoff, Bluebeam Revu or Acrobat, confirm or delete the flagged items, then export."
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I install pdf2takeoff?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Run it straight from GitHub with npx github:ajflow/pdf2takeoff, or register the MCP server with npx -y github:ajflow/pdf2takeoff mcp. It is not published to the npm registry, so always include the github:ajflow/ prefix."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which AI clients work with it?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Any MCP client that runs a local stdio server, including Claude Code, Claude Desktop, Cursor and Codex."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does the MCP server need an API key?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. The agent you already use does the reading and reasoning. Only the optional ai-count command needs a key for the provider you choose, read from an environment variable, and a local model through Ollama or LM Studio needs none."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can the agent open DXF files and images?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. open_document accepts PDFs, images and ASCII DXF files. A DXF arrives with its scale already set, and open_document reports it as drawingScale."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What Node version does it need?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Node.js 22.13 or later."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The CLI and MCP server are free and open source under Apache-2.0, built on the same engine as the browser app."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Free &amp; open source · runs on your machine</span>
+          <h1>An MCP server for construction takeoff</h1>
+          <p class="lead">
+            pdf2takeoff runs as an MCP server and a command line tool, so AI agents such as Claude, Cursor and Codex, or any MCP client, can <strong>run a construction takeoff on your machine and hand back a marked-up PDF for a person to review</strong>. It has 15 tools, needs Node 22.13 or later, and adds to Claude Code with one command.
+          </p>
+
+          <div class="fact-strip">
+            <span>15 MCP tools</span>
+            <span>Local files, local process</span>
+            <span>Node 22.13+</span>
+            <span>Open source · Apache-2.0</span>
+          </div>
+
+          <div class="hero-actions"><a class="btn btn-primary" href="https://github.com/ajflow/pdf2takeoff">View the source on GitHub</a><a class="textlink" href="/">Open the browser app</a></div>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>How to add pdf2takeoff to your agent</h2>
+            <ol>
+              <li><strong>Install Node.</strong> Install Node.js 22.13 or later. Nothing else needs installing: npx runs pdf2takeoff straight from GitHub.</li>
+              <li><strong>Add the MCP server.</strong> In Claude Code, run claude mcp add pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp, or add the same command to the MCP settings of Cursor, Claude Desktop or another client.</li>
+              <li><strong>Ask for a takeoff.</strong> Give the agent a local drawing and the job, for example: open plan.pdf, read the scale, fill each room and count the downlights.</li>
+              <li><strong>Review the marked-up PDF.</strong> The agent saves an annotated PDF. Open it in pdf2takeoff, Bluebeam Revu or Acrobat, confirm or delete the flagged items, then export.</li>
+            </ol>
+
+            <div class="code"><span class="c"># add it to Claude Code</span><br><span class="k">claude mcp add</span> pdf2takeoff -- npx -y github:ajflow/pdf2takeoff mcp</div>
+            <p style="margin-top:1rem">For Cursor, Claude Desktop and other clients, add this to the MCP settings:</p>
+            <pre class="code"><code>{
+  "mcpServers": {
+    "pdf2takeoff": {
+      "command": "npx",
+      "args": ["-y", "github:ajflow/pdf2takeoff", "mcp"]
+    }
+  }
+}</code></pre>
+
+            <h2>What can the agent do with the 15 tools?</h2>
+            <ul>
+              <li><strong>Open and look</strong>: <code>open_document</code> opens a PDF, image or DXF (a DXF arrives with its scale set, reported as <code>drawingScale</code>); <code>render_page</code> returns a PNG of any sheet; <code>read_text</code> returns printed scales, dimensions and labels exactly, with positions, so the agent never guesses them off the image.</li>
+              <li><strong>Scale and measure</strong>: <code>set_scale</code> from a ratio, a known dimension or the sheet itself; <code>measure</code> for lengths, areas, perimeters, volumes, angles and counts; <code>fill_area</code> for a room's area from one point inside it.</li>
+              <li><strong>Count</strong>: <code>scan_symbol</code> counts every match of one symbol; <code>propose_items</code> adds doors, windows and spaces as flagged markups; <code>count_items</code> totals them under a counting preset such as <code>aecv</code> or <code>schedule</code>.</li>
+              <li><strong>Compare</strong>: <code>compare_revisions</code> for two drawings or two folders of revisions.</li>
+              <li><strong>Review and hand back</strong>: <code>list_markups</code>, <code>set_status</code> and <code>delete_markup</code>; <code>export</code> writes CSV, TSV or Excel; <code>save_annotated</code> writes the marked-up PDF.</li>
+            </ul>
+
+            <h2>How do I run it from the command line?</h2>
+            <p>The same engine runs as a command line tool, straight from GitHub with nothing installed:</p>
+            <div class="code"><span class="c"># count every match of the symbol at a point, in PDF points</span><br><span class="k">npx</span> github:ajflow/pdf2takeoff scan plan.pdf --page 1 --at 88,271<br><span class="c"># the PDF's quantities as an Excel workbook</span><br><span class="k">npx</span> github:ajflow/pdf2takeoff export plan.pdf --format xlsx -o takeoff.xlsx</div>
+            <p style="margin-top:1rem">Other commands include <code>info</code> (page sizes, so you can place <code>--at</code>), <code>compare</code> for two files or two revision folders, <code>annotate</code>, <code>ocr</code>, <code>ai-count</code> and <code>run</code>, which regenerates a takeoff from a committed <code>takeoff.yaml</code> and, with <code>--prev</code>, shows which quantities changed since the last revision.</p>
+
+            <h2>Why does a person still review the result?</h2>
+            <p>AI models cannot yet count a floor plan reliably on their own: the best published model gets 54.3% of counts exactly right on <a class="textlink" href="/takeoff-benchmarks">AECV-Bench</a>. So the server is built for review. Proposed doors, windows and spaces land as count markups flagged <em>check</em>, quantities come from <code>count_items</code> under your counting rules rather than the model's own tally, and the output is a PDF that a person opens, checks and confirms.</p>
+
+            <h2>Does anything leave my machine?</h2>
+            <p>The server is a local process working on local files, and pdf2takeoff uploads nothing. It makes two network calls: the OCR language pack on first use (a few MB, then cached), and <code>ai-count</code>, which sends the page you choose to the provider you choose, only when you run it. The agent you connect is a separate matter: it sends what it reads, such as rendered pages, to its own model provider, as any agent does.</p>
+
+            <h2>FAQ</h2>
+            <div class="faq">
+              <details>
+                <summary>How do I install pdf2takeoff?</summary>
+                <p>Run it straight from GitHub with npx github:ajflow/pdf2takeoff, or register the MCP server with npx -y github:ajflow/pdf2takeoff mcp. It is not published to the npm registry, so always include the github:ajflow/ prefix.</p>
+              </details>
+              <details>
+                <summary>Which AI clients work with it?</summary>
+                <p>Any MCP client that runs a local stdio server, including Claude Code, Claude Desktop, Cursor and Codex.</p>
+              </details>
+              <details>
+                <summary>Does the MCP server need an API key?</summary>
+                <p>No. The agent you already use does the reading and reasoning. Only the optional ai-count command needs a key for the provider you choose, read from an environment variable, and a local model through Ollama or LM Studio needs none.</p>
+              </details>
+              <details>
+                <summary>Can the agent open DXF files and images?</summary>
+                <p>Yes. open_document accepts PDFs, images and ASCII DXF files. A DXF arrives with its scale already set, and open_document reports it as drawingScale.</p>
+              </details>
+              <details>
+                <summary>What Node version does it need?</summary>
+                <p>Node.js 22.13 or later.</p>
+              </details>
+              <details>
+                <summary>Is it free?</summary>
+                <p>Yes. The CLI and MCP server are free and open source under Apache-2.0, built on the same engine as the browser app.</p>
+              </details>
+            </div>
+
+            <h2>Give your agent a drawing</h2>
+            <p>Add the server with one command, or open the browser app to see the same engine at work on the sample drawing.</p>
+            <div class="hero-actions"><a class="btn btn-primary" href="/">Open the browser app</a><a class="textlink" href="/?file=/examples/sample-floor-plan.pdf">Try the sample drawing</a></div>
+
+            <h2>Related guides</h2>
+            <ul>
+              <li><a class="textlink" href="/takeoff-benchmarks">pdf2takeoff accuracy benchmarks</a>: every benchmark, weak results included.</li>
+              <li><a class="textlink" href="/dxf-takeoff">DXF takeoff without AutoCAD</a>: open a DXF with its scale already set.</li>
+              <li><a class="textlink" href="/takeoff-without-uploading-drawings">Takeoff without uploading drawings</a>: how your files stay on your own computer.</li>
+              <li><a class="textlink" href="/">pdf2takeoff home</a>: free construction takeoff software that runs in your browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

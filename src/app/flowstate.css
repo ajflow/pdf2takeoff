@@ -1061,6 +1061,42 @@ body.landing #dropzone.drag .drop-zone {
   overflow-x: auto;
 }
 
+/* a results table that stacks on a phone, so no column hides off-screen */
+@media (max-width: 640px) {
+  .bench.stack thead {
+    display: none;
+  }
+  .bench.stack tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--fs-line-light);
+  }
+  .bench.stack td {
+    padding: 0 0 0.5rem;
+    border: 0;
+  }
+  .bench.stack td:nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+  .bench.stack td:nth-child(n + 3)::before {
+    display: block;
+    font-size: var(--fs-kicker);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--fs-ink-muted);
+    font-weight: 600;
+    margin: 0.25rem 0 0.25rem;
+  }
+  .bench.stack td:nth-child(3)::before {
+    content: 'pdf2takeoff';
+  }
+  .bench.stack td:nth-child(4)::before {
+    content: 'For comparison';
+  }
+}
+
 .updated {
   font-size: var(--fs-label);
   color: var(--fs-ink-muted);

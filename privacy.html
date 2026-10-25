@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy | pdf2takeoff</title>
+    <meta
+      name="description"
+      content="What pdf2takeoff collects and what it never sees: your drawings stay on your computer, page visits are counted without cookies, and sign-ups go to Flowtivity."
+    />
+    <link rel="canonical" href="https://pdf2takeoff.com/privacy" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#0A192F" />
+    <meta property="og:title" content="Privacy | pdf2takeoff" />
+    <meta
+      property="og:description"
+      content="Your drawings stay on your computer. Here is everything pdf2takeoff and its website do and do not collect."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pdf2takeoff.com/privacy" />
+    <link rel="stylesheet" href="/src/app/flowstate.css" />
+  </head>
+  <body class="fs-page">
+    <header class="fs-top navy">
+      <div class="fs-wrap">
+        <a class="brand" href="/">
+          <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="rgb(17 36 61)" stroke="rgb(79 208 198)" stroke-width="3"/><path d="M19 45 L45 19" stroke="rgb(113 231 222)" stroke-width="4.5" stroke-linecap="round"/><path d="M14 50 l10 -10 M40 24 l10 -10" stroke="rgb(113 231 222)" stroke-width="3" stroke-linecap="round" opacity=".55"/><circle cx="19" cy="45" r="5" fill="rgb(113 231 222)"/><circle cx="45" cy="19" r="5" fill="rgb(113 231 222)"/></svg>
+          pdf2takeoff
+          <span class="by">by Flowtivity</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a href="/">Home</a><a href="/count-symbols-in-pdf-drawing">Count symbols</a><a href="/compare-drawing-revisions">Compare revisions</a><a href="https://github.com/ajflow/pdf2takeoff">GitHub</a>
+        </nav>
+        <a class="btn btn-primary" href="/">Open the tool</a>
+      </div>
+    </header>
+
+    <main class="fs">
+      <section class="fs-hero navy">
+        <div class="fs-wrap">
+          <span class="badge-pill">Updated 25 October 2026</span>
+          <h1>Privacy</h1>
+          <p class="lead">
+            pdf2takeoff processes your drawings on your own computer and never uploads them. This page lists everything the app and this website do collect, which is very little, and who handles it.
+          </p>
+        </div>
+      </section>
+
+      <section class="fs-body">
+        <div class="fs-wrap">
+          <div class="prose">
+            <h2>Who we are</h2>
+            <p>pdf2takeoff is free, open-source software made by <a class="textlink" href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia. Questions about this page: <a class="textlink" href="https://flowtivity.ai/contact/">contact Flowtivity</a>.</p>
+
+            <h2>Your drawings</h2>
+            <p>Every PDF, image, scan and DXF you open is read and rendered inside your browser tab, and every measurement, count and comparison runs there too. Nothing is sent to us or to anyone else, and we never see your drawings or your quantities. Exports download straight to your computer.</p>
+
+            <h2>What stays on your device</h2>
+            <ul>
+              <li>Your takeoff (markups and scales), saved in your browser's storage and keyed by a fingerprint of the file, so a refresh brings it back. The drawing itself is not stored.</li>
+              <li>Your tool presets, columns and similar settings.</li>
+              <li>Whether you have already seen or dismissed one of the app's prompts.</li>
+            </ul>
+            <p>None of this is sent anywhere. Clearing this site's data in your browser removes it.</p>
+
+            <h2>Website analytics</h2>
+            <p>This website counts page visits with Cloudflare Web Analytics: which pages are viewed, the referring site, the country, the browser type and page speed. It uses no cookies and does not identify you, and it never sees your drawings or what you do in the app. The app itself has no telemetry.</p>
+
+            <h2>Sign-up forms</h2>
+            <p>If you type your email into an "AI counting is coming" form, it is sent to Flowtivity's mailing list on flowtivity.ai, tagged with the page you signed up on. You confirm by email before anything is sent, you get Flowtivity's Friday digest, and you can unsubscribe at any time. Flowtivity handles your email under its <a class="textlink" href="https://flowtivity.ai/privacy/">privacy policy</a>.</p>
+
+            <h2>Links to Flowtivity</h2>
+            <p>Links from pdf2takeoff to flowtivity.ai, such as the offer to book a consult, are tagged <code>utm_source=pdf2takeoff</code> so Flowtivity knows you came from here. Nothing about your drawing is included.</p>
+
+            <h2>Downloads some features need</h2>
+            <p>A few features download code or data the first time you use them: the OCR language pack for reading scales, the ONNX runtime and symbol model for the ML detector (from jsDelivr and GitHub), and the HEIC decoder for iPhone photos. These are ordinary downloads to your computer. The services that serve them see a normal web request, such as your IP address, but nothing from your drawing.</p>
+
+            <h2>The optional AI count</h2>
+            <p>The AI count, available from the command line today, sends one rendered page image to the AI provider you choose, with your own key, and only when you run it. Point it at a local model and nothing leaves your machine. If you connect an AI agent to the pdf2takeoff MCP server, the server runs locally, but the agent sends what it reads to its own model provider.</p>
+
+            <h2>Hosting</h2>
+            <p>The website is served by Cloudflare Pages. Like any web host, Cloudflare processes request details such as IP addresses to deliver pages and protect the site.</p>
+
+            <h2>Check it yourself</h2>
+            <p>pdf2takeoff is open source under Apache-2.0, so anyone can read exactly what it does: <a class="textlink" href="https://github.com/ajflow/pdf2takeoff">github.com/ajflow/pdf2takeoff</a>.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="fs-foot navy">
+      <div class="fs-wrap">
+        <div>
+          <a class="brand" href="/">pdf2takeoff</a>
+          <p class="byline">Free, open-source construction takeoff software. Made by <a href="https://flowtivity.ai">Flowtivity</a> on the Gold Coast, Australia.</p>
+        </div>
+        <div><h4>Product</h4><ul><li><a href="/measure-area-on-pdf">Measure area</a></li><li><a href="/set-scale-on-pdf-drawing">Set the scale</a></li><li><a href="/count-symbols-in-pdf-drawing">Count symbols</a></li><li><a href="/compare-drawing-revisions">Compare revisions</a></li><li><a href="/dxf-takeoff">DXF takeoff</a></li><li><a href="/takeoff-from-photos-and-scans">Photos and scans</a></li><li><a href="/mcp-server-construction-takeoff">For AI agents</a></li></ul></div>
+        <div><h4>Proof</h4><ul><li><a href="/takeoff-benchmarks">Benchmarks</a></li><li><a href="/takeoff-without-uploading-drawings">Private, no upload</a></li><li><a href="/free-bluebeam-alternative">Free Bluebeam alternative</a></li><li><a href="https://flowtivity.ai/blog/pdf2takeoff-free-open-source-construction-takeoff/">What AI still gets wrong</a></li><li><a href="https://github.com/ajflow/pdf2takeoff">Source on GitHub</a></li></ul></div>
+        <div><h4>Flowtivity</h4><ul><li><a href="https://flowtivity.ai">flowtivity.ai</a></li><li><a href="https://flowtivity.ai/blog/">Articles</a></li></ul></div>
+      </div>
+    </footer>
+  </body>
+</html>

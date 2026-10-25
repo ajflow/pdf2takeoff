@@ -61,6 +61,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         compare: resolve(__dirname, 'compare-drawing-revisions.html'),
         count: resolve(__dirname, 'count-symbols-in-pdf-drawing.html'),
+        privacyPolicy: resolve(__dirname, 'privacy.html'),
         area: resolve(__dirname, 'measure-area-on-pdf.html'),
         scale: resolve(__dirname, 'set-scale-on-pdf-drawing.html'),
         bluebeam: resolve(__dirname, 'free-bluebeam-alternative.html'),

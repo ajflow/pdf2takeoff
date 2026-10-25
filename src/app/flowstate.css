@@ -1537,3 +1537,49 @@ body.landing :is(.btn-primary, .btn-outline) {
     transition: none !important;
   }
 }
+
+/* Sign-up for Flowtivity's Friday digest. The form posts to flowtivity.ai in
+   a new tab (no server code here), so an open takeoff is never lost. */
+.signup {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 34rem;
+  margin-top: 1.75rem;
+}
+.signup .signup-label {
+  font-weight: 600;
+  font-size: var(--fs-small);
+}
+.signup .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.signup input[type='email'] {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--fs-line-light);
+  border-radius: var(--fs-radius-control);
+  background: var(--fs-white);
+  color: var(--fs-ink);
+  font: inherit;
+}
+.signup .fine {
+  margin: 0;
+  font-size: var(--fs-label);
+  color: var(--fs-ink-muted);
+}
+.signup .hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.navy .signup .fine {
+  color: var(--fs-navy-muted);
+}
+.navy .signup input[type='email'] {
+  border-color: var(--fs-line-dark);
+}

@@ -34,6 +34,7 @@ import { calibrationFor, type Pt } from './state';
 import { initChrome, renderScaleChip } from './chrome';
 import { initCmdk } from './cmdk';
 import { initScanReview } from './scanreview';
+import { initNudges } from './nudge';
 import { initWonder } from './fx/wonder';
 import { prepareFiles, ACCEPT } from './inputs';
 import { formatLength, DISPLAY_UNITS, unitLabel } from '../engine/units';
@@ -395,7 +396,9 @@ subscribe(() => {
 function scheduleRender(delayMs: number): void {
   if (renderTimer) window.clearTimeout(renderTimer);
   renderTimer = window.setTimeout(() => {
-    window.scrollTo(0, 0); // keep the workspace anchored while the tool is in use
+    // keep the workspace anchored while the tool is in use; on the landing page
+    // the app may arrive after someone has started scrolling, so leave them be
+    if (hasDoc() || compareState.active) window.scrollTo(0, 0);
     if (compareState.active) {
       setCompareZoom(state.zoom);
       void renderCompare(state.zoom);
@@ -448,6 +451,7 @@ window.addEventListener('keydown', (e) => {
 initChrome();
 initCmdk();
 initScanReview();
+initNudges();
 initWonder();
 setTool('pan');
 $('toolHint').textContent = 'Open a PDF drawing to begin, or drop one anywhere in this window';

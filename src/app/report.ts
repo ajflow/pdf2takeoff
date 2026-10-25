@@ -79,7 +79,7 @@ export async function exportReport(): Promise<void> {
 
   ${sheets.join('\n')}
 
-  <footer>Generated locally by pdf2takeoff (open source, Apache-2.0); drawings are never uploaded. Verify quantities against the drawing before pricing.</footer>
+  <footer>Made with pdf2takeoff.com, free takeoff software by Flowtivity. Generated locally (open source, Apache-2.0); drawings are never uploaded. Verify quantities against the drawing before pricing.</footer>
 </div>
 </body>
 </html>`;

@@ -22,7 +22,7 @@ export interface ToolPreset {
 
 /** What the sheet says about a page's scale once it is set (Flow State scale chip). */
 export interface ScaleCheck {
-  status: 'agrees' | 'disagrees' | 'doors-ok' | 'doors-bad';
+  status: 'agrees' | 'disagrees' | 'doors-ok' | 'doors-bad' | 'dims-ok';
   /** The explanation to show when the check disagrees. */
   message?: string;
 }

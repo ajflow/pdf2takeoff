@@ -20,7 +20,7 @@ It is free: no account, no file limits and no paid tier. Processing is local: dr
 
 - **Opens the files you're sent**: PDFs, including scanned PDFs (CCITT fax, JBIG2 and JPEG 2000 images); PNG, JPEG, HEIC (iPhone photos), TIFF (multi-page, Group 4 scans included), WebP, GIF, BMP, AVIF and SVG images; pasted screenshots; and several files at once as one set.
 - **CAD drawings (DXF)**: an ASCII DXF opens as a vector page with its scale already set from the file's units, and Scan counts its blocks exactly. For DWG, export a DXF or PDF first.
-- **Scale you can check**: pick a preset, click a known dimension, or let OCR read the title-block scale or a printed dimension off the sheet. A scale chip shows whether the current scale can be trusted.
+- **Scale you can check**: pick a preset, click a known dimension, or let OCR read the title-block scale or a printed dimension off the sheet. A scale chip shows whether the current scale can be trusted. On CAD sheets it also measures the printed dimensions against their drawn lines, so a title block that says 1:100 on a sheet drawn at 1:50 is caught before it doubles every length.
 - **Measure**: length, area, perimeter, volume, angle and count. Magic Fill reads a room's area off the walls with one click inside it.
 - **Scan (auto-count symbols)**: click one symbol and every match on the page is counted in about 100 ms by local computer vision, with an optional in-browser ONNX detector for cluttered sheets. Results arrive review-first (Keep all, Review, Undo), and doubtful hits stay flagged for a person to check.
 - **Bluebeam and Acrobat round-trip**: save markups into the PDF as standard annotations; reopen the file and the takeoff comes back.

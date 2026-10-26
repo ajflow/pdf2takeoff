@@ -3,7 +3,8 @@
 
 import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
 import { openScanReview, isDoubtful } from './scanreview';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPdfDoc } from './viewer';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc } from './viewer';
+import { dimensionScale, shxWords, checkAgainstDimensions, type DimensionScale } from '../engine/dimensions';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
@@ -119,6 +120,7 @@ export function initTools(overlay: SVGSVGElement): void {
     renderMarkups();
     emit();
     hint('Scale set · press L for length, A for area, N to count');
+    void checkRatioAgainstDimensions(state.pageNum, ratio);
   });
 }
 
@@ -587,6 +589,21 @@ async function runOcrRead(): Promise<void> {
         return;
       }
     }
+    // the sheet's printed dimensions outvote a title block they clearly disagree with
+    const witness = await dimensionWitness(state.pageNum);
+    const titleWrong = scaleHit && witness ? checkAgainstDimensions(scaleHit.ratio, witness.dims, scaleHit.ratio).status === 'disagrees' : false;
+    const drawn = witness?.dims.ratio;
+    if (drawn !== undefined && (!scaleHit || titleWrong)) {
+      if (applyRatioToPages(drawn, `printed dimensions 1:${drawn} (${witness!.dims.support} of ${witness!.dims.total} agree)`)) {
+        const note = scaleHit ? `The title block says 1:${scaleHit.ratio}, but this sheet's printed dimensions are drawn at 1:${drawn}.` : undefined;
+        state.scaleChecks.set(state.pageNum, { status: 'dims-ok', message: note });
+        closeCalibModal();
+        renderMarkups();
+        emit();
+        hint(`Scale 1:${drawn} read from the sheet's printed dimensions${note ? `. ${note}` : ''} · press L to measure`);
+        return;
+      }
+    }
     if (scaleHit) {
       if (!applyRatioToPages(scaleHit.ratio, `${scaleHit.source} (sheet)`)) {
         hint(`The sheet says 1:${scaleHit.ratio}, but this page is an image without a paper size. Click both ends of a dimension you know and type its length.`);
@@ -596,6 +613,7 @@ async function runOcrRead(): Promise<void> {
       renderMarkups();
       emit();
       hint(`Scale 1:${scaleHit.ratio} read from the sheet · press L to measure`);
+      void checkRatioAgainstDimensions(state.pageNum, scaleHit.ratio);
       return;
     }
     hint('Could not read a scale or dimension from this sheet — type the length manually');
@@ -676,9 +694,34 @@ function applyCalibration(): void {
   void warnIfSheetDisagrees(state.pageNum, metersPerPt);
 }
 
+/** The sheet's printed dimensions as a scale witness, with the words read (CAD sheets; null on images). */
+async function dimensionWitness(page: number): Promise<{ dims: DimensionScale; printed?: number } | null> {
+  try {
+    const [items, annots, vec] = await Promise.all([getPageTextItems(page), getPageAnnotations(page), getPageVector(page)]);
+    if (!vec || !vec.segs.length) return null;
+    const words = [...items.flatMap((it) => wordsFromTextItem(it.str ?? '', it.transform, it.width, it.height)), ...shxWords(annots as never)];
+    return { dims: dimensionScale(words, vec), printed: findScaleRatio(words)?.ratio };
+  } catch {
+    return null;
+  }
+}
+
+/** After a printed ratio is set (a preset, the title block): do the sheet's own dimensions agree? */
+async function checkRatioAgainstDimensions(page: number, ratio: number): Promise<void> {
+  const metersPerPt = state.calibrations.get(page)?.metersPerPt;
+  const witness = await dimensionWitness(page);
+  if (!witness || state.calibrations.get(page)?.metersPerPt !== metersPerPt) return;
+  const d = checkAgainstDimensions(ratio, witness.dims, witness.printed);
+  if (d.status === 'unknown') return;
+  state.scaleChecks.set(page, d.status === 'agrees' ? { status: 'dims-ok' } : { status: 'disagrees', message: d.message });
+  emit();
+  if (d.status === 'disagrees') hint(d.message!);
+}
+
 /**
- * Compare a measured scale with the sheet's printed scale, and with the
- * sheet's own doorways (which should measure like doors); hint on a mismatch.
+ * Compare a measured scale with the sheet's printed dimensions, its printed
+ * scale, and its own doorways (which should measure like doors); hint on a
+ * mismatch.
  */
 async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<void> {
   const items = await getPageTextItems(page).catch(() => []);
@@ -689,12 +732,30 @@ async function warnIfSheetDisagrees(page: number, metersPerPt: number): Promise<
   const paperRatio = ratioOn(page, metersPerPt);
   const measured = paperRatio ?? metersPerPt / METERS_PER_PT;
   const c: ReturnType<typeof checkAgainstSheet> = paperRatio === null ? { status: 'none' } : checkAgainstSheet(measured, votes, nts);
-  // what the check found also drives the scale chip
+  // what the check found also drives the scale chip (unless the scale changed meanwhile)
   const record = (check: ScaleCheck | null) => {
+    if (state.calibrations.get(page)?.metersPerPt !== metersPerPt) return;
     if (check) state.scaleChecks.set(page, check);
     else state.scaleChecks.delete(page);
     emit();
   };
+  // the sheet's printed dimensions are the strongest witness on a CAD sheet:
+  // they can show the title block, not the clicked dimension, is wrong
+  const witness = paperRatio === null ? null : await dimensionWitness(page);
+  if (witness) {
+    const d = checkAgainstDimensions(measured, witness.dims, c.sheetRatio);
+    if (d.status === 'agrees') {
+      const note = c.status === 'disagrees' && c.sheetRatio !== undefined ? `Your scale matches this sheet's printed dimensions (1:${d.drawnRatio}). The title block's 1:${Math.round(c.sheetRatio)} is wrong for this sheet.` : undefined;
+      record({ status: 'dims-ok', message: note });
+      if (note) hint(note);
+      return;
+    }
+    if (d.status === 'disagrees') {
+      record({ status: 'disagrees', message: d.message });
+      hint(d.message!);
+      return;
+    }
+  }
   if (c.status === 'disagrees' && c.sheetRatio !== undefined) {
     const why = c.likely ? `, likely ${c.likely}` : '';
     const message = `Scale set to about 1:${Math.round(measured)}, but the sheet says 1:${Math.round(c.sheetRatio)}${why}. Check the dimension you used.`;

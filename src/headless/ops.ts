@@ -23,6 +23,7 @@ import { findScaleRatio, roomLabelPoints, wordsFromTextItem, type OcrWord } from
 import { metersPerPtForRatio } from '../engine/units.ts';
 import { dynamicFill, type FillHints } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
+import { dimensionScale, shxWords, type DimensionScale, type DimWord } from '../engine/dimensions.ts';
 
 /** Read pdf2takeoff-authored annotations from every page of an open doc. */
 export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
@@ -52,6 +53,22 @@ export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
   // hidden CAD layers are skipped, as the renderer skips them
   const layers = await doc.getOptionalContentConfig();
   return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => layers.isVisible(g as never) });
+}
+
+/**
+ * The sheet's printed dimensions as a scale witness: text-layer words plus
+ * Acrobat's SHX text comments, measured against the vector layer. Null for
+ * image pages and sheets with no line work.
+ */
+export async function sheetDimensions(doc: PDFDocumentProxy, page: number, words: DimWord[]): Promise<DimensionScale | null> {
+  try {
+    const annots = await (await doc.getPage(page)).getAnnotations({ intent: 'display' });
+    const vec = await vectorDocPage(doc, page);
+    if (!vec.segs.length) return null;
+    return dimensionScale([...words, ...shxWords(annots as never)], vec);
+  } catch {
+    return null; // image pages have no operator list
+  }
 }
 
 export interface ScanOptions {

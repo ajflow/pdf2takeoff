@@ -199,7 +199,7 @@ const NOT_ROOM_NAMES = /^(dn|up|ffl|fl|rl|ssl|tos|tow|cl|eq|eq\.|typ\.?|typical|
  * rooms; a finish note that slips through ("CARPET") can only split off a
  * room-sized part (see dynamicFill), never an alcove.
  */
-export function roomLabelPoints(items: { str?: string; transform?: number[]; width?: number; height?: number }[]): Pt[] {
+export function roomLabelPoints(items: { str?: string; transform?: number[]; width?: number; height?: number }[], exclude?: RegExp): Pt[] {
   const out: Pt[] = [];
   for (const it of items) {
     const str = (it.str ?? '').trim();
@@ -208,6 +208,7 @@ export function roomLabelPoints(items: { str?: string; transform?: number[]; wid
     if (/\d\s*(mm|cm|m|m2|m²|m3|ft|in|")\b|\d\s*(mm|cm|m²|")$/i.test(str)) continue;
     const first = str.split(/\s+/)[0];
     if (NOT_ROOM_NAMES.test(str) || NOT_ROOM_NAMES.test(first)) continue;
+    if (exclude?.test(str)) continue;
     const words = wordsFromTextItem(str, it.transform, it.width, it.height);
     if (!words.length) continue;
     out.push({

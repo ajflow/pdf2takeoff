@@ -5,6 +5,9 @@
 
 import { createCanvas } from '@napi-rs/canvas';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+
+/** pdf.js's layer (optional-content) configuration. */
+export type LayerConfig = Awaited<ReturnType<PDFDocumentProxy['getOptionalContentConfig']>>;
 import type { RasterPage } from '../engine/ports.ts';
 import type { RGBA } from '../engine/compare.ts';
 import type { Pt } from '../engine/types.ts';
@@ -31,6 +34,8 @@ export async function renderRasterNode(
   doc: PDFDocumentProxy,
   pageNum: number,
   scale: number,
+  /** a layer configuration to render with (Magic Fill hides clutter layers); omitted: the document's own */
+  layers?: LayerConfig,
 ): Promise<RasterPage> {
   const page = await doc.getPage(pageNum);
   const vp = page.getViewport({ scale });
@@ -41,7 +46,7 @@ export async function renderRasterNode(
   // skia's 2D context implements the same surface pdf.js drives in the
   // browser; the canvas param is deliberately omitted (pdf.js v5 takes a
   // bitmap-transfer path with it that crashes native canvas)
-  await page.render({ canvasContext: ctx, viewport: vp } as never).promise;
+  await page.render({ canvasContext: ctx, viewport: vp, ...(layers ? { optionalContentConfigPromise: Promise.resolve(layers) } : {}) } as never).promise;
   const img = ctx.getImageData(0, 0, w, h);
   return { width: w, height: h, data: img.data, ...pageTransforms(vp) };
 }

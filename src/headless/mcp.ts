@@ -17,7 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor, sheetDimensions } from './ops.ts';
+import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor, sheetDimensions, fillLayerConfig } from './ops.ts';
 import { terminateOcr } from './ocr-node.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
@@ -31,6 +31,7 @@ import { RASTER_SCALE } from '../engine/ports.ts';
 import type { RasterPage } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { checkAgainstDimensions } from '../engine/dimensions.ts';
+import { fillMergesRooms } from '../engine/cad-layers.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -43,7 +44,9 @@ interface OpenDoc {
   calibrations: Map<number, Calibration>;
   markups: Markup[];
   /** Last page raster the fill used: dynamicfill caches page-wide state on it, so refills on the page skip that work. */
-  fillRaster?: { page: number; raster: RasterPage };
+  fillRaster?: { page: number; allLayers: boolean; raster: RasterPage };
+  /** Layers Magic Fill leaves out (furniture, finish hatching, annotation, services); null when none; undefined until first asked. */
+  fillLayers?: Awaited<ReturnType<typeof fillLayerConfig>>;
 }
 
 const docs = new Map<string, OpenDoc>();
@@ -358,28 +361,46 @@ export async function runMcpServer(): Promise<void> {
     'fill_area',
     {
       description:
-        'Measure a room by clicking inside it (Magic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends, and records it as an area markup. Uses the page scale (set_scale first for a value), room labels from the text layer and the vector layer to stop at doorways; on an uncalibrated sheet with none of those, the door width the sheet itself shows (its clustered wall-end gaps) is used and reported. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
+        'Measure a room by clicking inside it (Magic Fill): flood-fills the bounded region around the point, closing door gaps between wall ends (on layered CAD PDFs, furniture, finish hatching, notes, services and structure-above layers are left out of the fill unless all_layers is set; provenance.layersLeftOut counts them), and records it as an area markup. Uses the page scale (set_scale first for a value), room labels from the text layer and the vector layer to stop at doorways; on an uncalibrated sheet with none of those, the door width the sheet itself shows (its clustered wall-end gaps) is used and reported. Points are PDF points, bottom-left origin. Report the value from this result, never from the rendered image.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
         at: ptTuple.describe('a point inside the room, PDF points'),
         label: z.string().optional(),
+        all_layers: z.boolean().optional().describe('fill on every CAD layer; by default furniture, finish hatching, annotation and services layers are left out so they cannot stop the fill short of the walls'),
         ocr: z.boolean().optional().describe('also OCR the sheet and mask the recognised text out of the fill boundary (scans and raster imports have no text layer); slower'),
       },
     },
-    async ({ id, page, at, label, ocr }) => {
+    async ({ id, page, at, label, ocr, all_layers }) => {
       const d = getDoc(id);
       if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
-      // a page renders identically every time, so the last fill raster is
-      // reused for the next fill on the same page (see OpenDoc.fillRaster)
-      const raster = d.fillRaster?.page === page ? d.fillRaster.raster : await renderRasterNode(d.doc, page, RASTER_SCALE);
-      d.fillRaster = { page, raster };
+      // CAD layers drawn over the floor (furniture, finish hatching,
+      // annotation, services, structure above) are left out of the fill's
+      // render, so they cannot stop it short of the walls; walls and doors
+      // always stay. If leaving them out lets the fill run through a doorway
+      // (it takes in two room labels) or fail, it fills on every layer instead.
+      if (d.fillLayers === undefined) d.fillLayers = await fillLayerConfig(d.doc).catch(() => null);
       const cal = d.calibrations.get(page);
-      // text-layer labels and word boxes, vector doorway bridges, the scale, OCR boxes on request
-      const hints = await fillHintsFor(d.doc, page, raster, { metersPerPt: cal?.metersPerPt, ocr });
+      const fillOn = async (clean: boolean) => {
+        const layers = clean ? d.fillLayers : null;
+        // a page renders identically every time, so the last fill raster is
+        // reused for the next fill on the same page (see OpenDoc.fillRaster)
+        const raster =
+          d.fillRaster?.page === page && d.fillRaster.allLayers === !layers ? d.fillRaster.raster : await renderRasterNode(d.doc, page, RASTER_SCALE, layers?.config);
+        d.fillRaster = { page, allLayers: !layers, raster };
+        // text-layer labels and word boxes, vector doorway bridges, the scale, OCR boxes on request
+        const hints = await fillHintsFor(d.doc, page, raster, { metersPerPt: cal?.metersPerPt, ocr, layers: layers?.config });
+        return { raster, hints, layers, result: dynamicFill(raster, { x: at[0], y: at[1] }, undefined, hints) };
+      };
+      let run = await fillOn(!all_layers && !!d.fillLayers);
+      if (run.layers && ('error' in run.result || fillMergesRooms(run.result.points, run.hints.roomNames))) {
+        const full = await fillOn(false);
+        // keep the clean fill when the full drawing cannot fill here at all
+        if (!('error' in full.result) || 'error' in run.result) run = full;
+      }
+      const { hints, layers, result } = run;
       const labels = hints.labels ?? [];
       const bridges = hints.bridges ?? [];
-      const result = dynamicFill(raster, { x: at[0], y: at[1] }, undefined, hints);
       if ('error' in result) throw new Error(result.error);
       const markup: Markup = {
         id: nextId('mcp'),
@@ -406,6 +427,7 @@ export async function runMcpServer(): Promise<void> {
           // only gaps that actually bound this room; absent for a sealed room
           ...(gapPt > 0 ? { gapClosedPt: round(gapPt, 1), ...(cal ? { gapClosedM: round(gapPt * cal.metersPerPt, 3) } : {}) } : {}),
           ...(result.bridged ? { vectorDoorBridgeUsed: true } : {}),
+          ...(layers ? { layersLeftOut: layers.hidden.length } : {}),
           ...(result.swings ? { doorSwingArcErased: true } : {}),
           // the doorway rule in force: gaps between wall ends up to this width close by default
           ...(result.doorPx

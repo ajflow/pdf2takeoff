@@ -5,7 +5,7 @@ import { writeFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { createCanvas } from '@napi-rs/canvas';
-import { renderRasterNode, rasterizeToNode } from './raster-node.ts';
+import { renderRasterNode, rasterizeToNode, type LayerConfig } from './raster-node.ts';
 import { imageKindByExt, openAny } from './image-node.ts';
 import { RASTER_SCALE, type RasterPage, type ScanDeps } from '../engine/ports.ts';
 import { scanForSimilar } from '../engine/scan.ts';
@@ -24,6 +24,7 @@ import { metersPerPtForRatio } from '../engine/units.ts';
 import { dynamicFill, type FillHints } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { dimensionScale, shxWords, type DimensionScale, type DimWord } from '../engine/dimensions.ts';
+import { layersToHideForFill, NOT_A_ROOM_NAME, type LayerRole } from '../engine/cad-layers.ts';
 
 /** Read pdf2takeoff-authored annotations from every page of an open doc. */
 export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
@@ -48,11 +49,25 @@ export async function renderPagePng(doc: PDFDocumentProxy, page: number, scale: 
   return { png: cnv.toBuffer('image/png'), widthPx: raster.width, heightPx: raster.height };
 }
 
-/** The page's vector geometry from its drawing operators. */
-export async function vectorDocPage(doc: PDFDocumentProxy, page: number) {
+/** The page's vector geometry from its drawing operators (with `layers`, as that configuration shows the page). */
+export async function vectorDocPage(doc: PDFDocumentProxy, page: number, layers?: LayerConfig) {
   // hidden CAD layers are skipped, as the renderer skips them
-  const layers = await doc.getOptionalContentConfig();
-  return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => layers.isVisible(g as never) });
+  const cfg = layers ?? (await doc.getOptionalContentConfig());
+  return vectorize(await (await doc.getPage(page)).getOperatorList(), OPS, { isVisible: (g) => cfg.isVisible(g as never) });
+}
+
+/**
+ * The document's layers with Magic Fill's clutter hidden: furniture, finish
+ * hatching, annotation and services drawn over the floor (see
+ * cad-layers.ts). Null when the document has no such layers.
+ */
+export async function fillLayerConfig(doc: PDFDocumentProxy): Promise<{ config: LayerConfig; hidden: { name: string; role: LayerRole }[] } | null> {
+  const config = await doc.getOptionalContentConfig();
+  const groups = [...(config as unknown as Iterable<[string, { name: string | null }]>)].map(([id, g]) => ({ id, name: g.name }));
+  const hide = layersToHideForFill(groups);
+  if (!hide.length) return null;
+  for (const h of hide) config.setVisibility(h.id, false);
+  return { config, hidden: hide.map(({ name, role }) => ({ name, role })) };
 }
 
 /**
@@ -238,13 +253,15 @@ function wordBox(raster: RasterPage, wd: OcrWord & { angleDeg?: number }): NonNu
  * raster imports have no text layer). One call per sheet; the hints are
  * reusable across clicks on it.
  */
-export async function fillHintsFor(doc: PDFDocumentProxy, page: number, raster: RasterPage, opts: { metersPerPt?: number; ocr?: boolean } = {}): Promise<FillHints> {
-  const [tc, vec] = await Promise.all([doc.getPage(page).then((pg) => pg.getTextContent()), vectorDocPage(doc, page).catch(() => null)]);
+export async function fillHintsFor(doc: PDFDocumentProxy, page: number, raster: RasterPage, opts: { metersPerPt?: number; ocr?: boolean; layers?: LayerConfig } = {}): Promise<FillHints & { roomNames: Pt[] }> {
+  const [tc, vec] = await Promise.all([doc.getPage(page).then((pg) => pg.getTextContent()), vectorDocPage(doc, page, opts.layers).catch(() => null)]);
   const items = tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[];
   const words: (OcrWord & { angleDeg?: number })[] = items.flatMap((it) => wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height));
   if (opts.ocr) words.push(...(await ocrRaster(raster).catch(() => [] as OcrWord[])));
   return {
     labels: roomLabelPoints(items),
+    // room names only (no finish or construction notes), for the merged-rooms test
+    roomNames: roomLabelPoints(items, NOT_A_ROOM_NAME),
     textBoxes: words.map((wd) => wordBox(raster, wd)),
     ...(vec ? { bridges: doorBridgesFor(vec, opts.metersPerPt) } : {}),
     ...(opts.metersPerPt ? { metersPerPt: opts.metersPerPt } : {}),

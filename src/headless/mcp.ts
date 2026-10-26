@@ -32,6 +32,7 @@ import type { RasterPage } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
 import { checkAgainstDimensions } from '../engine/dimensions.ts';
 import { fillMergesRooms } from '../engine/cad-layers.ts';
+import { TAKEOFF_TEMPLATES, templateById, templateSummary, templateMatrix } from '../engine/templates.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -768,31 +769,40 @@ export async function runMcpServer(): Promise<void> {
     'export',
     {
       description:
-        'Export the quantities table (items + group totals) to a file: csv, tsv or xlsx. The agent passes the output path; nothing is uploaded anywhere.',
+        'Export the quantities table (items + group totals) to a file: csv, tsv or xlsx. With template (a trade price sheet: fitout, electrical or painting), exports that sheet\'s lines in order instead, each totalled from the markups labelled with the line\'s exact wording (0 where nothing was measured): label markups with the template\'s line names to fill it. The agent passes the output path; nothing is uploaded anywhere.',
       inputSchema: {
         id: z.string(),
         format: z.enum(['csv', 'tsv', 'xlsx']).default('csv'),
         path: z.string().describe('output file path'),
+        template: z
+          .enum(TAKEOFF_TEMPLATES.map((t) => t.id) as [string, ...string[]])
+          .optional()
+          .describe(`a trade template's line summary instead of the full table: ${TAKEOFF_TEMPLATES.map((t) => `${t.id} (${t.items.map((i) => i.label).join(', ')})`).join('; ')}`),
         columns: z
           .array(z.object({ name: z.string(), formula: z.string(), unit: z.string() }))
           .optional()
           .describe('computed columns, e.g. {"name":"Waste +10%","formula":"value * 1.1","unit":"m"}'),
       },
     },
-    async ({ id, format, path, columns }) => {
+    async ({ id, format, path, columns, template }) => {
       const d = getDoc(id);
-      const matrix = buildMatrix({
-        markups: d.markups,
-        calibrations: d.calibrations,
-        displayUnit: 'm',
-        columns,
-      });
+      const t = templateById(template);
+      const lines = t ? templateSummary(t, d.markups, (m) => d.calibrations.get(m.page)) : null;
+      const matrix =
+        t && lines
+          ? templateMatrix(t, lines, basename(d.path))
+          : buildMatrix({
+              markups: d.markups,
+              calibrations: d.calibrations,
+              displayUnit: 'm',
+              columns,
+            });
       if (format === 'xlsx') {
         writeFileSync(path, await xlsxBytes(matrix));
       } else {
         writeFileSync(path, '\ufeff' + toDelimited(matrix, format === 'csv' ? ',' : '\t'));
       }
-      return text({ path, format, markups: d.markups.length });
+      return text({ path, format, markups: d.markups.length, ...(lines ? { template: t!.id, lines: lines.map(({ label, quantity, unit }) => ({ label, quantity, unit })) } : {}) });
     },
   );
 

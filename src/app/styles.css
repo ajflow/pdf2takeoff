@@ -1955,6 +1955,29 @@ table.demo-results td.mono {
   outline: none;
   border-color: rgb(var(--teal-rgb) / 0.5);
 }
+.lib-add select {
+  flex: 1;
+  min-width: 0;
+  background: var(--field);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 9px;
+}
+.lib-template {
+  margin: 4px 0 14px;
+}
+.lib-template label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.lib-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
 .preset-list {
   display: flex;
   flex-wrap: wrap;

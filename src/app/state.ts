@@ -48,6 +48,8 @@ export interface AppState {
   /** last reversible action, so Ctrl+Z can restore a drag before falling back to delete-newest */
   lastAction: { kind: 'move'; id: string; before: Pt[] } | null;
   presets: ToolPreset[];
+  /** the trade template loaded into the library (its id), for the template summary */
+  template: string | null;
   activePreset: ToolPreset | null;
   columns: CustomColumn[];
   viewports: Viewport[];
@@ -75,6 +77,7 @@ export const state: AppState = {
   selectedId: null,
   lastAction: null,
   presets: [],
+  template: null,
   activePreset: null,
   columns: [],
   viewports: [],

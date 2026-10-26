@@ -84,7 +84,7 @@ export function noteExport(): void {
 export function initNudges(): void {
   // the real export buttons (the top bar's Export menu proxies click these too);
   // a moment's delay lets the download or report open first
-  for (const id of ['exportXlsxBtn', 'exportCsvBtn', 'copyTsvBtn', 'reportBtn', 'savePdfBtn']) {
+  for (const id of ['exportXlsxBtn', 'exportCsvBtn', 'copyTsvBtn', 'reportBtn', 'savePdfBtn', 'templateExportBtn', 'templateCopyBtn']) {
     document.getElementById(id)?.addEventListener('click', () => setTimeout(noteExport, 1200));
   }
 }

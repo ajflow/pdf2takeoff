@@ -17,7 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor } from './ops.ts';
+import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor, sheetDimensions } from './ops.ts';
 import { terminateOcr } from './ocr-node.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
@@ -30,6 +30,7 @@ import { countItems, COUNT_PRESETS, presetById, proposalMarkups } from '../engin
 import { RASTER_SCALE } from '../engine/ports.ts';
 import type { RasterPage } from '../engine/ports.ts';
 import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck } from '../engine/scale.ts';
+import { checkAgainstDimensions } from '../engine/dimensions.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -257,7 +258,7 @@ export async function runMcpServer(): Promise<void> {
     'set_scale',
     {
       description:
-        'Calibrate the drawing scale, required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0"), measure a known dimension (give both endpoints in PDF points and its true length), or pass neither to read the printed scale note off the sheet (text layer, OCR of the render on scans).',
+        'Calibrate the drawing scale, required before length/area values mean anything. Either pick a ratio ("1:100", or a preset like 1/4" = 1\'-0"), measure a known dimension (give both endpoints in PDF points and its true length), or pass neither to read the printed scale note off the sheet (text layer, OCR of the render on scans). On CAD sheets the printed dimensions are measured against their drawn lines too: when they clearly disagree with the title block, reading the sheet uses the dimensions, and any scale you set is reported against them (sheetCheck.dimensions), so a mislabelled sheet cannot double every length.',
       inputSchema: {
         id: z.string(),
         page: z.number().int().min(1).default(1),
@@ -279,16 +280,27 @@ export async function runMcpServer(): Promise<void> {
       // typed ratio stays instant on scans) OCR of the render
       const sheet = await pageWordsWithOcr(d.doc, page, undefined, { ocr: ratio || from_points ? false : undefined });
       const origin = sheet.source === 'ocr' ? 'OCR' : 'text layer';
+      // the sheet's printed dimensions measured against their drawn lines: a
+      // witness the title block cannot fool (vector sheets only)
+      const dims = await sheetDimensions(d.doc, page, sheet.words);
+      const printed = findScaleRatio(sheet.words, origin);
       let metersPerPt: number;
       let source: string;
       if (ratio) {
         metersPerPt = parseScaleSpec(ratio);
         source = `mcp preset ${ratio}`;
       } else if (!from_points) {
-        const hit = findScaleRatio(sheet.words, origin);
-        if (!hit) throw new Error('no scale note could be read off the sheet: pass ratio or from_points');
-        metersPerPt = metersPerPtForRatio(hit.ratio);
-        source = `sheet ${hit.source}`;
+        const hit = printed;
+        if (!hit && dims?.ratio === undefined) throw new Error('no scale note could be read off the sheet: pass ratio or from_points');
+        // printed dimensions outvote a title block they clearly disagree with
+        const titleWrong = hit && dims ? checkAgainstDimensions(hit.ratio, dims, hit.ratio).status === 'disagrees' : false;
+        if (dims?.ratio !== undefined && (!hit || titleWrong)) {
+          metersPerPt = metersPerPtForRatio(dims.ratio);
+          source = `sheet dimensions 1:${dims.ratio} (${dims.support} of ${dims.total} printed dimensions agree${hit ? `; the title block's ${hit.source} does not match them` : ''})`;
+        } else {
+          metersPerPt = metersPerPtForRatio(hit!.ratio);
+          source = `sheet ${hit!.source}`;
+        }
       } else if (from_points) {
         const ptDist = distPt(
           { x: from_points.a[0], y: from_points.a[1] },
@@ -313,10 +325,14 @@ export async function runMcpServer(): Promise<void> {
       // and is reported above instead.
       const vp = (await d.doc.getPage(page)).getViewport({ scale: RASTER_SCALE });
       const pagePx = vp.width * vp.height; // what renderRasterNode would allocate, UserUnit included
+      const dimCheck = dims ? checkAgainstDimensions(setRatio, dims, printed?.ratio) : null;
       const noPrintedScale = check.status === 'none' || check.status === 'nts' || check.status === 'ambiguous';
       const doors = noPrintedScale && pagePx <= DOOR_CHECK_MAX_PX ? doorWidthCheck(metersPerPt, sheetDoorWidthPx(await renderRasterNode(d.doc, page, RASTER_SCALE)), RASTER_SCALE) : null;
+      // the title block is wrong but the dimensions back this scale: worth knowing, not a risk
+      const note = check.status === 'disagrees' && dimCheck?.status === 'agrees' ? `the title block says 1:${round(check.sheetRatio ?? 0, 2)}, but the sheet's printed dimensions are drawn at 1:${dimCheck.drawnRatio}, which this scale matches` : null;
       const warnings: string[] = [];
-      if (check.status === 'disagrees') warnings.push(`the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}`);
+      if (dimCheck?.status === 'disagrees') warnings.push(dimCheck.message!.replace(/\.$/, ''));
+      else if (check.status === 'disagrees' && !note) warnings.push(`the sheet's printed scale is 1:${round(check.sheetRatio ?? 0, 2)}${check.likely ? `: likely ${check.likely}` : ''}`);
       if (doors?.status === 'implausible') warnings.push(`this scale makes the sheet's doorways ${round(doors.impliedDoorM, 2)} m wide${doors.likely ? `: likely ${doors.likely}` : ''}`);
       return text({
         set: pages,
@@ -329,7 +345,10 @@ export async function runMcpServer(): Promise<void> {
           sheetSays: votes.map((v) => ({ ratio: round(v.ratio, 3), source: v.source })),
           // null when a printed scale was checked instead, when the sheet shows no agreed door width (no two-jamb doorways), or when it is larger than A1
           doorWidth: doors ? { status: doors.status, impliedDoorM: round(doors.impliedDoorM, 3), ...(doors.likely ? { likely: doors.likely } : {}) } : null,
+          // printed dimensions measured against their drawn lines; null on image pages
+          dimensions: dimCheck ? { status: dimCheck.status, ...(dimCheck.drawnRatio !== undefined ? { drawnRatio: dimCheck.drawnRatio } : {}), agreeing: dimCheck.support, measured: dimCheck.total } : null,
           ...(warnings.length ? { warning: `${warnings.join('; ')}. Check before measuring` } : {}),
+          ...(note ? { note } : {}),
         },
       });
     },

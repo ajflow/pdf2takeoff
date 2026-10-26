@@ -143,6 +143,7 @@ function sourceText(source: string): string {
   if (/^drawing units/.test(source)) return /assumed/.test(source) ? 'units assumed' : 'from drawing units';
   if (/^measured |demo/.test(source)) return 'from a dimension';
   if (/^preset /.test(source)) return 'set by hand';
+  if (/^printed dimensions/.test(source)) return 'from dimensions';
   return 'set';
 }
 
@@ -173,6 +174,9 @@ export function renderScaleChip(open: boolean): void {
     icon = TICK;
   } else if (check?.status === 'doors-ok') {
     src = 'doors check out';
+    icon = TICK;
+  } else if (check?.status === 'dims-ok') {
+    src = 'dimensions check out';
     icon = TICK;
   } else if (check) {
     chip.classList.add('warn');

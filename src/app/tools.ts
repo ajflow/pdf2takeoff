@@ -3,7 +3,8 @@
 
 import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
 import { openScanReview, isDoubtful } from './scanreview';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc } from './viewer';
+import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers } from './viewer';
+import { fillMergesRooms, NOT_A_ROOM_NAME } from '../engine/cad-layers';
 import { dimensionScale, shxWords, checkAgainstDimensions, type DimensionScale } from '../engine/dimensions';
 import { doorBridgesFor } from '../engine/fill-vector';
 import { renderMarkups, renderPreview, type PreviewSpec } from './render';
@@ -296,7 +297,7 @@ function onDoubleClick(e: MouseEvent): void {
 // The last page raster the fill used. The fill caches its page-wide state on
 // the raster (dynamicfill), so reusing it for the next fill on the same page
 // skips that work too; a new document or page just misses the cache.
-let fillRaster: { doc: unknown; page: number; raster: RasterPage } | null = null;
+let fillRaster: { doc: unknown; page: number; clean: boolean; raster: RasterPage } | null = null;
 
 async function runFill(p: Pt): Promise<void> {
   hint('Filling…');
@@ -305,17 +306,28 @@ async function runFill(p: Pt): Promise<void> {
     // room labels, the scale at the click and vector doorway bridges let the
     // fill stop at doorways; page text and geometry are cached per page
     const doc = getPdfDoc();
-    const cached = fillRaster && fillRaster.doc === doc && fillRaster.page === state.pageNum;
-    const raster = cached ? fillRaster!.raster : await renderRaster(state.pageNum, 3);
-    fillRaster = { doc, page: state.pageNum, raster };
-    const [items, vec] = await Promise.all([
-      getPageTextItems(state.pageNum).catch(() => []),
-      getPageVector(state.pageNum).catch(() => null),
-    ]);
+    const page = state.pageNum;
+    const [items, fillLayers] = await Promise.all([getPageTextItems(page).catch(() => []), getFillLayers()]);
     const labels = roomLabelPoints(items);
-    const clickCal = calibrationForMarkup({ id: '', page: state.pageNum, type: 'area', label: '', points: [p], createdAt: 0 });
-    const bridges = vec ? doorBridgesFor(vec, clickCal?.metersPerPt) : [];
-    const result = dynamicFill(raster, p, undefined, { labels, bridges, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
+    const clickCal = calibrationForMarkup({ id: '', page, type: 'area', label: '', points: [p], createdAt: 0 });
+    // CAD layers drawn over the floor (furniture, finish hatching, notes,
+    // services, structure above) are left out of the fill's own render, so
+    // they cannot stop it short of the walls; what you see is unchanged
+    const fillOn = async (clean: boolean) => {
+      const cached = fillRaster && fillRaster.doc === doc && fillRaster.page === page && fillRaster.clean === clean;
+      const raster = cached ? fillRaster!.raster : await renderRaster(page, 3, clean ? fillLayers?.config : undefined);
+      fillRaster = { doc, page, clean, raster };
+      const vec = await getPageVector(page, clean).catch(() => null);
+      const bridges = vec ? doorBridgesFor(vec, clickCal?.metersPerPt) : [];
+      return dynamicFill(raster, p, undefined, { labels, bridges, ...(clickCal ? { metersPerPt: clickCal.metersPerPt } : {}) });
+    };
+    let result = await fillOn(!!fillLayers);
+    // leaving those layers out can lose a door swing or jamb they carried:
+    // when the fill then takes in two named rooms (or fails), fill on every layer
+    if (fillLayers && ('error' in result || fillMergesRooms(result.points, roomLabelPoints(items, NOT_A_ROOM_NAME)))) {
+      const full = await fillOn(false);
+      if (!('error' in full) || 'error' in result) result = full;
+    }
     if ('error' in result) {
       hint(result.error);
       return;

@@ -10,6 +10,7 @@ import { state, emit } from './state';
 import { vectorize, type VecPage } from '../engine/vector';
 import { parseImagePages, parseScales, PAPER_KEY, SCALE_KEY } from '../engine/inputs';
 import { METERS_PER_PT } from '../engine/units';
+import { layersToHideForFill, type LayerRole } from '../engine/cad-layers';
 
 /**
  * Where pdf.js finds its WebAssembly decoders (CCITT fax, JBIG2, JPEG 2000:
@@ -119,6 +120,37 @@ export async function closePdf(): Promise<void> {
 type TextItems = { str?: string; transform?: number[]; width?: number; height?: number }[];
 const vectorCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<VecPage>>>();
 const textCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<TextItems>>>();
+const cleanVectorCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<VecPage>>>();
+
+/** pdf.js's layer (optional-content) configuration. */
+export type LayerConfig = Awaited<ReturnType<PDFDocumentProxy['getOptionalContentConfig']>>;
+const fillLayerCache = new WeakMap<PDFDocumentProxy, Promise<{ config: LayerConfig; hidden: { name: string; role: LayerRole }[] } | null>>();
+
+/**
+ * The document's layers with Magic Fill's clutter hidden (furniture, finish
+ * hatching, annotation, services, structure above; see cad-layers.ts). Null
+ * when the document has no such layers. What the person sees is unchanged:
+ * only the fill renders with this.
+ */
+export function getFillLayers(): Promise<{ config: LayerConfig; hidden: { name: string; role: LayerRole }[] } | null> {
+  const d = doc;
+  if (!d) return Promise.resolve(null);
+  let p = fillLayerCache.get(d);
+  if (!p) {
+    p = d
+      .getOptionalContentConfig()
+      .then((config) => {
+        const groups = [...(config as unknown as Iterable<[string, { name: string | null }]>)].map(([id, g]) => ({ id, name: g.name }));
+        const hide = layersToHideForFill(groups);
+        if (!hide.length) return null;
+        for (const h of hide) config.setVisibility(h.id, false);
+        return { config, hidden: hide.map(({ name, role }) => ({ name, role })) };
+      })
+      .catch(() => null);
+    fillLayerCache.set(d, p);
+  }
+  return p;
+}
 function cached<T>(store: WeakMap<PDFDocumentProxy, Map<number, Promise<T>>>, d: PDFDocumentProxy, pageNum: number, make: () => Promise<T>): Promise<T> {
   let byPage = store.get(d);
   if (!byPage) store.set(d, (byPage = new Map()));
@@ -131,12 +163,16 @@ function cached<T>(store: WeakMap<PDFDocumentProxy, Map<number, Promise<T>>>, d:
   return p;
 }
 
-/** The page's vector geometry from its drawing operators (null before a document loads). */
-export async function getPageVector(pageNum: number): Promise<VecPage | null> {
+/**
+ * The page's vector geometry from its drawing operators (null before a
+ * document loads). `clean`: as Magic Fill sees it, without the clutter layers.
+ */
+export async function getPageVector(pageNum: number, clean = false): Promise<VecPage | null> {
   const d = doc;
   if (!d) return null;
-  return cached(vectorCache, d, pageNum, async () => {
-    const [page, layers] = await Promise.all([d.getPage(pageNum), d.getOptionalContentConfig()]);
+  return cached(clean ? cleanVectorCache : vectorCache, d, pageNum, async () => {
+    const fill = clean ? await getFillLayers() : null;
+    const [page, layers] = await Promise.all([d.getPage(pageNum), fill ? fill.config : d.getOptionalContentConfig()]);
     return vectorize(await page.getOperatorList(), pdfjsLib.OPS, { isVisible: (g) => layers.isVisible(g as never) });
   });
 }

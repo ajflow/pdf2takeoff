@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node scripts/run-checks.mjs scripts/check-fill.mjs scripts/check-detector.mjs scripts/check-detector-node.mjs scripts/check-ocr.mjs scripts/check-scale.mjs scripts/check-dimensions.mjs scripts/check-cad-layers.mjs scripts/check-vector.mjs scripts/check-raster-input.mjs scripts/check-inputs.mjs scripts/check-export.mjs scripts/check-scan.mjs scripts/check-openings.mjs scripts/check-scaled-bench.mjs scripts/check-inventory.mjs",
+    "typecheck:engine": "tsc --noEmit -p src/engine && node scripts/check-engine.mjs && node scripts/run-checks.mjs scripts/check-fill.mjs scripts/check-detector.mjs scripts/check-detector-node.mjs scripts/check-ocr.mjs scripts/check-scale.mjs scripts/check-dimensions.mjs scripts/check-cad-layers.mjs scripts/check-templates.mjs scripts/check-vector.mjs scripts/check-raster-input.mjs scripts/check-inputs.mjs scripts/check-export.mjs scripts/check-scan.mjs scripts/check-openings.mjs scripts/check-scaled-bench.mjs scripts/check-inventory.mjs",
     "build": "npm run typecheck:engine && tsc --noEmit && vite build",
     "build:node": "tsc -p tsconfig.node.json",
     "prepack": "npm run build:node",

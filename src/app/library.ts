@@ -6,11 +6,55 @@
 import { state, emit } from './state';
 import { savePresets } from './persistence';
 import { setTool, showHint } from './tools';
+import { TAKEOFF_TEMPLATES, templateById } from '../engine/templates';
+
+const TEMPLATE_KEY = 'p2t-template';
+
+/** Show the template exports once a trade template is loaded. */
+export function syncTemplateExports(): void {
+  const on = !!templateById(state.template);
+  for (const id of ['templateExportBtn', 'templateCopyBtn']) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !on;
+  }
+}
 
 let listEl: HTMLElement;
 
 export function initLibrary(): void {
   listEl = document.getElementById('presetList')!;
+  const pick = document.getElementById('templateSelect') as HTMLSelectElement | null;
+  if (pick) {
+    for (const t of TAKEOFF_TEMPLATES) pick.add(new Option(`${t.name}: ${t.description}`, t.id));
+    try {
+      state.template = templateById(localStorage.getItem(TEMPLATE_KEY))?.id ?? null;
+    } catch {
+      // storage blocked: the template is simply not remembered
+    }
+    if (state.template) pick.value = state.template;
+    syncTemplateExports();
+    document.getElementById('templateLoad')?.addEventListener('click', () => {
+      const t = templateById(pick.value);
+      if (!t) return showHint('Choose a trade first');
+      let added = 0;
+      for (const item of t.items) {
+        if (state.presets.some((p) => p.type === item.type && p.label.toLowerCase() === item.label.toLowerCase())) continue;
+        state.presets.push({ type: item.type, label: item.label });
+        added++;
+      }
+      state.template = t.id;
+      try {
+        localStorage.setItem(TEMPLATE_KEY, t.id);
+      } catch {
+        // storage blocked
+      }
+      void savePresets(state.presets);
+      syncTemplateExports();
+      renderLibrary();
+      emit();
+      showHint(`${t.name} template loaded: ${added} tool${added === 1 ? '' : 's'} added. Pick one, measure, then export the template summary.`);
+    });
+  }
   const input = document.getElementById('presetLabel') as HTMLInputElement;
 
   document.getElementById('presetSave')?.addEventListener('click', () => {

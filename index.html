@@ -441,6 +441,14 @@
         <section class="panel-view" id="viewLibrary" role="tabpanel" aria-labelledby="tabLibrary" hidden>
         <div class="library">
           <h2>Tool library</h2>
+          <div class="lib-template">
+            <label for="templateSelect">Start from a trade template</label>
+            <div class="lib-add">
+              <select id="templateSelect" aria-describedby="templateHint"><option value="">Choose a trade…</option></select>
+              <button class="btn" id="templateLoad" title="Add this trade's line items to the library as labelled tools">Load</button>
+            </div>
+            <p class="lib-hint" id="templateHint">Each line of the trade's price sheet becomes a labelled tool, and the template summary exports them in order.</p>
+          </div>
           <div class="lib-add">
             <input type="text" id="presetLabel" placeholder="Label, e.g. Skirting" autocomplete="off" aria-label="Preset label" />
             <button class="btn" id="presetSave" title="Save the current tool + this label as a reusable preset">+ Save</button>
@@ -471,6 +479,8 @@
             <div class="menu menu-up menu-right hidden" id="exportMoreMenu" role="menu" aria-label="Other formats">
               <button class="menu-item" type="button" role="menuitem" id="exportCsvBtn" title="Download the markups list as CSV">CSV</button>
               <button class="menu-item" type="button" role="menuitem" id="copyTsvBtn" title="Copy the list for pasting into Excel">Copy for a spreadsheet</button>
+              <button class="menu-item" type="button" role="menuitem" id="templateExportBtn" title="Every line of the loaded trade template, in order, with its quantity" hidden>Template summary (Excel)</button>
+              <button class="menu-item" type="button" role="menuitem" id="templateCopyBtn" title="Copy the template's lines and quantities for pasting into a price sheet" hidden>Copy template quantities</button>
               <button class="menu-item" type="button" role="menuitem" id="reportBtn" title="Printable report: marked-up sheets and quantities">Printable report</button>
               <button class="menu-item" type="button" role="menuitem" id="savePdfBtn" title="Save the PDF with markups as standard annotations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/></svg><span>Save into the PDF</span></button>
             </div>

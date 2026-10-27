@@ -19,6 +19,7 @@ import { columnValuesFor } from './columns';
 import { isVisibleLayer } from './layers';
 import { fileStem } from './inputs';
 import { COLORS, scanStyle } from './render';
+import { templateById, templateSummary, templateMatrix } from '../engine/templates';
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
@@ -86,6 +87,8 @@ export function initTable(): void {
 
   document.getElementById('exportCsvBtn')?.addEventListener('click', exportCsv);
   document.getElementById('copyTsvBtn')?.addEventListener('click', copyTsv);
+  document.getElementById('templateExportBtn')?.addEventListener('click', () => void exportTemplate());
+  document.getElementById('templateCopyBtn')?.addEventListener('click', () => void copyTemplate());
   document.getElementById('exportXlsxBtn')?.addEventListener('click', exportXlsx);
   document.getElementById('reportBtn')?.addEventListener('click', () => void exportReport());
   document.getElementById('clearMarkups')?.addEventListener('click', () => {
@@ -257,6 +260,34 @@ export async function exportXlsx(): Promise<void> {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     await xlsxBytes(buildMatrix(takeoffData())),
   );
+}
+
+/** The loaded trade template's lines in order, with this takeoff's quantities. */
+function templateRows() {
+  const t = templateById(state.template);
+  if (!t) return null;
+  return { t, lines: templateSummary(t, state.markups, calibrationForMarkup) };
+}
+
+async function exportTemplate(): Promise<void> {
+  const rows = templateRows();
+  if (!rows) return;
+  const title = state.fileName.replace(/\.[a-z0-9]+$/i, '') || 'takeoff';
+  download(`${baseName()}-${rows.t.id}-summary.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', await xlsxBytes(templateMatrix(rows.t, rows.lines, title)));
+}
+
+async function copyTemplate(): Promise<void> {
+  const rows = templateRows();
+  if (!rows) return;
+  try {
+    await navigator.clipboard.writeText(rows.lines.map((l) => `${l.label}\t${l.quantity}\t${l.unit}`).join('\n'));
+    const btn = document.getElementById('templateCopyBtn')!;
+    const old = btn.textContent;
+    btn.textContent = 'Copied ✓';
+    setTimeout(() => (btn.textContent = old), 1200);
+  } catch {
+    /* clipboard unavailable */
+  }
 }
 
 async function copyTsv(): Promise<void> {

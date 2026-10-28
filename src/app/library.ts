@@ -7,6 +7,7 @@ import { state, emit } from './state';
 import { savePresets } from './persistence';
 import { setTool, showHint } from './tools';
 import { TAKEOFF_TEMPLATES, templateById } from '../engine/templates';
+import { findWalls } from './walls';
 
 const TEMPLATE_KEY = 'p2t-template';
 
@@ -23,6 +24,7 @@ let listEl: HTMLElement;
 
 export function initLibrary(): void {
   listEl = document.getElementById('presetList')!;
+  document.getElementById('findWallsBtn')?.addEventListener('click', () => void findWalls());
   const pick = document.getElementById('templateSelect') as HTMLSelectElement | null;
   if (pick) {
     for (const t of TAKEOFF_TEMPLATES) pick.add(new Option(`${t.name}: ${t.description}`, t.id));

@@ -90,7 +90,8 @@ export interface TemplateLine {
 
 /**
  * Every line of the template, in its order, totalled from the markups that
- * carry its label and tool (labels match ignoring case and spacing). Lines
+ * carry its label and tool (labels match ignoring case and spacing; a label
+ * with a bracketed detail, "Walls (half height)", counts toward its line). Lines
  * nothing was measured for come out 0, which is a real answer on a price
  * sheet. Each markup is totalled at its own scale.
  */
@@ -107,7 +108,11 @@ export function templateSummary(t: TakeoffTemplate, markups: Markup[], calFor: (
     totals.set(k, acc);
   }
   return t.items.map((item) => {
-    const { total, uncalibrated } = totals.get(key(item.type, item.label)) ?? { total: 0, uncalibrated: 0 };
+    // "Walls (half height)" and "Walls (proposed partition)" roll up into "Walls"
+    const own = key(item.type, item.label);
+    const parts = [...totals.entries()].filter(([k]) => k === own || k.startsWith(`${own} (`));
+    const total = parts.reduce((s, [, v]) => s + v.total, 0);
+    const uncalibrated = parts.reduce((s, [, v]) => s + v.uncalibrated, 0);
     const quantity = Math.round(total * (item.factor ?? 1) * 100) / 100;
     return { label: item.label, quantity, unit: item.unit, uncalibrated, ...(item.note ? { note: item.note } : {}) };
   });

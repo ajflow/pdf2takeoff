@@ -449,6 +449,10 @@
             </div>
             <p class="lib-hint" id="templateHint">Each line of the trade's price sheet becomes a labelled tool, and the template summary exports them in order.</p>
           </div>
+          <div class="lib-template">
+            <button class="btn" type="button" id="findWallsBtn" title="Propose the wall runs on this sheet from its CAD wall layers and legend, flagged for you to check">Find walls on this sheet</button>
+            <p class="lib-hint">On CAD PDFs that keep their layers: new walls by legend type ("proposed partition", "half height"), measured along their centrelines, flagged for you to check. They count toward a template's Walls line.</p>
+          </div>
           <div class="lib-add">
             <input type="text" id="presetLabel" placeholder="Label, e.g. Skirting" autocomplete="off" aria-label="Preset label" />
             <button class="btn" id="presetSave" title="Save the current tool + this label as a reusable preset">+ Save</button>

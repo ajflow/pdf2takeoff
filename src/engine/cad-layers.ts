@@ -91,3 +91,8 @@ export function fillMergesRooms(points: { x: number; y: number }[], labels: { x:
   }
   return false;
 }
+
+/** Whether a layer holds walls (the layers wall runs are read from). */
+export function isWallLayer(name: string): boolean {
+  return layerRole(name) === 'structure' && /wall|partition/i.test(name);
+}

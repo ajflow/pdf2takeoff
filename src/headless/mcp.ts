@@ -17,7 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { openAny } from './image-node.ts';
 import { renderRasterNode } from './raster-node.ts';
-import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor, sheetDimensions, fillLayerConfig } from './ops.ts';
+import { readMarkups, renderPagePng, scanDocAt, scanDocAllPages, compareDocs, compareFolders, quantityDelta, pageWordsWithOcr, fillHintsFor, sheetDimensions, fillLayerConfig, wallRunsOnPage } from './ops.ts';
 import { terminateOcr } from './ocr-node.ts';
 import { statSync } from 'node:fs';
 import { markupLength, markupArea, markupPerimeter, markupVolume, markupAngle, defaultLabel, nextId, distPt } from '../engine/geometry.ts';
@@ -33,6 +33,7 @@ import { scaleVotesFromWords, scaleConsensus, checkAgainstSheet, doorWidthCheck 
 import { checkAgainstDimensions } from '../engine/dimensions.ts';
 import { fillMergesRooms } from '../engine/cad-layers.ts';
 import { TAKEOFF_TEMPLATES, templateById, templateSummary, templateMatrix } from '../engine/templates.ts';
+import { wallLabel, classesToPropose } from '../engine/wall-runs.ts';
 import { parseScaleSpec } from './spec.ts';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { Calibration, Markup } from '../engine/types.ts';
@@ -573,6 +574,52 @@ export async function runMcpServer(): Promise<void> {
           ...(result.note ? { note: result.note } : {}),
           ...('truncated' in result && result.truncated ? { truncated: true } : {}),
         },
+      });
+    },
+  );
+
+  server.registerTool(
+    'propose_walls',
+    {
+      description:
+        'Propose the wall runs on a CAD sheet as flagged length markups (status "check") for a person to confirm or delete. Reads the PDF\'s wall layers, groups the filled wall pieces by shade and names each shade from the sheet\'s legend ("PROPOSED PARTITION", "HALF HEIGHT", "EXISTING PARTITION"); each piece is measured along its centreline (curved walls too), corner and junction squares included. Labels are "Walls (<legend name>)", which roll up into a template\'s Walls line. By default only new walls are proposed (every unnamed shade when the legend names none); include "all" adds existing and demolished walls. Needs a PDF that keeps its CAD layers; returns an error otherwise.',
+      inputSchema: {
+        id: z.string(),
+        page: z.number().int().min(1).default(1),
+        include: z.enum(['new', 'all']).default('new'),
+      },
+    },
+    async ({ id, page, include }) => {
+      const d = getDoc(id);
+      if (page > d.doc.numPages) throw new Error(`page ${page} out of range (1..${d.doc.numPages})`);
+      const found = await wallRunsOnPage(d.doc, page);
+      if (!found) throw new Error('this PDF has no wall layers to read: measure walls with the length tool, or ask for a CAD export that keeps its layers');
+      const cal = d.calibrations.get(page);
+      const chosen = classesToPropose(found.classes, include);
+      const added: string[] = [];
+      for (const c of chosen) {
+        for (const piece of c.pieces) {
+          const m: Markup = { id: nextId('mcp'), page, type: 'length', label: wallLabel(c), points: piece.points, createdAt: Date.now(), status: 'check' };
+          d.markups.push(m);
+          added.push(m.id);
+        }
+      }
+      const toM = (pt: number) => (cal ? round(pt * cal.metersPerPt, 2) : null);
+      return text({
+        proposed: added.length,
+        classes: found.classes.map((c) => ({
+          label: wallLabel(c),
+          kind: c.kind,
+          legend: c.name,
+          fill: c.fill,
+          runs: c.pieces.length,
+          lengthM: toM(c.lengthPt),
+          proposed: chosen.includes(c),
+        })),
+        wallLayers: found.layers,
+        ...(found.classes.length ? {} : { note: 'the wall layers hold no filled wall pieces (this sheet draws its walls as outlines): measure walls with measure type length instead' }),
+        calibrated: !!cal,
+        next: 'render_page to check the proposed runs, set_status or delete_markup on any that are out of scope, then export (template fitout totals them on its Walls line)',
       });
     },
   );

@@ -7,6 +7,7 @@ import { setTool } from './tools';
 import { groupKey } from './table';
 import { hasDoc, fitWidth, setZoom } from './viewer';
 import { showView, closeMenus } from './chrome';
+import { findWalls } from './walls';
 
 interface Command {
   title: string;
@@ -44,6 +45,7 @@ function commands(): Command[] {
       { title: 'Copy for a spreadsheet', group: 'Export', run: click('copyTsvBtn') },
       { title: 'Printable report', group: 'Export', run: click('reportBtn') },
       { title: 'Save into the PDF', group: 'Export', run: click('savePdfBtn') },
+      { title: 'Find walls on this sheet', group: 'Tool', run: () => void findWalls() },
       { title: 'Fit width', key: 'F', group: 'View', run: fitWidth },
       { title: 'Zoom in', key: '+', group: 'View', run: () => setZoom(state.zoom * 1.25) },
       { title: 'Zoom out', key: '−', group: 'View', run: () => setZoom(state.zoom / 1.25) },

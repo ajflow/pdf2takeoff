@@ -163,7 +163,11 @@ function renderMarkup(m: Markup): SVGGElement {
     addVertices(g, pts, color, selected);
     const mid = pts[Math.max(0, pts.length - 2)] ?? pts[0];
     const end = pts[pts.length - 1] ?? mid;
-    addLabel(g, labelText(m), { x: (mid.x + end.x) / 2, y: (mid.y + end.y) / 2 });
+    // a line too short on screen to carry its label (dozens of proposed wall
+    // runs) shows it only when selected; the hover tooltip always has it
+    const text = labelText(m);
+    const onScreen = pts.reduce((s, p, i) => (i ? s + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) : 0), 0);
+    if (selected || onScreen >= text.length * 3.5) addLabel(g, text, { x: (mid.x + end.x) / 2, y: (mid.y + end.y) / 2 });
   } else if (m.type === 'area' || m.type === 'volume') {
     g.appendChild(
       el('polygon', {

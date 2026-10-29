@@ -31,7 +31,18 @@ export interface VecSeg {
 export interface VecPage {
   segs: VecSeg[];
   /** painted paths, with their page-space bounding boxes */
-  paths: { x0: number; y0: number; x1: number; y1: number; segs: [number, number]; form: number; lineWidth: number; curve: boolean }[];
+  paths: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    segs: [number, number];
+    form: number;
+    lineWidth: number;
+    curve: boolean;
+    /** fill colour of a filled path as pdf.js sets it ("#rrggbb"); absent for strokes and pattern fills */
+    fill?: string;
+  }[];
   /** Form XObject instances drawn on the page */
   forms: number;
   /** optional-content (layer) groups referenced */
@@ -60,6 +71,10 @@ export interface OpsTable {
   beginMarkedContent: number;
   beginMarkedContentProps: number;
   endMarkedContent: number;
+  /** fill colours (pdf.js converts grey, RGB and CMYK fills to this, as a hex string) */
+  setFillRGBColor?: number;
+  /** pattern and separation fills */
+  setFillColorN?: number;
 }
 
 export interface VectorizeOptions {
@@ -105,7 +120,8 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
   let ctm: M = [1, 0, 0, 1, 0, 0];
   let lineWidth = 1;
   let dashed = false;
-  const stack: { ctm: M; lineWidth: number; dashed: boolean }[] = [];
+  let fill: string | undefined = '#000000';
+  const stack: { ctm: M; lineWidth: number; dashed: boolean; fill: string | undefined }[] = [];
   const formStack: number[] = [];
   let forms = 0;
   let layers = 0;
@@ -126,11 +142,13 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
   for (let k = 0; k < fnArray.length; k++) {
     const fn = fnArray[k];
     const args = argsArray[k] as unknown[];
-    if (fn === OPS.save) stack.push({ ctm, lineWidth, dashed });
+    if (fn === OPS.save) stack.push({ ctm, lineWidth, dashed, fill });
     else if (fn === OPS.restore) {
       const s = stack.pop();
-      if (s) ({ ctm, lineWidth, dashed } = s);
+      if (s) ({ ctm, lineWidth, dashed, fill } = s);
     } else if (fn === OPS.transform) ctm = mul(ctm, args as unknown as M);
+    else if (OPS.setFillRGBColor !== undefined && fn === OPS.setFillRGBColor) fill = typeof args[0] === 'string' ? (args[0] as string).toLowerCase() : undefined;
+    else if (OPS.setFillColorN !== undefined && fn === OPS.setFillColorN) fill = undefined;
     else if (fn === OPS.setLineWidth) lineWidth = Number(args[0]) || 0;
     else if (fn === OPS.setDash) dashed = Array.isArray(args[0]) && (args[0] as unknown[]).length > 0;
     else if (fn === OPS.setGState) {
@@ -139,14 +157,14 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
         if (key === 'D' && Array.isArray(value)) dashed = Array.isArray(value[0]) && (value[0] as unknown[]).length > 0;
       }
     } else if (fn === OPS.paintFormXObjectBegin) {
-      stack.push({ ctm, lineWidth, dashed });
+      stack.push({ ctm, lineWidth, dashed, fill });
       const m = args[0] as M | null;
       if (m) ctm = mul(ctm, m);
       formStack.push(forms++);
     } else if (fn === OPS.paintFormXObjectEnd) {
       formStack.pop();
       const s = stack.pop();
-      if (s) ({ ctm, lineWidth, dashed } = s);
+      if (s) ({ ctm, lineWidth, dashed, fill } = s);
     } else if (fn === OPS.beginMarkedContent) {
       marked.push(true);
     } else if (fn === OPS.beginMarkedContentProps) {
@@ -233,7 +251,7 @@ export function vectorize(opList: { fnArray: ArrayLike<number>; argsArray: unkno
         x1 = Math.max(x1, g.x1, g.x2);
         y1 = Math.max(y1, g.y1, g.y2);
       }
-      paths.push({ x0, y0, x1, y1, segs: [first, segs.length], form, lineWidth: lw, curve: anyCurve });
+      paths.push({ x0, y0, x1, y1, segs: [first, segs.length], form, lineWidth: lw, curve: anyCurve, ...(kind.filled && fill ? { fill } : {}) });
     }
   }
   return { segs, paths, forms, layers };

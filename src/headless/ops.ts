@@ -24,7 +24,8 @@ import { metersPerPtForRatio } from '../engine/units.ts';
 import { dynamicFill, type FillHints } from '../engine/dynamicfill.ts';
 import { doorBridgesFor } from '../engine/fill-vector.ts';
 import { dimensionScale, shxWords, type DimensionScale, type DimWord } from '../engine/dimensions.ts';
-import { layersToHideForFill, NOT_A_ROOM_NAME, type LayerRole } from '../engine/cad-layers.ts';
+import { layersToHideForFill, NOT_A_ROOM_NAME, isWallLayer, type LayerRole } from '../engine/cad-layers.ts';
+import { wallRuns, readWallLegend, type WallClass } from '../engine/wall-runs.ts';
 
 /** Read pdf2takeoff-authored annotations from every page of an open doc. */
 export async function readMarkups(doc: PDFDocumentProxy): Promise<Markup[]> {
@@ -84,6 +85,22 @@ export async function sheetDimensions(doc: PDFDocumentProxy, page: number, words
   } catch {
     return null; // image pages have no operator list
   }
+}
+
+/**
+ * Wall runs on a page, read off the PDF's wall layers and named from the
+ * sheet's legend (see wall-runs.ts). Null when the PDF has no wall layers.
+ */
+export async function wallRunsOnPage(doc: PDFDocumentProxy, page: number): Promise<{ classes: WallClass[]; layers: string[] } | null> {
+  const config = await doc.getOptionalContentConfig();
+  const groups = [...(config as unknown as Iterable<[string, { name: string | null }]>)].map(([id, g]) => ({ id, name: g.name ?? '' }));
+  const wallIds = new Set(groups.filter((g) => isWallLayer(g.name)).map((g) => g.id));
+  if (!wallIds.size) return null;
+  for (const g of groups) config.setVisibility(g.id, wallIds.has(g.id));
+  const [tc, all, walls] = await Promise.all([doc.getPage(page).then((pg) => pg.getTextContent()), vectorDocPage(doc, page), vectorDocPage(doc, page, config)]);
+  const items = tc.items as { str?: string; transform?: number[]; width?: number; height?: number }[];
+  const words = items.flatMap((it) => wordsFromTextItem(typeof it.str === 'string' ? it.str : '', it.transform, it.width, it.height));
+  return { classes: wallRuns(walls, readWallLegend(words, all)), layers: [...new Set(groups.filter((g) => wallIds.has(g.id)).map((g) => g.name))] };
 }
 
 export interface ScanOptions {

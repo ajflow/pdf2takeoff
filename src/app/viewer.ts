@@ -10,7 +10,7 @@ import { state, emit } from './state';
 import { vectorize, type VecPage } from '../engine/vector';
 import { parseImagePages, parseScales, PAPER_KEY, SCALE_KEY } from '../engine/inputs';
 import { METERS_PER_PT } from '../engine/units';
-import { layersToHideForFill, type LayerRole } from '../engine/cad-layers';
+import { layersToHideForFill, isWallLayer, type LayerRole } from '../engine/cad-layers';
 
 /**
  * Where pdf.js finds its WebAssembly decoders (CCITT fax, JBIG2, JPEG 2000:
@@ -161,6 +161,26 @@ function cached<T>(store: WeakMap<PDFDocumentProxy, Map<number, Promise<T>>>, d:
     byPage.set(pageNum, p);
   }
   return p;
+}
+
+const wallVectorCache = new WeakMap<PDFDocumentProxy, Map<number, Promise<VecPage | null>>>();
+
+/**
+ * The page's geometry on its CAD wall layers only (null when the PDF has no
+ * wall layers), for reading wall runs.
+ */
+export async function getWallVector(pageNum: number): Promise<VecPage | null> {
+  const d = doc;
+  if (!d) return null;
+  return cached(wallVectorCache, d, pageNum, async () => {
+    const config = await d.getOptionalContentConfig();
+    const groups = [...(config as unknown as Iterable<[string, { name: string | null }]>)].map(([id, g]) => ({ id, name: g.name ?? '' }));
+    const walls = new Set(groups.filter((g) => isWallLayer(g.name)).map((g) => g.id));
+    if (!walls.size) return null;
+    for (const g of groups) config.setVisibility(g.id, walls.has(g.id));
+    const page = await d.getPage(pageNum);
+    return vectorize(await page.getOperatorList(), pdfjsLib.OPS, { isVisible: (g) => config.isVisible(g as never) });
+  });
 }
 
 /**

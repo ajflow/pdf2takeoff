@@ -50,6 +50,8 @@ check('summary: feature paint is wall length x 2.7 m', by['Feature Wall Paint'].
 check('summary: lines with nothing measured are 0', ['Bulkheads', 'Grid Ceiling', 'Doors (Aluminium)', 'Doors (Frameless)', 'Windows', 'Mirrors'].every((l) => by[l].quantity === 0));
 check('summary: a count on the same label but another tool does not land on a length line', templateSummary(fitout, [pin('Walls')], () => cal)[0].quantity === 0);
 
+check('summary: a bracketed detail rolls up into its line (proposed wall runs)', templateSummary(fitout, [line('Walls (half height)', 10), line('Walls (proposed partition)', 5), line('Wallsy', 99)], () => cal)[0].quantity === 15);
+
 const matrix = templateMatrix(fitout, lines, 'Aero Group');
 check('sheet: title, header, then every line', matrix[0][0] === 'Commercial fit-out takeoff: Aero Group' && matrix[2].join('|') === 'Item|Quantity|Unit|Note' && matrix.length === 3 + 10);
 check('sheet: the uncalibrated markup is noted on its line', String(matrix[3][3]).includes('1 markup not counted'));

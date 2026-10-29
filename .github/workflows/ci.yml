@@ -52,3 +52,22 @@ jobs:
           path: dist/
       - name: Pack guard (npm package contents + compiled CLI)
         run: node scripts/check-pack.mjs
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run sample
+      - name: Browser suites (app, template, lead capture) in headless Chrome
+        run: npm run test:e2e
+        env:
+          E2E_SHOTS: e2e-shots
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-shots
+          path: e2e-shots/

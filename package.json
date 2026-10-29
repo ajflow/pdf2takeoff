@@ -25,6 +25,7 @@
     "check:deploy": "node scripts/check-deploy.mjs",
     "cli": "node bin/pdf2takeoff.js",
     "preview": "vite preview",
+    "test:e2e": "vite build && node e2e/run.mjs",
     "sample": "node scripts/make-sample.mjs",
     "soak": "node scripts/make-soak.mjs",
     "bench": "node --experimental-strip-types scripts/takeoff-bench.mjs",

@@ -40,3 +40,4 @@ __pycache__/
 # Browser workspace build (source retained in experiments)
 experiments/legend-takeoff/.build/
 experiments/legend-takeoff/.resources/
+e2e-shots/

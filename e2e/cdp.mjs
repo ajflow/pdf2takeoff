@@ -109,7 +109,11 @@ export async function openBrowser(shots) {
     ws.close();
     chrome.kill('SIGKILL');
     live.delete(chrome);
-    rmSync(profile, { recursive: true, force: true });
+    // Chrome may still be writing its profile as it dies; a profile left in
+    // the temp dir is harmless, a failed run over it is not
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {}
   };
 
   await send('Page.enable');

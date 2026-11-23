@@ -462,6 +462,45 @@ function onPointerMove(e: PointerEvent): void {
 function onDoubleClick(e: MouseEvent): void {
   const p = eventToPdf(e);
   if (!p) return;
+
+  // In pan/select mode, double-click a measurement segment to insert a
+  // vertex at its nearest point. The new node is stored in PDF coordinates,
+  // exactly like the original vertices, and can immediately be dragged.
+  if (state.tool === 'pan' && e.target instanceof Element) {
+    const group = e.target.closest<SVGGElement>('.markup[data-id]');
+    const id = group?.getAttribute('data-id');
+    const markup = id ? state.markups.find((m) => m.id === id && m.page === state.pageNum) : undefined;
+    if (markup && ['length', 'area', 'perimeter', 'volume'].includes(markup.type) && markup.points.length >= 2) {
+      const points = markup.points;
+      const closed = markup.type === 'area' || markup.type === 'perimeter' || markup.type === 'volume';
+      let best: { index: number; point: Pt; distance: number } | null = null;
+      const segmentCount = closed ? points.length : points.length - 1;
+      for (let i = 0; i < segmentCount; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+        const q = { x: a.x + t * dx, y: a.y + t * dy };
+        const distance = Math.hypot(p.x - q.x, p.y - q.y);
+        if (!best || distance < best.distance) best = { index: i, point: q, distance };
+      }
+      if (best && best.distance <= 12 / Math.max(0.05, state.zoom)) {
+        const before = points.map((point) => ({ ...point }));
+        state.lastAction = { kind: 'move', id: markup.id, before };
+        markup.points.splice(best.index + 1, 0, best.point);
+        state.selectedId = markup.id;
+        syncUpsertMarkup(markup);
+        renderMarkups();
+        emit();
+        e.preventDefault();
+        e.stopPropagation();
+        hint('Vertex inserted · drag the new node to adjust the measurement');
+        return;
+      }
+    }
+  }
+
   if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport') {
     // Both pointerdowns have already been processed by the time the
     // browser dispatches dblclick. The second click is the duplicate end

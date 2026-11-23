@@ -333,6 +333,12 @@ drawingViewMode.addEventListener('change', () => {
   if (drawingViewMode.value === 'grayscale') canvas.classList.add('drawing-grayscale');
   if (drawingViewMode.value === 'blueprint') canvas.classList.add('drawing-blueprint');
 });
+const pageToneMode = $('pageToneMode') as HTMLSelectElement;
+pageToneMode.addEventListener('change', () => {
+  const dark = pageToneMode.value === 'black';
+  $('pdfCanvas').classList.toggle('paper-black', dark);
+  $('pageWrap').classList.toggle('paper-black', dark);
+});
 $('zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.25));
 $('zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
 $('zoomFit').addEventListener('click', () => {

@@ -5,7 +5,7 @@ import { state, emit } from './state';
 
 export const DEFAULT_LAYER = 'Default';
 
-type LayerMeta = { name: string; color?: string; locked?: boolean };
+type LayerMeta = { name: string; color?: string; locked?: boolean; order?: number };
 type LayerState = { activeLayer?: string; hidden?: string[]; layers?: LayerMeta[] };
 
 function cleanName(value: string): string {
@@ -33,7 +33,7 @@ export function knownLayers(): string[] {
   const names = new Set<string>([DEFAULT_LAYER, ...metadata.keys()]);
   for (const m of state.markups) names.add(layerOf(m));
   for (const name of names) ensureLayer(name);
-  return [...names].sort((a, b) => a === DEFAULT_LAYER ? -1 : b === DEFAULT_LAYER ? 1 : a.localeCompare(b));
+  return [...names].sort((a, b) => a === DEFAULT_LAYER ? -1 : b === DEFAULT_LAYER ? 1 : (ensureLayer(a).order ?? 9999) - (ensureLayer(b).order ?? 9999) || a.localeCompare(b));
 }
 
 export function getActiveLayer(): string {
@@ -64,7 +64,7 @@ export function importLayerState(value: LayerState | undefined): void {
   metadata.set(DEFAULT_LAYER, { name: DEFAULT_LAYER });
   for (const item of value?.layers ?? []) {
     if (!item || typeof item.name !== 'string' || !item.name.trim()) continue;
-    metadata.set(item.name, { name: item.name, color: item.color, locked: Boolean(item.locked) });
+    metadata.set(item.name, { name: item.name, color: item.color, locked: Boolean(item.locked), order: item.order });
   }
   for (const m of state.markups) ensureLayer(layerOf(m));
   if (!metadata.has(activeLayer)) activeLayer = DEFAULT_LAYER;
@@ -93,6 +93,21 @@ export function initLayers(): void {
       const item = ensureLayer(lock.dataset.layerLock!);
       item.locked = !item.locked;
       renderLayers(); emit(); return;
+    }
+    const move = target.closest<HTMLElement>('[data-layer-move]');
+    if (move) {
+      const name = move.dataset.layerMove!;
+      const names = knownLayers().filter((item) => item !== DEFAULT_LAYER);
+      const index = names.indexOf(name);
+      const nextIndex = index + Number(move.dataset.direction || 0);
+      if (index >= 0 && nextIndex >= 0 && nextIndex < names.length) {
+        const a = ensureLayer(name), b = ensureLayer(names[nextIndex]);
+        const order = a.order ?? index;
+        a.order = b.order ?? nextIndex;
+        b.order = order;
+        renderLayers(); emit();
+      }
+      return;
     }
     const rename = target.closest<HTMLElement>('[data-layer-rename]');
     if (rename) {
@@ -143,7 +158,7 @@ export function initLayers(): void {
       setTimeout(() => input.classList.remove('invalid'), 600);
       return;
     }
-    metadata.set(name, { name });
+    metadata.set(name, { name, order: knownLayers().length });
     activeLayer = name;
     input.value = '';
     renderLayers(); emit();
@@ -185,8 +200,14 @@ export function renderLayers(): void {
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'layer-action danger'; del.dataset.layerDelete = name;
     del.textContent = '×'; del.title = 'Delete layer'; del.disabled = name === DEFAULT_LAYER;
+    const up = document.createElement('button');
+    up.type = 'button'; up.className = 'layer-action'; up.dataset.layerMove = name; up.dataset.direction = '-1';
+    up.textContent = '↑'; up.title = 'Move layer up'; up.disabled = name === DEFAULT_LAYER || knownLayers().filter((item) => item !== DEFAULT_LAYER)[0] === name;
+    const down = document.createElement('button');
+    down.type = 'button'; down.className = 'layer-action'; down.dataset.layerMove = name; down.dataset.direction = '1';
+    down.textContent = '↓'; down.title = 'Move layer down';
     const n = document.createElement('span'); n.className = 'layer-count'; n.textContent = String(count);
-    row.append(eye, pick, color, lock, rename, del, n);
+    row.append(eye, pick, color, lock, up, down, rename, del, n);
     list.appendChild(row);
   }
 }

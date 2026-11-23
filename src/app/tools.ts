@@ -447,12 +447,14 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
       break;
     }
     case 'note': {
+      const annotationText = window.prompt('Text annotation', state.activePreset?.type === 'note' ? state.activePreset.label : '');
+      if (annotationText === null) break;
       const note: Markup = {
         id: nextId('mk'),
         page: state.pageNum,
         type: 'note',
         layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
-        label: state.activePreset?.type === 'note' ? state.activePreset.label : 'Note',
+        label: annotationText.trim() || 'Note',
         points: [p],
         createdAt: Date.now(),
       };
@@ -462,7 +464,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
       syncUpsertMarkup(note);
       renderMarkups();
       emit();
-      hint('Note placed · type its text in the Label column of the list');
+      hint('Text annotation placed · select it to move, or edit its text in the Markups list');
       break;
     }
     case 'fill':

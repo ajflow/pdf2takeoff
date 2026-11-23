@@ -144,5 +144,17 @@ const hierarchyMatrix = buildMatrix({ markups: [hierarchyParent, hierarchyChild]
 const childRow = hierarchyMatrix.find((r) => r[0] === 'Ground floor slab');
 check('parent item code and hierarchy are included in exports', childRow && childRow[15] === '1.1' && childRow[16] === 'Concrete works');
 
+// Drawing visibility must never remove measured quantities from schedules or BOQ exports.
+const hiddenMarkup = { ...wall('hidden-wall', 1), label: 'Hidden but measured', visible: false };
+const hiddenData = {
+  markups: [hiddenMarkup],
+  calibrations: new Map([[1, { metersPerPt: 0.01, source: 'test' }]]),
+  displayUnit: 'm',
+};
+const hiddenMatrix = buildMatrix(hiddenData);
+check('a hidden drawing markup remains present in the exported take-off', hiddenMatrix.some((row) => row[0] === 'Hidden but measured'));
+const hiddenGroup = hiddenMatrix.slice(hiddenMatrix.findIndex((row) => row[0] === 'Group') + 1).find((row) => row[0] === 'Hidden but measured');
+check('a hidden drawing markup still contributes to its QS group total', hiddenGroup && near(hiddenGroup[3], 1));
+
 if (failed) process.exit(1);
 console.log('PASS: export group totals (per-item scales, unscaled items, counts)');

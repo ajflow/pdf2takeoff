@@ -1,7 +1,7 @@
 // Markups list (right sidebar): rows per measurement, group totals, and
 // CSV / clipboard / Excel export. Serialization math lives in the engine.
 
-import { state, emit, calibrationForMarkup, takeoffData } from './state';
+import { state, emit, calibrationForMarkup, takeoffData, nextId } from './state';
 import {
   groupsOf,
   groupTotal,
@@ -12,6 +12,7 @@ import {
   xlsxBytes,
 } from '../engine/export';
 import { defaultLabel } from '../engine/geometry';
+import { recordTakeoffHistory } from './tools';
 import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
@@ -37,11 +38,11 @@ export function initTable(): void {
         const source = state.markups.find((m) => m.id === action.dataset.cloneFor);
         if (source) {
           const clone = structuredClone(source);
-          clone.id = `mk_${Math.random().toString(36).slice(2, 10)}`;
+          clone.id = nextId('mk');
           clone.label = `${source.label} copy`;
           clone.createdAt = Date.now();
           clone.points = source.points.map((p) => ({ ...p }));
-          recordTableHistoryUnavailable();
+          recordTakeoffHistory();
           state.markups.push(clone);
           syncUpsertMarkup(clone);
           state.selectedId = clone.id;

@@ -52,6 +52,13 @@ function recordHistory(): void {
   undoStack.push(snapshotTakeoff());
   if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
   redoStack.length = 0;
+  updateHistoryButtons();
+}
+function updateHistoryButtons(): void {
+  const undo = document.getElementById('undoBtn') as HTMLButtonElement | null;
+  const redo = document.getElementById('redoBtn') as HTMLButtonElement | null;
+  if (undo) undo.disabled = undoStack.length === 0;
+  if (redo) redo.disabled = redoStack.length === 0;
 }
 function restoreHistory(target: HistorySnapshot): void {
   const previous = new Map(state.markups.map((m) => [m.id, m]));
@@ -67,6 +74,7 @@ function restoreHistory(target: HistorySnapshot): void {
   state.selectedId = null;
   renderMarkups();
   emit();
+  updateHistoryButtons();
 }
 function undoTakeoff(): void {
   const previous = undoStack.pop();
@@ -276,6 +284,9 @@ export function initTools(overlay: SVGSVGElement): void {
   for (const p of PRESET_SCALES) calibPresetSel.add(new Option(p.label, String(p.ratio)));
 
   svg.addEventListener('pointerdown', onPointerDown);
+  document.getElementById('undoBtn')?.addEventListener('click', undoTakeoff);
+  document.getElementById('redoBtn')?.addEventListener('click', redoTakeoff);
+  updateHistoryButtons();
   document.getElementById('snapToggle')?.addEventListener('click', () => {
     snapEnabled = !snapEnabled;
     snapPoint = null;

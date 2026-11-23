@@ -101,7 +101,7 @@ export function templateSummary(t: TakeoffTemplate, markups: Markup[], calFor: (
   const totals = new Map<string, { total: number; uncalibrated: number }>();
   for (const g of groupsOf(markups)) {
     const k = key(g.type, g.label);
-    const { total, uncalibrated } = groupTotal(g, calFor);
+    const { total, uncalibrated } = groupTotal(g, calFor, markups);
     const acc = totals.get(k) ?? { total: 0, uncalibrated: 0 };
     acc.total += total ?? 0;
     acc.uncalibrated += uncalibrated;

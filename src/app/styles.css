@@ -2342,3 +2342,23 @@ table.demo-results td.mono {
   opacity: 0.35;
   cursor: default;
 }
+
+
+/* Drawing-only display filters: measurements and annotations remain in colour. */
+#pdfCanvas.drawing-grayscale { filter: grayscale(1) contrast(1.12); }
+#pdfCanvas.drawing-blueprint {
+  filter: grayscale(1) invert(1) sepia(1) saturate(5) hue-rotate(165deg) brightness(.72) contrast(1.45);
+}
+.markup-color {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.cell-del { white-space: nowrap; }
+.cell-del button[data-visibility-for] { color: var(--muted); }

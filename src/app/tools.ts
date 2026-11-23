@@ -147,6 +147,7 @@ let loupeFrame = 0;
 let loupePending = { x: 0, y: 0 };
 const LOUPE_MAGNIFICATION = 2.5;
 let draft: Pt[] = [];
+let selectedVertex: { markupId: string; index: number } | null = null;
 let cursor: Pt | null = null;
 let calibFirst: Pt | null = null;
 let pendingCalib: { a: Pt; b: Pt } | null = null;
@@ -715,13 +716,19 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
       emit();
       if (m.page === state.pageNum) {
         const vtx = e.target.closest('.vtx');
-        beginDrag(m, vtx ? Number(vtx.getAttribute('data-idx')) : null, e);
+        const vertexIndex = vtx ? Number(vtx.getAttribute('data-idx')) : null;
+        selectedVertex = vertexIndex === null ? null : { markupId: m.id, index: vertexIndex };
+        beginDrag(m, vertexIndex, e);
       }
     }
     return;
   }
   let p = eventToPdf(e);
   if (!p) return;
+  if (['length', 'area', 'count', 'perimeter', 'volume', 'angle', 'note', 'fill', 'scan'].includes(state.tool) && isLockedLayer(getActiveLayer())) {
+    hint('The active layer is locked · unlock it or choose another layer before measuring');
+    return;
+  }
   if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
     await loadSnapSegments(state.pageNum);
     if (!snapSegments.length) hint('No vector geometry is available for snapping on this page; use manual clicks on this scanned/image sheet.');
@@ -897,6 +904,7 @@ function onDoubleClick(e: MouseEvent): void {
         recordHistory();
         state.lastAction = { kind: 'move', id: markup.id, before };
         geometry.points.splice(best.index + 1, 0, best.point);
+        selectedVertex = { markupId: markup.id, index: best.index + 1 };
         state.selectedId = markup.id;
         syncUpsertMarkup(geometry);
         renderMarkups();
@@ -1504,6 +1512,26 @@ function onKeyDown(e: KeyboardEvent): void {
       draft.pop();
       refreshPreview();
       return; // don't delete a selected markup while drawing
+    }
+  }
+  if ((k === 'delete' || k === 'backspace') && selectedVertex) {
+    const selectedMarkup = state.markups.find((m) => m.id === selectedVertex!.markupId);
+    const geometry = selectedMarkup?.sourceId ? state.markups.find((m) => m.id === selectedMarkup.sourceId) ?? selectedMarkup : selectedMarkup;
+    if (selectedMarkup && geometry && !isLockedLayer(layerOf(selectedMarkup))) {
+      const minimum = selectedMarkup.type === 'length' ? 2 : 3;
+      if (geometry.points.length <= minimum) {
+        hint(`This measurement needs at least ${minimum} vertices`);
+        return;
+      }
+      recordHistory();
+      geometry.points.splice(selectedVertex.index, 1);
+      selectedVertex = null;
+      state.lastAction = null;
+      syncUpsertMarkup(geometry);
+      renderMarkups();
+      emit();
+      hint('Vertex deleted · measurement quantity recalculated');
+      return;
     }
   }
   if ((k === 'delete' || k === 'backspace') && state.selectedAnnotationId) {

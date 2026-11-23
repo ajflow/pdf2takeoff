@@ -32,6 +32,57 @@ function hint(text: string): void {
   onStatusHint?.(text);
 }
 
+type HistorySnapshot = {
+  markups: Markup[];
+  calibrations: Map<number, import('./state').Calibration>;
+  viewports: import('../engine/viewports').Viewport[];
+};
+const undoStack: HistorySnapshot[] = [];
+const redoStack: HistorySnapshot[] = [];
+const HISTORY_LIMIT = 100;
+
+function snapshotTakeoff(): HistorySnapshot {
+  return {
+    markups: structuredClone(state.markups),
+    calibrations: new Map([...state.calibrations].map(([page, cal]) => [page, { ...cal }])),
+    viewports: structuredClone(state.viewports),
+  };
+}
+function recordHistory(): void {
+  undoStack.push(snapshotTakeoff());
+  if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+}
+function restoreHistory(target: HistorySnapshot): void {
+  const previous = new Map(state.markups.map((m) => [m.id, m]));
+  const next = new Map(target.markups.map((m) => [m.id, m]));
+  for (const id of previous.keys()) if (!next.has(id)) syncDeleteMarkup(id);
+  state.markups = structuredClone(target.markups);
+  for (const m of state.markups) syncUpsertMarkup(m);
+  const pages = new Set([...state.calibrations.keys(), ...target.calibrations.keys()]);
+  state.calibrations = new Map([...target.calibrations].map(([p, c]) => [p, { ...c }]));
+  for (const page of pages) syncCalibration(page, state.calibrations.get(page) ?? null);
+  state.viewports = structuredClone(target.viewports);
+  state.lastAction = null;
+  state.selectedId = null;
+  renderMarkups();
+  emit();
+}
+function undoTakeoff(): void {
+  const previous = undoStack.pop();
+  if (!previous) { hint('Nothing to undo'); return; }
+  redoStack.push(snapshotTakeoff());
+  restoreHistory(previous);
+  hint('Undo');
+}
+function redoTakeoff(): void {
+  const next = redoStack.pop();
+  if (!next) { hint('Nothing to redo'); return; }
+  undoStack.push(snapshotTakeoff());
+  restoreHistory(next);
+  hint('Redo');
+}
+
 /** One-off hint from other modules (library, etc.). */
 export function showHint(text: string): void {
   hint(text);
@@ -376,6 +427,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
         points: [p],
         createdAt: Date.now(),
       };
+      recordHistory();
       state.markups.push(m);
       state.lastAction = null;
       syncUpsertMarkup(m);
@@ -393,6 +445,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
         points: [p],
         createdAt: Date.now(),
       };
+      recordHistory();
       state.markups.push(note);
       state.lastAction = null;
       syncUpsertMarkup(note);
@@ -420,6 +473,7 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
   const start = eventToPdf(e);
   if (!start) return;
   const before = m.points.map((p) => ({ ...p }));
+  recordHistory();
   state.lastAction = { kind: 'move', id: m.id, before };
   const move = (ev: PointerEvent) => {
     const cur = eventToPdf(ev);
@@ -487,6 +541,7 @@ function onDoubleClick(e: MouseEvent): void {
       }
       if (best && best.distance <= 12 / Math.max(0.05, state.zoom)) {
         const before = points.map((point) => ({ ...point }));
+        recordHistory();
         state.lastAction = { kind: 'move', id: markup.id, before };
         markup.points.splice(best.index + 1, 0, best.point);
         state.selectedId = markup.id;
@@ -660,6 +715,7 @@ function finishDraft(): void {
 }
 
 function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'angle', depth?: number): void {
+  recordHistory();
   state.markups.push({
     id: nextId('mk'),
     page: state.pageNum,
@@ -1082,6 +1138,7 @@ function onKeyDown(e: KeyboardEvent): void {
   }
   if ((k === 'delete' || k === 'backspace') && state.selectedId) {
     const deleted = state.selectedId;
+    recordHistory();
     state.markups = state.markups.filter((m) => m.id !== state.selectedId);
     state.selectedId = null;
     if (deleted) syncDeleteMarkup(deleted);
@@ -1089,29 +1146,18 @@ function onKeyDown(e: KeyboardEvent): void {
     emit();
     return;
   }
+  if ((e.metaKey || e.ctrlKey) && (k === 'y' || (k === 'z' && e.shiftKey))) {
+    e.preventDefault();
+    redoTakeoff();
+    return;
+  }
   if ((e.metaKey || e.ctrlKey) && k === 'z') {
     e.preventDefault();
     if (draft.length) {
       draft.pop();
       refreshPreview();
-    } else if (state.lastAction?.kind === 'move') {
-      const moved = state.markups.find((x) => x.id === state.lastAction!.id);
-      if (moved) {
-        moved.points = state.lastAction.before;
-        state.lastAction = null;
-        syncUpsertMarkup(moved);
-        renderMarkups();
-        emit();
-        return;
-      }
-    }
-    if (state.markups.length) {
-      const newest = state.markups.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
-      state.markups = state.markups.filter((m) => m.id !== newest.id);
-      if (state.selectedId === newest.id) state.selectedId = null;
-      syncDeleteMarkup(newest.id);
-      renderMarkups();
-      emit();
+    } else {
+      undoTakeoff();
     }
     return;
   }

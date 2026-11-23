@@ -68,7 +68,11 @@ let calibPresetSel: HTMLSelectElement;
 let snapEnabled = true;
 let snapPage = 0;
 let snapSegments: VecSeg[] = [];
+let snapGrid = new Map<string, VecSeg[]>();
+let longSnapSegments: VecSeg[] = [];
 let snapPromise: Promise<VecSeg[]> | null = null;
+const SNAP_GRID_SIZE = 128;
+const snapCellKey = (x: number, y: number) => `${x},${y}`;
 let snapPoint: { x: number; y: number; kind: string } | null = null;
 
 async function loadSnapSegments(page: number): Promise<VecSeg[]> {
@@ -80,10 +84,37 @@ async function loadSnapSegments(page: number): Promise<VecSeg[]> {
     // A safety ceiling avoids making pointer interaction unresponsive on unusually
     // complex vector sheets. No geometry is changed or discarded from the PDF.
     const usable = segs.length <= 250000 ? segs : [];
-    if (snapPage === page) snapSegments = usable;
+    if (snapPage === page) {
+      snapSegments = usable;
+      snapGrid = new Map();
+      longSnapSegments = [];
+      for (const seg of usable) {
+        const x0 = Math.floor(Math.min(seg.x1, seg.x2) / SNAP_GRID_SIZE);
+        const x1 = Math.floor(Math.max(seg.x1, seg.x2) / SNAP_GRID_SIZE);
+        const y0 = Math.floor(Math.min(seg.y1, seg.y2) / SNAP_GRID_SIZE);
+        const y1 = Math.floor(Math.max(seg.y1, seg.y2) / SNAP_GRID_SIZE);
+        const cells = (x1 - x0 + 1) * (y1 - y0 + 1);
+        if (cells > 64) {
+          longSnapSegments.push(seg);
+          continue;
+        }
+        for (let gx = x0; gx <= x1; gx++) {
+          for (let gy = y0; gy <= y1; gy++) {
+            const key = snapCellKey(gx, gy);
+            const bucket = snapGrid.get(key);
+            if (bucket) bucket.push(seg);
+            else snapGrid.set(key, [seg]);
+          }
+        }
+      }
+    }
     return usable;
   }).catch(() => {
-    if (snapPage === page) snapSegments = [];
+    if (snapPage === page) {
+      snapSegments = [];
+      snapGrid.clear();
+      longSnapSegments = [];
+    }
     return [];
   });
   return snapPromise;
@@ -115,17 +146,27 @@ function snapPdfPoint(p: Pt): { point: Pt; kind: string } | null {
   const tol2 = tolerance * tolerance;
   const best: { current: { point: Pt; kind: string; d2: number } | null } = { current: null };
   const nearby: VecSeg[] = [];
+  const candidates = new Set<VecSeg>(longSnapSegments);
+  const gx0 = Math.floor((p.x - tolerance) / SNAP_GRID_SIZE);
+  const gx1 = Math.floor((p.x + tolerance) / SNAP_GRID_SIZE);
+  const gy0 = Math.floor((p.y - tolerance) / SNAP_GRID_SIZE);
+  const gy1 = Math.floor((p.y + tolerance) / SNAP_GRID_SIZE);
+  for (let gx = gx0; gx <= gx1; gx++) {
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (const seg of snapGrid.get(snapCellKey(gx, gy)) ?? []) candidates.add(seg);
+    }
+  }
   const offer = (point: Pt, kind: string) => {
     const dx = point.x - p.x, dy = point.y - p.y, d2 = dx * dx + dy * dy;
     if (d2 <= tol2 && (!best.current || d2 < best.current.d2)) best.current = { point, kind, d2 };
   };
-  for (const s of snapSegments) {
+  for (const s of candidates) {
     const a = { x: s.x1, y: s.y1 }, b = { x: s.x2, y: s.y2 };
     offer(a, 'Endpoint'); offer(b, 'Endpoint');
     offer({ x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 }, 'Midpoint');
     const projected = projectToSegment(p, s);
     if (projected.distance <= tolerance * 1.5) {
-      nearby.push(s);
+      if (nearby.length < 48) nearby.push(s);
       offer(projected.point, 'Nearest');
     }
   }
@@ -289,6 +330,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
   if (!p) return;
   if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
     await loadSnapSegments(state.pageNum);
+    if (!snapSegments.length) hint('No vector geometry is available for snapping on this page; use manual clicks on this scanned/image sheet.');
     // Use the original pointer position after the async geometry load.
     const raw = eventToPdf(e);
     if (raw) p = raw;

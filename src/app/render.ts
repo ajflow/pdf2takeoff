@@ -29,6 +29,13 @@ function el<K extends keyof SVGElementTagNameMap>(
 ): SVGElementTagNameMap[K] {
   const node = document.createElementNS(NS, name);
   for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+  // The SVG viewBox is scaled with the page zoom. Keep visible annotation
+  // strokes in screen pixels so measurement lines do not become oversized
+  // when zooming in or disappear when zooming out. Geometry remains in PDF
+  // coordinates; this affects presentation only.
+  if ('stroke-width' in attrs && attrs.stroke !== 'transparent') {
+    node.setAttribute('vector-effect', 'non-scaling-stroke');
+  }
   return node;
 }
 

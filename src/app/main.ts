@@ -305,7 +305,11 @@ function updateLanding(): void {
 // --- toolbar ---
 
 document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((btn) => {
-  btn.addEventListener('click', () => setTool(btn.dataset.tool as typeof state.tool));
+  btn.addEventListener('click', () => {
+    const requested = btn.dataset.tool as typeof state.tool;
+    // Clicking the active drawing tool again returns to Select mode.
+    setTool(requested === state.tool && requested !== 'pan' ? 'pan' : requested);
+  });
 });
 
 const unitSel = $('unitSelect') as HTMLSelectElement;

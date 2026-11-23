@@ -53,6 +53,8 @@ export function initViewer(
   pl: SVGGElement,
 ): void {
   scrollEl = scroll;
+  // Prevent wheel gestures at the workspace edge from chaining to the page.
+  scrollEl.style.overscrollBehavior = 'contain';
   pageEl = page;
   canvas = cnv;
   svg = overlay;
@@ -251,18 +253,24 @@ export function setZoom(z: number): void {
 }
 
 export function zoomAt(clientX: number, clientY: number, factor: number): void {
-  const cr = scrollEl.getBoundingClientRect();
-  const cx = clientX - cr.left;
-  const cy = clientY - cr.top;
-  const z2 = clampZoom(state.zoom * factor);
-  if (z2 === state.zoom) return;
-  const ratio = z2 / state.zoom;
-  const contentX = scrollEl.scrollLeft + cx;
-  const contentY = scrollEl.scrollTop + cy;
+  const z1 = state.zoom;
+  const z2 = clampZoom(z1 * factor);
+  if (z2 === z1) return;
+
+  // Anchor against the actual page box, not the scrollport origin. The page
+  // is centred with auto margins while it is narrower than the workspace, so
+  // its left edge can move when zoom changes.
+  const before = pageEl.getBoundingClientRect();
+  const localX = clientX - before.left;
+  const localY = clientY - before.top;
   state.zoom = z2;
   previewResize();
-  scrollEl.scrollLeft = contentX * ratio - cx;
-  scrollEl.scrollTop = contentY * ratio - cy;
+  const after = pageEl.getBoundingClientRect();
+
+  // Keep the same page-space point under the pointer after the page has
+  // resized/re-centred. Geometry in the SVG/PDF coordinate system is untouched.
+  scrollEl.scrollLeft += after.left - before.left + localX * (z2 / z1 - 1);
+  scrollEl.scrollTop += after.top - before.top + localY * (z2 / z1 - 1);
   emit();
 }
 
@@ -296,27 +304,44 @@ async function paintCanvas(page: pdfjsLib.PDFPageProxy, mySeq: number): Promise<
   if (px * py > MAX_CANVAS_PIXELS) {
     dpr = Math.max(1, Math.sqrt(MAX_CANVAS_PIXELS / (viewport.width * viewport.height)));
   }
-  canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
-  canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
-  applyLayoutSize();
-  const ctx = canvas.getContext('2d');
+
+  // Render off-screen. Resizing the visible canvas clears it immediately and
+  // caused a blank flash while PDF.js rasterised complex sheets. Keep the last
+  // completed frame visible until this render is ready to be swapped in.
+  const nextCanvas = document.createElement('canvas');
+  nextCanvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+  nextCanvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+  const ctx = nextCanvas.getContext('2d');
   if (!ctx) return;
+  const task = page.render({
+    canvas: nextCanvas,
+    canvasContext: ctx,
+    viewport,
+    transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+  });
+  renderTask = task;
   try {
-    renderTask = page.render({
-      canvas,
-      canvasContext: ctx,
-      viewport,
-      transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
-    });
-    await renderTask.promise;
+    await task.promise;
   } catch {
+    if (renderTask === task) renderTask = null;
     return; // cancelled or superseded
   }
-  if (mySeq === renderSeq && onFirstRender) {
+  if (mySeq !== renderSeq) {
+    if (renderTask === task) renderTask = null;
+    return;
+  }
+
+  canvas.width = nextCanvas.width;
+  canvas.height = nextCanvas.height;
+  const visible = canvas.getContext('2d');
+  if (visible) visible.drawImage(nextCanvas, 0, 0);
+  applyLayoutSize();
+
+  if (onFirstRender) {
     onFirstRender();
     onFirstRender = null;
   }
-  renderTask = null;
+  if (renderTask === task) renderTask = null;
 }
 
 export function viewSize(): { w: number; h: number } {
@@ -364,7 +389,7 @@ function bindWheel(): void {
       const factor = Math.exp(-delta * 0.002);
       zoomAt(e.clientX, e.clientY, factor);
     },
-    { passive: false },
+    { passive: false, capture: true },
   );
 
   // Double-click zoom is navigation-only. Measurement tools retain their

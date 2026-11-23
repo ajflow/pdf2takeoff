@@ -903,6 +903,23 @@ select.btn {
 
 /* ---------- the panel: quantities first ---------- */
 
+#sidebar.sidebar-collapsed { width: 42px; }
+#sidebar.sidebar-collapsed .panel-head { padding: 10px 6px; flex-direction: column; align-items: center; }
+#sidebar.sidebar-collapsed .panel-tab,
+#sidebar.sidebar-collapsed .panel-view,
+#sidebar.sidebar-collapsed .panel-foot { display: none !important; }
+.panel-collapse {
+  flex: none; margin-left: auto; width: 28px; height: 28px; padding: 0;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--field);
+  color: var(--text-dim); font: 700 18px/1 var(--font); cursor: pointer;
+}
+#sidebar.sidebar-collapsed .panel-collapse { margin: 0; }
+.panel-collapse:hover { color: var(--teal); border-color: var(--teal); }
+.list-visibility-tools { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 16px 8px; }
+#markupRows tr.markup-hidden { opacity: .62; }
+#markupRows tr.markup-hidden .cell-label::after { content: 'hidden on drawing'; display: block; color: var(--text-dim); font-size: 10px; }
+@media (max-width: 640px) { #sidebar.sidebar-collapsed { width: 38px; } }
+
 #sidebar {
   width: 312px;
   flex: none;

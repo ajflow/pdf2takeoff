@@ -40,6 +40,15 @@ check('a group with an unscaled item exports no total rather than a wrong one', 
 const t2 = groupTotal(groupsOf(withUnscaled.markups)[0], calFor);
 check('groupTotal reports the scaled part and counts the unscaled item', near(t2.total, expected) && t2.uncalibrated === 1, JSON.stringify(t2));
 
+// A measurement's creation-time calibration wins over later page or viewport edits.
+const frozen = { ...wall('frozen', 1), calibration: { metersPerPt: METERS_PER_PT * 25, source: 'viewport 1:25' } };
+const changedScales = new Map([[1, { metersPerPt: METERS_PER_PT * 200, source: 'preset 1:200' }]]);
+const frozenData = { markups: [frozen], calibrations: changedScales, viewports: [{ id: 'vp1', page: 1, points: [{ x: -10, y: -10 }, { x: 200, y: -10 }, { x: 200, y: 10 }, { x: -10, y: 10 }], metersPerPt: METERS_PER_PT * 10, source: 'viewport 1:10' }], displayUnit: 'm' };
+const frozenMatrix = buildMatrix(frozenData);
+const frozenGroup = frozenMatrix.slice(frozenMatrix.findIndex((r) => r[0] === 'Group') + 1).find((r) => r[0] === 'External wall');
+const frozenExpected = 100 * METERS_PER_PT * 25;
+check('a measurement retains its creation-time scale after page and viewport scales change', frozenGroup && near(frozenGroup[3], frozenExpected), `got ${frozenGroup?.[3]}, want ${frozenExpected}`);
+
 const counts = { markups: [1, 2, 3].map((p) => ({ id: `n${p}`, page: p, type: 'count', label: 'Downlight', points: [{ x: 1, y: 1 }], createdAt: p })), calibrations: new Map(), displayUnit: 'm' };
 const m3 = buildMatrix(counts);
 const g3 = m3.slice(m3.findIndex((r) => r[0] === 'Group') + 1).find((r) => r[0] === 'Downlight');

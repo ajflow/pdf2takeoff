@@ -67,8 +67,8 @@ const door = {
   points: [{ x: 10, y: 10 }], createdAt: 1,
   parameters: { Width: '900 mm', Height: '2100 mm' },
   links: [
-    { markupId: 'paint-wall', relation: 'deduct' },
-    { markupId: 'skirting-run', relation: 'deduct' },
+    { markupId: 'paint-wall', logic: 'Deduct opening area from wall finish' },
+    { markupId: 'skirting-run', logic: 'Deduct opening width from skirting' },
   ],
 };
 const paintWall = {
@@ -82,13 +82,13 @@ const skirting = {
 const linkedMarkups = [door, paintWall, skirting];
 const linkedCalFor = (m) => linkedCalibrations.get(m.page);
 const linkedGroups = groupsOf(linkedMarkups);
-const paintTotal = groupTotal(linkedGroups.find((g) => g.label === 'Internal wall paint'), linkedCalFor, linkedMarkups);
-const skirtingTotal = groupTotal(linkedGroups.find((g) => g.label === 'Skirting'), linkedCalFor, linkedMarkups);
-check('a door Width × Height deduction reduces linked wall paint area', near(paintTotal.total, 100 - 1.89), JSON.stringify(paintTotal));
-check('a door Width deduction reduces linked skirting length', near(skirtingTotal.total, 10 - 0.9), JSON.stringify(skirtingTotal));
+const paintTotal = groupTotal(linkedGroups.find((g) => g.label === 'Internal wall paint'), linkedCalFor);
+const skirtingTotal = groupTotal(linkedGroups.find((g) => g.label === 'Skirting'), linkedCalFor);
+check('user-authored links do not automatically deduct from wall paint quantities', near(paintTotal.total, 100), JSON.stringify(paintTotal));
+check('user-authored links do not automatically deduct from skirting quantities', near(skirtingTotal.total, 10), JSON.stringify(skirtingTotal));
 const linkedExport = buildMatrix({ markups: linkedMarkups, calibrations: linkedCalibrations, displayUnit: 'm' });
 const doorRow = linkedExport.find((r) => r[0] === 'D01 timber door');
-check('linked measurement relationships appear in the export', doorRow && String(doorRow[11]).includes('deduct'));
+check('user-authored link logic is retained in the export as descriptive text', doorRow && String(doorRow[11]).includes('Deduct opening area'));
 
 if (failed) process.exit(1);
 console.log('PASS: export group totals (per-item scales, unscaled items, counts)');

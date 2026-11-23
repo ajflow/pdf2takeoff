@@ -386,7 +386,7 @@ function bindWheel(): void {
           : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
             ? e.deltaY * scrollEl.clientHeight
             : e.deltaY;
-      const factor = Math.exp(-delta * 0.002);
+      const factor = Math.exp(-delta * 0.0012);
       zoomAt(e.clientX, e.clientY, factor);
     },
     { passive: false, capture: true },

@@ -1515,16 +1515,17 @@ function onKeyDown(e: KeyboardEvent): void {
     }
   }
   if ((k === 'delete' || k === 'backspace') && selectedVertex) {
-    const selectedMarkup = state.markups.find((m) => m.id === selectedVertex!.markupId);
+    const vertex = selectedVertex;
+    const selectedMarkup = state.markups.find((m) => m.id === vertex.markupId);
     const geometry = selectedMarkup?.sourceId ? state.markups.find((m) => m.id === selectedMarkup.sourceId) ?? selectedMarkup : selectedMarkup;
-    if (selectedMarkup && geometry && !isLockedLayer(layerOf(selectedMarkup))) {
+    if (!selectedMarkup || !geometry) { selectedVertex = null; }
+    else {
+      if (isLockedLayer(layerOf(selectedMarkup))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
       const minimum = selectedMarkup.type === 'length' ? 2 : 3;
-      if (geometry.points.length <= minimum) {
-        hint(`This measurement needs at least ${minimum} vertices`);
-        return;
-      }
+      if (geometry.points.length <= minimum) { hint(`This measurement needs at least ${minimum} vertices`); return; }
+      if (vertex.index < 0 || vertex.index >= geometry.points.length) { selectedVertex = null; return; }
       recordHistory();
-      geometry.points.splice(selectedVertex.index, 1);
+      geometry.points.splice(vertex.index, 1);
       selectedVertex = null;
       state.lastAction = null;
       syncUpsertMarkup(geometry);

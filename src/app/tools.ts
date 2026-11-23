@@ -1134,6 +1134,14 @@ function onKeyDown(e: KeyboardEvent): void {
       calibFirst = null;
       renderPreview(null);
       hint(HINTS[state.tool]);
+    } else if (state.tool !== 'pan') {
+      setTool('pan');
+      if (state.selectedId) {
+        state.selectedId = null;
+        renderMarkups();
+        emit();
+      }
+      hint('Select mode · choose a markup to edit, or drag the sheet to pan');
     } else if (state.selectedId) {
       state.selectedId = null;
       renderMarkups();

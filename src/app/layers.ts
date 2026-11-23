@@ -205,7 +205,7 @@ export function renderLayers(): void {
     up.textContent = '↑'; up.title = 'Move layer up'; up.disabled = name === DEFAULT_LAYER || knownLayers().filter((item) => item !== DEFAULT_LAYER)[0] === name;
     const down = document.createElement('button');
     down.type = 'button'; down.className = 'layer-action'; down.dataset.layerMove = name; down.dataset.direction = '1';
-    down.textContent = '↓'; down.title = 'Move layer down';
+    down.textContent = '↓'; down.title = 'Move layer down'; down.disabled = name === DEFAULT_LAYER || knownLayers().filter((item) => item !== DEFAULT_LAYER).at(-1) === name;
     const n = document.createElement('span'); n.className = 'layer-count'; n.textContent = String(count);
     row.append(eye, pick, color, lock, up, down, rename, del, n);
     list.appendChild(row);

@@ -155,7 +155,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
     rows.push([]);
     rows.push(['Group', 'Type', 'Items', 'Total', 'Unit', '', '', '', '', '', '', '', 'Status', 'Layer', ...cols.map((col) => col.name)]);
     for (const g of gs) {
-      const calFor = (m: Markup) => resolveCalibration(m, d.calibrations, d.viewports);
+      const calFor = (m: Markup) => m.calibration ?? resolveCalibration(m, d.calibrations, d.viewports);
       const cal = calFor(g.items[0]);
       // each item at its own scale; a group with any unscaled item has no honest total
       const sum = groupTotal(g, calFor);

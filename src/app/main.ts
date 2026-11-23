@@ -2,7 +2,7 @@
 // boot.ts (the page's entry), which also owns the landing buttons, drag and
 // drop and paste, and calls openFiles / openSample / startDemo here.
 
-import { state, subscribe, emit } from './state';
+import { state, freezeMarkupCalibration, subscribe, emit } from './state';
 import { initViewer, loadPdf, closePdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf } from './viewer';
 import { initTools, setTool, setStatusHint } from './tools';
 import { initTable, renderTable } from './table';
@@ -172,6 +172,9 @@ async function openProject(file: File): Promise<void> {
   state.markups = Array.isArray(project.markups) ? project.markups : [];
   state.calibrations = new Map(Array.isArray(project.calibrations) ? project.calibrations : []);
   state.viewports = Array.isArray(project.viewports) ? project.viewports : [];
+  // Older .p2t projects did not freeze each measurement's calibration. Freeze
+  // their then-current page/viewport scale once on load; future scale edits are non-retroactive.
+  for (const markup of state.markups) freezeMarkupCalibration(markup);
   state.presets = Array.isArray(project.presets) ? project.presets : [];
   state.columns = Array.isArray(project.columns) ? project.columns : [];
   state.template = project.template ?? null;

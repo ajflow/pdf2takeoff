@@ -53,8 +53,12 @@ export function initViewer(
   pl: SVGGElement,
 ): void {
   scrollEl = scroll;
-  // Prevent wheel gestures at the workspace edge from chaining to the page.
-  scrollEl.style.overscrollBehavior = 'contain';
+  // Keep the drawing workspace as the only scroll/zoom surface. Disable
+  // browser scroll anchoring: resizing a centred page across the overflow
+  // threshold must not let the browser independently rewrite scroll offsets.
+  scrollEl.style.overscrollBehavior = 'none';
+  scrollEl.style.overflowAnchor = 'none';
+  scrollEl.style.touchAction = 'none';
   pageEl = page;
   canvas = cnv;
   svg = overlay;
@@ -261,16 +265,26 @@ export function zoomAt(clientX: number, clientY: number, factor: number): void {
   // is centred with auto margins while it is narrower than the workspace, so
   // its left edge can move when zoom changes.
   const before = pageEl.getBoundingClientRect();
+  const scrollRect = scrollEl.getBoundingClientRect();
   const localX = clientX - before.left;
   const localY = clientY - before.top;
+  const pointerX = clientX - scrollRect.left;
+  const pointerY = clientY - scrollRect.top;
+  const pageX = localX / z1;
+  const pageY = localY / z1;
   state.zoom = z2;
   previewResize();
-  const after = pageEl.getBoundingClientRect();
 
-  // Keep the same page-space point under the pointer after the page has
-  // resized/re-centred. Geometry in the SVG/PDF coordinate system is untouched.
-  scrollEl.scrollLeft += after.left - before.left + localX * (z2 / z1 - 1);
-  scrollEl.scrollTop += after.top - before.top + localY * (z2 / z1 - 1);
+  // Compute the required scroll offsets from the page-space anchor rather
+  // than adding a delta to the previous offsets. This is stable when the
+  // page changes from auto-centred to horizontally/vertically overflowing.
+  const after = pageEl.getBoundingClientRect();
+  const afterOriginX = after.left - scrollRect.left + scrollEl.scrollLeft;
+  const afterOriginY = after.top - scrollRect.top + scrollEl.scrollTop;
+  const desiredLeft = afterOriginX + pageX * z2 - pointerX;
+  const desiredTop = afterOriginY + pageY * z2 - pointerY;
+  scrollEl.scrollLeft = Math.max(0, desiredLeft);
+  scrollEl.scrollTop = Math.max(0, desiredTop);
   emit();
 }
 
@@ -373,20 +387,26 @@ export function pdfToView(p: { x: number; y: number }): ViewPt {
 // --- interaction: wheel zoom, drag pan ---
 
 function bindWheel(): void {
-  scrollEl.addEventListener(
+  // Capture at window level so the browser never gets a chance to chain a
+  // wheel gesture to the document when the sheet starts overflowing or a
+  // canvas/SVG redraw changes the event target. Only intercept gestures that
+  // originate inside this drawing workspace.
+  window.addEventListener(
     'wheel',
     (e) => {
-      if (!doc) return;
-      // CAD-style navigation: the wheel always zooms around the pointer.
-      // Normalise line/page deltas so mouse wheels and touchpads behave alike.
+      if (!doc || !(e.target instanceof Node) || !scrollEl.contains(e.target)) return;
       e.preventDefault();
+      e.stopPropagation();
       const delta =
         e.deltaMode === WheelEvent.DOM_DELTA_LINE
           ? e.deltaY * 16
           : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? e.deltaY * scrollEl.clientHeight
+            ? e.deltaY * Math.max(1, scrollEl.clientHeight)
             : e.deltaY;
-      const factor = Math.exp(-delta * 0.0012);
+      // Smooth exponential scaling works for both detented wheels and
+      // high-resolution trackpads. At either zoom limit the event remains
+      // consumed, rather than falling through to page scrolling.
+      const factor = Math.exp(-Math.max(-2400, Math.min(2400, delta)) * 0.0012);
       zoomAt(e.clientX, e.clientY, factor);
     },
     { passive: false, capture: true },

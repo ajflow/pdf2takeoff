@@ -29,6 +29,13 @@ const expandedIds = new Set<string>();
 export function initTable(): void {
   tbody = document.getElementById('markupRows')!;
   totalsEl = document.getElementById('markupTotals')!;
+  tbody.addEventListener('toggle', (e) => {
+    const details = e.target as HTMLDetailsElement;
+    if (details.matches('.markup-details')) {
+      const id = details.dataset.detailFor;
+      if (id) details.open ? expandedIds.add(id) : expandedIds.delete(id);
+    }
+  }, true);
   tbody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     if (target.closest('summary') || target.closest('.markup-details')) {
@@ -173,7 +180,7 @@ export function initTable(): void {
       } else if (input.dataset.remarksFor) {
         m.remarks = input.value;
       } else if (input.dataset.parameterKeyFor) {
-        const oldKey = input.dataset.parameterKeyFor;
+        const oldKey = input.dataset.parameterKey ?? '';
         const value = m.parameters?.[oldKey] ?? '';
         const key = input.value.trim();
         if (!key) { input.value = oldKey; return; }
@@ -182,7 +189,7 @@ export function initTable(): void {
           m.parameters[key] = value;
         }
       } else if (input.dataset.parameterValueFor) {
-        if (m.parameters) m.parameters[input.dataset.parameterValueFor] = input.value;
+        if (m.parameters) m.parameters[input.dataset.parameterKey ?? ''] = input.value;
       } else if (input.dataset.linkTargetFor) {
         const index = Number(input.dataset.linkIndex);
         if (m.links?.[index]) m.links[index].markupId = input.value;
@@ -305,7 +312,7 @@ export function renderTable(): void {
         <label class="wide">Remarks <input type="text" data-remarks-for="${m.id}" value="${escapeAttr(m.remarks ?? '')}" placeholder="Location, drawing reference, specification…"></label>
       </div>
       <div class="markup-parameters"><b>Dimensions / attributes</b>
-        ${Object.entries(m.parameters ?? {}).map(([key, val]) => `<div class="markup-param"><input aria-label="Parameter name" data-parameter-key-for="${m.id}" value="${escapeAttr(key)}"><input aria-label="Parameter value" data-parameter-value-for="${m.id}" value="${escapeAttr(val)}"><button type="button" data-remove-param="${m.id}::${escapeAttr(key)}" title="Remove parameter">×</button></div>`).join('')}
+        ${Object.entries(m.parameters ?? {}).map(([key, val]) => `<div class="markup-param"><input aria-label="Parameter name" data-parameter-key-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(key)}"><input aria-label="Parameter value" data-parameter-value-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(val)}"><button type="button" data-remove-param="${m.id}::${escapeAttr(key)}" title="Remove parameter">×</button></div>`).join('')}
         <button type="button" class="btn quiet" data-add-param-for="${m.id}">+ Add attribute</button>
       </div>
       <div class="markup-links"><b>Linked take-off</b>

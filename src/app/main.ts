@@ -15,7 +15,7 @@ import { initLibrary, renderLibrary } from './library';
 import { startSession, stopSession, sessionActive, getPeers } from './session';
 import { loadPresets, loadColumns } from './persistence';
 import { initColumns, renderColumns } from './columns';
-import { initLayers, renderLayers } from './layers';
+import { initLayers, renderLayers, exportLayerState, importLayerState } from './layers';
 import { scheduleSave, restoreSession } from './persistence';
 import {
   compareState,
@@ -126,6 +126,7 @@ type ProjectFile = {
   presets: typeof state.presets;
   columns: typeof state.columns;
   template: string | null;
+  layerState?: ReturnType<typeof exportLayerState>;
 };
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -150,6 +151,7 @@ function saveProject(): void {
     displayUnit: state.displayUnit, markups: state.markups,
     calibrations: [...state.calibrations.entries()], viewports: state.viewports,
     presets: state.presets, columns: state.columns, template: state.template,
+    layerState: exportLayerState(),
   };
   const blob = new Blob([JSON.stringify(project)], { type: 'application/vnd.pdf2takeoff.project+json' });
   const url = URL.createObjectURL(blob);
@@ -173,6 +175,7 @@ async function openProject(file: File): Promise<void> {
   state.presets = Array.isArray(project.presets) ? project.presets : [];
   state.columns = Array.isArray(project.columns) ? project.columns : [];
   state.template = project.template ?? null;
+  importLayerState(project.layerState);
   state.displayUnit = project.displayUnit || 'm';
   state.pageNum = Math.min(Math.max(1, project.pageNum || 1), state.pageCount);
   state.selectedId = null;

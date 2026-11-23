@@ -118,7 +118,14 @@ export function calibrationFor(page: number): Calibration | undefined {
 
 /** Calibration for a markup, honouring viewports (per-region scales). */
 export function calibrationForMarkup(m: Markup): Calibration | undefined {
-  return resolveCalibration(m, state.calibrations, state.viewports);
+  return m.calibration ?? resolveCalibration(m, state.calibrations, state.viewports);
+}
+
+/** Freeze the applicable page/viewport calibration on legacy markups when loading a project. */
+export function freezeMarkupCalibration(m: Markup): void {
+  if (m.calibration || m.type === 'count' || m.type === 'note' || m.type === 'angle') return;
+  const cal = resolveCalibration(m, state.calibrations, state.viewports);
+  if (cal) m.calibration = { metersPerPt: cal.metersPerPt, source: cal.source };
 }
 
 /** Everything the engine needs to serialize this session's takeoff. */

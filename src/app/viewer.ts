@@ -381,7 +381,10 @@ let spaceDown = false;
 
 function bindPan(): void {
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !isTypingTarget(e.target)) spaceDown = true;
+    if (e.code === 'Space' && !isTypingTarget(e.target)) {
+      e.preventDefault(); // Space is a temporary navigation modifier, not page-scroll.
+      spaceDown = true;
+    }
   });
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Space') spaceDown = false;

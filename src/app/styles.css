@@ -681,6 +681,12 @@ select.btn {
   pointer-events: none;
 }
 
+/* Precision cursor while placing measurement points; the snap glyph itself
+   remains screen-sized through the inverse-zoom SVG sizing in tools.ts. */
+#overlay.drawing {
+  cursor: crosshair;
+}
+
 #overlay:not(.drawing) .markup {
   cursor: pointer;
 }

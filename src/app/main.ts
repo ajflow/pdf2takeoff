@@ -396,9 +396,6 @@ subscribe(() => {
 function scheduleRender(delayMs: number): void {
   if (renderTimer) window.clearTimeout(renderTimer);
   renderTimer = window.setTimeout(() => {
-    // keep the workspace anchored while the tool is in use; on the landing page
-    // the app may arrive after someone has started scrolling, so leave them be
-    if (hasDoc() || compareState.active) window.scrollTo(0, 0);
     if (compareState.active) {
       setCompareZoom(state.zoom);
       void renderCompare(state.zoom);

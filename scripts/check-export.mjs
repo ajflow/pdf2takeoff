@@ -45,5 +45,50 @@ const m3 = buildMatrix(counts);
 const g3 = m3.slice(m3.findIndex((r) => r[0] === 'Group') + 1).find((r) => r[0] === 'Downlight');
 check('counts total without any scale', g3 && g3[3] === 3);
 
+
+const adjustedWalls = {
+  markups: [
+    { ...wall('t1', 1), timesing: 2, sign: 1 },
+    { ...wall('t2', 2), timesing: 1, sign: -1 },
+  ],
+  calibrations,
+  displayUnit: 'm',
+};
+const adjustedExpected = 2 * 100 * METERS_PER_PT * 100 - 100 * METERS_PER_PT * 50;
+const adjustedMatrix = buildMatrix(adjustedWalls);
+const adjustedGroup = adjustedMatrix.slice(adjustedMatrix.findIndex((r) => r[0] === 'Group') + 1).find((r) => r[0] === 'External wall');
+check('per-entry timesing and negative deductions are applied to group totals', adjustedGroup && near(adjustedGroup[3], adjustedExpected), `got ${adjustedGroup?.[3]}, want ${adjustedExpected}`);
+check('measurement exports include QS adjustment and attribute columns', ['Timesing', 'Sign', 'Base quantity', 'Adjusted quantity', 'Parameters', 'Remarks', 'Links'].every((h) => adjustedMatrix[0].includes(h)));
+
+const linkedPage = 4;
+const linkedCalibrations = new Map([[linkedPage, { metersPerPt: 0.01, source: 'test' }]]);
+const door = {
+  id: 'door-01', page: linkedPage, type: 'count', label: 'D01 timber door',
+  points: [{ x: 10, y: 10 }], createdAt: 1,
+  parameters: { Width: '900 mm', Height: '2100 mm' },
+  links: [
+    { markupId: 'paint-wall', relation: 'deduct' },
+    { markupId: 'skirting-run', relation: 'deduct' },
+  ],
+};
+const paintWall = {
+  id: 'paint-wall', page: linkedPage, type: 'area', label: 'Internal wall paint',
+  points: [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }, { x: 0, y: 1000 }], createdAt: 2,
+};
+const skirting = {
+  id: 'skirting-run', page: linkedPage, type: 'length', label: 'Skirting',
+  points: [{ x: 0, y: 0 }, { x: 1000, y: 0 }], createdAt: 3,
+};
+const linkedMarkups = [door, paintWall, skirting];
+const linkedCalFor = (m) => linkedCalibrations.get(m.page);
+const linkedGroups = groupsOf(linkedMarkups);
+const paintTotal = groupTotal(linkedGroups.find((g) => g.label === 'Internal wall paint'), linkedCalFor, linkedMarkups);
+const skirtingTotal = groupTotal(linkedGroups.find((g) => g.label === 'Skirting'), linkedCalFor, linkedMarkups);
+check('a door Width × Height deduction reduces linked wall paint area', near(paintTotal.total, 100 - 1.89), JSON.stringify(paintTotal));
+check('a door Width deduction reduces linked skirting length', near(skirtingTotal.total, 10 - 0.9), JSON.stringify(skirtingTotal));
+const linkedExport = buildMatrix({ markups: linkedMarkups, calibrations: linkedCalibrations, displayUnit: 'm' });
+const doorRow = linkedExport.find((r) => r[0] === 'D01 timber door');
+check('linked measurement relationships appear in the export', doorRow && String(doorRow[11]).includes('deduct'));
+
 if (failed) process.exit(1);
 console.log('PASS: export group totals (per-item scales, unscaled items, counts)');

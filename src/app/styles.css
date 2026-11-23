@@ -1295,7 +1295,10 @@ td.empty {
 }
 
 .calib-row input[type='text'] {
-  flex: 1;
+  flex: 1 1 0%;
+  width: 0;
+  min-width: 180px;
+  box-sizing: border-box;
   background: var(--field);
   border: 1px solid var(--line-strong);
   color: var(--text);
@@ -1303,7 +1306,13 @@ td.empty {
   font-family: var(--mono);
   padding: 10px 13px;
   border-radius: 10px;
-  min-width: 0;
+}
+
+.calib-row select#calibUnit {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  box-sizing: border-box;
 }
 
 .calib-row input[type='text']:focus {

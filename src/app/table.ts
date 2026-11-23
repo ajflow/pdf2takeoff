@@ -338,6 +338,34 @@ export function initTable(): void {
     }
   });
 
+  const changeVisibility = (predicate: (m: typeof state.markups[number]) => boolean, visible: boolean) => {
+    const affected = state.markups.filter(predicate).filter((m) => (m.visible !== false) !== visible);
+    if (!affected.length) return;
+    recordTakeoffHistory();
+    for (const m of affected) {
+      m.visible = visible;
+      syncUpsertMarkup(m);
+    }
+    emit();
+  };
+  document.getElementById('hideAllMarkupsBtn')?.addEventListener('click', () => {
+    changeVisibility(() => true, false);
+  });
+  document.getElementById('showAllMarkupsBtn')?.addEventListener('click', () => {
+    changeVisibility(() => true, true);
+  });
+  document.getElementById('hideOtherMarkupsBtn')?.addEventListener('click', () => {
+    if (!state.selectedId) return;
+    changeVisibility((m) => m.id !== state.selectedId, false);
+    const selected = state.markups.find((m) => m.id === state.selectedId);
+    if (selected && selected.visible === false) {
+      recordTakeoffHistory();
+      selected.visible = true;
+      syncUpsertMarkup(selected);
+      emit();
+    }
+  });
+
   document.getElementById('exportCsvBtn')?.addEventListener('click', exportCsv);
   document.getElementById('copyTsvBtn')?.addEventListener('click', copyTsv);
   document.getElementById('templateExportBtn')?.addEventListener('click', () => void exportTemplate());
@@ -409,6 +437,7 @@ export function renderTable(): void {
     const tr = document.createElement('tr');
     tr.dataset.id = m.id;
     if (m.id === state.selectedId) tr.classList.add('selected');
+    if (m.visible === false) tr.classList.add('markup-hidden');
     if (m.parentId) tr.classList.add('sub-item');
     const quantity = quantityForMarkup(m, state.markups, calibrationForMarkup);
     const formulaVars = (m.links ?? []).map((link, index) => link.variable || String.fromCharCode(65 + index));

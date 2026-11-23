@@ -35,6 +35,8 @@ export interface ItemAttrs {
 export interface MarkupLink {
   /** The other markup's stable id. */
   markupId: string;
+  /** Formula variable used by the parent measurement (A, B, C...). */
+  variable?: string;
   /** User-authored description of the relationship or intended QS logic. Never executed automatically. */
   logic?: string;
   /** Legacy field retained as inert text when opening older project files. */
@@ -57,6 +59,11 @@ export interface Markup {
   layer?: string;
   /** Optional per-markup display colour; absent uses the automatic type colour. */
   color?: string;
+  /** Visual styling is independent of measured geometry and quantity. */
+  strokeWidth?: number;
+  strokeOpacity?: number;
+  fillOpacity?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
   /** Drawing visibility only; hidden quantities remain in schedules and exports. */
   visible?: boolean;
   /** Count markups only: set when this markup is a proposed or confirmed door, Window or space (see inventory.ts). */
@@ -71,8 +78,15 @@ export interface Markup {
   parameters?: Record<string, string>;
   /** Optional notes carried into schedules and exports. */
   remarks?: string;
+  /** QS bill item code and optional parent row for a parent/sub-item hierarchy. */
+  itemCode?: string;
+  parentId?: string;
+  /** Optional geometry source for a live linked duplicate; absent means independent geometry. */
+  sourceId?: string;
   /** Directed take-off relationships to other measurement entries. */
   links?: MarkupLink[];
+  /** Optional live quantity formula over linked measurements, e.g. A-B-C. */
+  formula?: string;
 }
 
 export interface Calibration {
@@ -115,3 +129,19 @@ export type ScanResult =
       };
     }
   | { error: string };
+
+
+/** Drawing-only annotation. These are deliberately separate from Markup so they never enter quantity schedules. */
+export type DrawingAnnotationKind = 'line' | 'arrow' | 'rectangle' | 'ellipse' | 'highlight' | 'cloud' | 'text';
+export interface DrawingAnnotation {
+  id: string;
+  page: number;
+  kind: DrawingAnnotationKind;
+  points: Pt[];
+  text?: string;
+  color?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  fillOpacity?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+}

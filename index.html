@@ -205,9 +205,9 @@
 
     <div id="app">
       <nav class="rail" role="toolbar" aria-label="Tools" aria-orientation="vertical">
-        <button class="tool" type="button" data-tool="pan" aria-label="Select / pan (V)" title="Select / pan. Press Escape to cancel an active tool.">
+        <button class="tool" type="button" data-tool="pan" aria-label="Select (V)" title="Select measurements; drag the sheet with Space or the middle mouse button.">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
-          <span class="tip" aria-hidden="true">Pan <kbd>V</kbd></span>
+          <span class="tip" aria-hidden="true">Select <kbd>V</kbd></span>
         </button>
         <span class="rail-gap" aria-hidden="true"></span>
         <button class="tool" type="button" data-tool="calibrate" aria-label="Calibrate scale (C)">
@@ -257,6 +257,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/><path d="M14 6l4 4"/></svg>
           <span class="tip" aria-hidden="true">Note <kbd>T</kbd></span>
         </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="annot-line" aria-label="Annotation line">╱<span class="tip">Line annotation</span></button>
+        <button class="tool" type="button" data-tool="annot-arrow" aria-label="Annotation arrow">➜<span class="tip">Arrow annotation</span></button>
+        <button class="tool" type="button" data-tool="annot-rectangle" aria-label="Annotation rectangle">▭<span class="tip">Rectangle</span></button>
+        <button class="tool" type="button" data-tool="annot-ellipse" aria-label="Annotation ellipse">◯<span class="tip">Ellipse</span></button>
+        <button class="tool" type="button" data-tool="annot-highlight" aria-label="Area highlight">▨<span class="tip">Area highlight</span></button>
+        <button class="tool" type="button" data-tool="annot-cloud" aria-label="Revision cloud">☁<span class="tip">Revision cloud</span></button>
+        <button class="tool" type="button" data-tool="annot-text" aria-label="Text annotation">T<span class="tip">Text annotation</span></button>
       </nav>
 
       <main id="workspace">
@@ -266,6 +274,7 @@
             <canvas id="fxCanvas" aria-hidden="true"></canvas>
             <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
               <g id="previewLayer"></g>
+              <g id="annotationLayer"></g>
               <g id="markupsLayer"></g>
             </svg>
           </div>
@@ -291,6 +300,10 @@
             <option value="light">Light page</option><option value="black">Black page</option>
           </select>
           <button type="button" id="loupeToggle" class="snap-toggle" aria-pressed="false" title="Toggle precision loupe (movable magnifier)">Loupe</button>
+          <input type="color" id="annotationColor" value="#e11d48" title="Annotation colour" aria-label="Annotation colour">
+          <input type="number" id="annotationWidth" min="0.5" max="16" step="0.5" value="2" title="Annotation line width" aria-label="Annotation line width">
+          <input type="number" id="annotationOpacity" min="0" max="1" step="0.05" value="0.9" title="Annotation opacity" aria-label="Annotation opacity">
+          <select id="annotationLineStyle" title="Annotation line type" aria-label="Annotation line type"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select>
           <button type="button" id="undoBtn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">↶</button>
           <button type="button" id="redoBtn" aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y)">↷</button>
           <button type="button" id="snapToggle" class="snap-toggle active" aria-pressed="true" title="Object snapping on (S)">Snap</button>

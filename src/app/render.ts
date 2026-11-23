@@ -90,6 +90,13 @@ export function countNumberFor(m: Markup): number {
 }
 
 export function renderMarkups(): void {
+  const annotationLayer = document.getElementById('annotationLayer') as SVGGElement | null;
+  if (annotationLayer) {
+    annotationLayer.replaceChildren();
+    for (const annotation of state.annotations.filter((item) => item.page === state.pageNum)) {
+      annotationLayer.appendChild(renderDrawingAnnotation(annotation));
+    }
+  }
   markupsLayer.replaceChildren();
   // a selected quantity row keeps its markups bright and fades the rest
   markupsLayer.classList.toggle('focusing', state.focusLabel !== null);
@@ -100,6 +107,54 @@ export function renderMarkups(): void {
   for (const m of state.markups.filter((x) => x.page === page && x.visible !== false && isVisibleLayer(x))) {
     markupsLayer.appendChild(renderMarkup(m));
   }
+}
+
+function renderDrawingAnnotation(annotation: import('../engine/types').DrawingAnnotation): SVGGElement {
+  const pts = annotation.points.map(pdfToView);
+  const color = annotation.color || '#e11d48';
+  const width = Math.max(0.5, Math.min(16, annotation.strokeWidth ?? 2));
+  const opacity = Math.max(0, Math.min(1, annotation.opacity ?? 0.9));
+  const fillOpacity = Math.max(0, Math.min(1, annotation.fillOpacity ?? 0.16));
+  const dash = annotation.lineStyle === 'dashed' ? '7 4' : annotation.lineStyle === 'dotted' ? '1 4' : undefined;
+  const g = el('g', { class: `drawing-annotation annotation-${annotation.kind}${state.selectedAnnotationId === annotation.id ? ' selected' : ''}`, 'data-annotation-id': annotation.id, opacity });
+  const a = pts[0] ?? { x: 0, y: 0 };
+  const b = pts[1] ?? a;
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  const w = Math.max(1, Math.abs(b.x - a.x)), h = Math.max(1, Math.abs(b.y - a.y));
+  const stroke = { stroke: color, 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...(dash ? { 'stroke-dasharray': dash } : {}) };
+  if (annotation.kind === 'line' || annotation.kind === 'arrow') {
+    g.appendChild(el('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, fill: 'none', ...stroke }));
+    if (annotation.kind === 'arrow') {
+      const angle = Math.atan2(b.y - a.y, b.x - a.x);
+      const size = Math.max(7, width * 4);
+      const p1 = { x: b.x - size * Math.cos(angle - Math.PI / 6), y: b.y - size * Math.sin(angle - Math.PI / 6) };
+      const p2 = { x: b.x - size * Math.cos(angle + Math.PI / 6), y: b.y - size * Math.sin(angle + Math.PI / 6) };
+      g.appendChild(el('polygon', { points: `${b.x},${b.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`, fill: color }));
+    }
+  } else if (annotation.kind === 'rectangle' || annotation.kind === 'highlight' || annotation.kind === 'cloud') {
+    if (annotation.kind === 'cloud') {
+      const r = Math.min(12, Math.max(5, Math.min(w, h) / 8));
+      let d = `M ${x + r} ${y}`;
+      for (let px = x + r; px < x + w - r; px += r * 2) d += ` Q ${px + r} ${y - r * .55} ${Math.min(x + w - r, px + r * 2)} ${y}`;
+      d += ` L ${x + w} ${y + r}`;
+      for (let py = y + r; py < y + h - r; py += r * 2) d += ` Q ${x + w + r * .55} ${py + r} ${x + w} ${Math.min(y + h - r, py + r * 2)}`;
+      d += ` L ${x + w - r} ${y + h}`;
+      for (let px = x + w - r; px > x + r; px -= r * 2) d += ` Q ${px - r} ${y + h + r * .55} ${Math.max(x + r, px - r * 2)} ${y + h}`;
+      d += ` L ${x} ${y + h - r}`;
+      for (let py = y + h - r; py > y + r; py -= r * 2) d += ` Q ${x - r * .55} ${py - r} ${x} ${Math.max(y + r, py - r * 2)}`;
+      d += ' Z';
+      g.appendChild(el('path', { d, fill: 'none', ...stroke }));
+    } else {
+      g.appendChild(el('rect', { x, y, width: w, height: h, fill: annotation.kind === 'highlight' ? color : 'none', 'fill-opacity': annotation.kind === 'highlight' ? fillOpacity : 0, ...stroke }));
+    }
+  } else if (annotation.kind === 'ellipse') {
+    g.appendChild(el('ellipse', { cx: x + w / 2, cy: y + h / 2, rx: w / 2, ry: h / 2, fill: 'none', ...stroke }));
+  } else if (annotation.kind === 'text') {
+    const text = el('text', { x: a.x, y: a.y, fill: color, 'font-size': 12, 'font-weight': 600, 'paint-order': 'stroke', stroke: '#ffffff', 'stroke-width': 3, 'stroke-linejoin': 'round' });
+    text.textContent = annotation.text ?? '';
+    g.appendChild(text);
+  }
+  return g;
 }
 
 function renderViewport(v: { points: Pt[]; metersPerPt: number; source: string }): SVGGElement {
@@ -145,6 +200,10 @@ function addVertices(g: SVGGElement, pts: { x: number; y: number }[], color: str
 
 function renderMarkup(m: Markup): SVGGElement {
   const color = m.color || COLORS[m.type] || '#333';
+  const strokeWidth = Math.max(0.25, Math.min(12, m.strokeWidth ?? 1.6));
+  const strokeOpacity = Math.max(0, Math.min(1, m.strokeOpacity ?? 1));
+  const fillOpacity = Math.max(0, Math.min(1, m.fillOpacity ?? 0.13));
+  const dash = m.lineStyle === 'dashed' ? '6 3' : m.lineStyle === 'dotted' ? '1 3' : undefined;
   const selected = m.id === state.selectedId;
   const focus = state.focusLabel === `${m.type}|${m.label}`;
   const g = el('g', {
@@ -154,7 +213,8 @@ function renderMarkup(m: Markup): SVGGElement {
   const title = el('title');
   title.textContent = labelText(m);
   g.appendChild(title);
-  const pts = m.points.map(pdfToView);
+  const geometrySource = m.sourceId ? state.markups.find((item) => item.id === m.sourceId) : undefined;
+  const pts = (geometrySource?.points ?? m.points).map(pdfToView);
 
   if (m.type === 'length') {
     g.appendChild(
@@ -162,7 +222,9 @@ function renderMarkup(m: Markup): SVGGElement {
         points: pts.map((p) => `${p.x},${p.y}`).join(' '),
         fill: 'none',
         stroke: color,
-        'stroke-width': selected ? 2.4 : 1.6,
+        'stroke-width': selected ? strokeWidth * 1.5 : strokeWidth,
+        'stroke-opacity': strokeOpacity,
+        ...(dash ? { 'stroke-dasharray': dash } : {}),
         'stroke-linecap': 'round',
         'stroke-linejoin': 'round',
       }),
@@ -180,11 +242,12 @@ function renderMarkup(m: Markup): SVGGElement {
       el('polygon', {
         points: pts.map((p) => `${p.x},${p.y}`).join(' '),
         fill: color,
-        'fill-opacity': selected ? 0.22 : 0.13,
+        'fill-opacity': selected ? Math.min(1, Math.max(fillOpacity, 0.22)) : fillOpacity,
         stroke: color,
-        'stroke-width': selected ? 2.4 : 1.6,
+        'stroke-width': selected ? strokeWidth * 1.5 : strokeWidth,
+        'stroke-opacity': strokeOpacity,
         'stroke-linejoin': 'round',
-        ...(m.type === 'volume' ? { 'stroke-dasharray': '6 2' } : {}),
+        ...(m.type === 'volume' && !m.lineStyle ? { 'stroke-dasharray': '6 2' } : dash ? { 'stroke-dasharray': dash } : {}),
       }),
     );
     addVertices(g, pts, color, selected);
@@ -195,8 +258,10 @@ function renderMarkup(m: Markup): SVGGElement {
         points: pts.map((p) => `${p.x},${p.y}`).join(' '),
         fill: 'none',
         stroke: color,
-        'stroke-width': selected ? 2.4 : 1.6,
+        'stroke-width': selected ? strokeWidth * 1.5 : strokeWidth,
+        'stroke-opacity': strokeOpacity,
         'stroke-linejoin': 'round',
+        ...(dash ? { 'stroke-dasharray': dash } : {}),
       }),
     );
     addVertices(g, pts, color, selected);
@@ -206,7 +271,7 @@ function renderMarkup(m: Markup): SVGGElement {
     for (const ray of [a, b]) {
       if (!ray) continue;
       g.appendChild(
-        el('line', { x1: v.x, y1: v.y, x2: ray.x, y2: ray.y, stroke: color, 'stroke-width': selected ? 2.4 : 1.6 }),
+        el('line', { x1: v.x, y1: v.y, x2: ray.x, y2: ray.y, stroke: color, 'stroke-width': selected ? strokeWidth * 1.5 : strokeWidth, 'stroke-opacity': strokeOpacity, ...(dash ? { 'stroke-dasharray': dash } : {}) }),
       );
     }
     addVertices(g, pts, color, selected);

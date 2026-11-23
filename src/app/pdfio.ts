@@ -11,12 +11,12 @@ import { fileStem } from './inputs';
 import type { Markup } from '../engine/types';
 
 export async function saveAnnotatedPdf(): Promise<void> {
-  if (!state.fileBytes || state.markups.length === 0) return;
-  const bytes = await buildAnnotatedPdf({ bytes: state.fileBytes, ...takeoffData() });
+  if (!state.fileBytes || (state.markups.length === 0 && state.annotations.length === 0)) return;
+  const bytes = await buildAnnotatedPdf({ bytes: state.fileBytes, ...takeoffData(), annotations: state.annotations });
   const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = fileStem(state.fileName) + '-markups.pdf';
+  a.download = fileStem(state.fileName) + '-annotated.pdf';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }

@@ -2345,7 +2345,7 @@ table.demo-results td.mono {
 
 
 /* Drawing-only display filters: measurements and annotations remain in colour. */
-#pdfCanvas#pdfCanvas { filter: var(--drawing-filter, none) var(--page-tone-filter, none); }
+#pdfCanvas { filter: var(--drawing-filter, ) var(--page-tone-filter, ); }
 #pdfCanvas.drawing-grayscale { --drawing-filter: grayscale(1) contrast(1.12); }
 #pdfCanvas.drawing-blueprint {
   --drawing-filter: grayscale(1) invert(1) sepia(1) saturate(5) hue-rotate(165deg) brightness(.72) contrast(1.45);
@@ -2453,7 +2453,8 @@ table.demo-results td.mono {
 .markup-parameters,
 .markup-links { display: grid; gap: 5px; margin: 8px 0; }
 .markup-param,
-.markup-link { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(90px, 1.3fr) auto; gap: 5px; }
+.markup-link { display: grid; grid-template-columns: 74px minmax(100px, 1.5fr) minmax(90px, 1fr) auto; gap: 6px; align-items: end; }
+.markup-link .link-variable { display: grid; gap: 3px; color: var(--text-dim); font-size: 10px; }
 .markup-link { grid-template-columns: minmax(100px, 1.5fr) minmax(90px, 1fr) auto; }
 .markup-details button {
   border: 1px solid var(--line);
@@ -2470,3 +2471,17 @@ table.demo-results td.mono {
   .markup-detail-grid { grid-template-columns: 1fr 1fr; }
   .markup-detail-grid .wide { grid-column: 1 / -1; }
 }
+
+
+/* Formula, hierarchy and measurement-style controls. */
+.markup-details input.invalid { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--field)); }
+.markup-details [data-apply-style-for] { margin: 0 0 7px; font-size: 10px; }
+#markupRows tr.sub-item .cell-label { padding-left: 18px; position: relative; }
+#markupRows tr.sub-item .cell-label::before { content: '↳'; position: absolute; left: 5px; color: var(--text-dim); }
+
+/* Drawing annotations are independent of quantity markups and sit below them. */
+#annotationLayer .drawing-annotation { pointer-events: visiblePainted; }
+#annotationLayer .drawing-annotation.selected { filter: drop-shadow(0 0 2px var(--action)); }
+.zoom-pill input[type="color"] { width: 25px; height: 24px; padding: 1px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--field); }
+.zoom-pill input[type="number"] { width: 42px; height: 24px; padding: 2px 3px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--field); color: var(--text); font: 10px var(--mono); }
+.zoom-pill select#annotationLineStyle { max-width: 66px; height: 24px; padding: 1px 3px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--field); color: var(--text); font-size: 10px; }

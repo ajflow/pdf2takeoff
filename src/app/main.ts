@@ -3,8 +3,8 @@
 // drop and paste, and calls openFiles / openSample / startDemo here.
 
 import { state, freezeMarkupCalibration, subscribe, emit } from './state';
-import { initViewer, loadPdf, closePdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf } from './viewer';
-import { initTools, setTool, setStatusHint } from './tools';
+import { initViewer, loadPdf, closePdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf, setZoomChangeHandler } from './viewer';
+import { initTools, setTool, setStatusHint, clearTakeoffHistory } from './tools';
 import { initTable, renderTable } from './table';
 import { renderMarkups } from './render';
 import { saveAnnotatedPdf, importMarkups } from './pdfio';
@@ -51,6 +51,11 @@ const dropzone = $('dropzone');
 const fileInput = $('fileInput') as HTMLInputElement;
 
 initViewer(scrollEl, pageEl, canvas, overlay, markupsLayer, previewLayer);
+setZoomChangeHandler((zoom) => {
+  $('zoomIndicator').textContent = `${Math.round(zoom * 100)}%`;
+  lastZoom = zoom;
+  scheduleRender(120);
+});
 initTools(overlay);
 initTable();
 initCompare(canvas, pageEl);
@@ -85,6 +90,7 @@ async function openBytes(bytes: Uint8Array, name: string, notes: string[] = []):
   $('loading').classList.remove('hidden');
   try {
     await loadPdf(bytes, name);
+    clearTakeoffHistory();
     window.scrollTo(0, 0);
     dropzone.classList.add('hidden');
     let restored = await importMarkups();
@@ -126,6 +132,7 @@ type ProjectFile = {
   presets: typeof state.presets;
   columns: typeof state.columns;
   template: string | null;
+  annotations?: typeof state.annotations;
   layerState?: ReturnType<typeof exportLayerState>;
 };
 
@@ -148,7 +155,7 @@ function saveProject(): void {
   const project: ProjectFile = {
     format: 'pdf2takeoff-project', version: 1, name: state.fileName,
     drawing: bytesToBase64(state.fileBytes), pageNum: state.pageNum,
-    displayUnit: state.displayUnit, markups: state.markups,
+    displayUnit: state.displayUnit, markups: state.markups, annotations: state.annotations,
     calibrations: [...state.calibrations.entries()], viewports: state.viewports,
     presets: state.presets, columns: state.columns, template: state.template,
     layerState: exportLayerState(),
@@ -159,7 +166,7 @@ function saveProject(): void {
   a.href = url;
   a.download = `${state.fileName.replace(/\.[^.]+$/, '') || 'takeoff'}.p2t`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
   $('toolHint').textContent = 'Project saved. Keep the .p2t file to reopen the drawing and its take-off.';
 }
 async function openProject(file: File): Promise<void> {
@@ -170,6 +177,8 @@ async function openProject(file: File): Promise<void> {
   const bytes = base64ToBytes(project.drawing);
   await openBytes(bytes, project.name || 'project.pdf');
   state.markups = Array.isArray(project.markups) ? project.markups : [];
+  state.annotations = Array.isArray(project.annotations) ? project.annotations : [];
+  state.selectedAnnotationId = null;
   state.calibrations = new Map(Array.isArray(project.calibrations) ? project.calibrations : []);
   state.viewports = Array.isArray(project.viewports) ? project.viewports : [];
   // Older .p2t projects did not freeze each measurement's calibration. Freeze
@@ -195,11 +204,14 @@ async function closeProject(): Promise<void> {
   if (!window.confirm('Close this project? Save it first if you want to keep your latest changes.')) return;
   stopSession();
   await closePdf();
+  clearTakeoffHistory();
   state.fileName = '';
   state.fileBytes = null;
   state.pageCount = 0;
   state.pageNum = 1;
   state.markups = [];
+  state.annotations = [];
+  state.selectedAnnotationId = null;
   state.calibrations.clear();
   state.viewports = [];
   state.imagePages.clear();
@@ -245,14 +257,24 @@ fileInput.accept = ACCEPT;
 fileInput.multiple = true;
 const projectInput = $('projectInput') as HTMLInputElement;
 $('saveProjectBtn').addEventListener('click', saveProject);
-$('openProjectBtn').addEventListener('click', () => projectInput.click());
-$('newProjectBtn').addEventListener('click', () => $('fileInput').click());
+$('openProjectBtn').addEventListener('click', () => {
+  if (hasDoc() && !window.confirm('Open another project? The current drawing and take-off will be replaced. Save it first if you need to keep your changes.')) return;
+  projectInput.click();
+});
+$('newProjectBtn').addEventListener('click', () => {
+  if (hasDoc() && !window.confirm('Start a new take-off? The current drawing and measurements will be replaced. Save the current project first if needed.')) return;
+  $('fileInput').click();
+});
 $('closeProjectBtn').addEventListener('click', () => void closeProject());
 projectInput.addEventListener('change', () => {
   const file = projectInput.files?.[0];
   projectInput.value = '';
   if (!file) return;
-  void openProject(file).catch((err) => showMessage(`Could not open project: ${err instanceof Error ? err.message : String(err)}`));
+  void openProject(file).catch((err) => {
+    const message = `Could not open project: ${err instanceof Error ? err.message : String(err)}`;
+    $('toolHint').textContent = message;
+    showMessage(message);
+  });
 });
 
 export async function openSample(): Promise<void> {

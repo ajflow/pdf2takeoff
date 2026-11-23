@@ -34,6 +34,7 @@ function hint(text: string): void {
 
 type HistorySnapshot = {
   markups: Markup[];
+  annotations: import('../engine/types').DrawingAnnotation[];
   calibrations: Map<number, import('./state').Calibration>;
   viewports: import('../engine/viewports').Viewport[];
 };
@@ -44,12 +45,21 @@ const HISTORY_LIMIT = 100;
 function snapshotTakeoff(): HistorySnapshot {
   return {
     markups: structuredClone(state.markups),
+    annotations: structuredClone(state.annotations),
     calibrations: new Map([...state.calibrations].map(([page, cal]) => [page, { ...cal }])),
     viewports: structuredClone(state.viewports),
   };
 }
 export function recordTakeoffHistory(): void {
   recordHistory();
+}
+
+/** A new or closed project starts with an empty undo/redo history. */
+export function clearTakeoffHistory(): void {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  state.lastAction = null;
+  updateHistoryButtons();
 }
 
 function recordHistory(): void {
@@ -69,6 +79,7 @@ function restoreHistory(target: HistorySnapshot): void {
   const next = new Map(target.markups.map((m) => [m.id, m]));
   for (const id of previous.keys()) if (!next.has(id)) syncDeleteMarkup(id);
   state.markups = structuredClone(target.markups);
+  state.annotations = structuredClone(target.annotations);
   for (const m of state.markups) syncUpsertMarkup(m);
   const pages = new Set([...state.calibrations.keys(), ...target.calibrations.keys()]);
   state.calibrations = new Map([...target.calibrations].map(([p, c]) => [p, { ...c }]));
@@ -113,6 +124,13 @@ const HINTS: Record<string, string> = {
   fill: 'Click inside a room or slab — the fill reads its area off the walls',
   viewport: 'Outline a region drawn at a different scale (e.g. a 1:20 detail), then pick its scale',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
+  'annot-line': 'Drag to draw a non-measurement line',
+  'annot-arrow': 'Drag to draw a non-measurement arrow',
+  'annot-rectangle': 'Drag to draw a rectangle annotation',
+  'annot-ellipse': 'Drag to draw an ellipse annotation',
+  'annot-highlight': 'Drag to highlight a drawing region',
+  'annot-cloud': 'Drag to draw a revision cloud',
+  'annot-text': 'Click to place a text annotation',
 };
 
 let svg: SVGSVGElement;
@@ -125,6 +143,8 @@ let loupePointer = { x: 0, y: 0, valid: false };
 let loupeOffset = { x: 28, y: 28 };
 let loupeDragging = false;
 let loupeDragStart = { x: 0, y: 0, offsetX: 28, offsetY: 28 };
+let loupeFrame = 0;
+let loupePending = { x: 0, y: 0 };
 const LOUPE_MAGNIFICATION = 2.5;
 let draft: Pt[] = [];
 let cursor: Pt | null = null;
@@ -297,18 +317,18 @@ function positionLoupe(): void {
 }
 
 /** Copy the live page canvas and SVG overlay into a movable, magnified window. */
-function refreshLoupe(e: PointerEvent): void {
+function refreshLoupe(clientX: number, clientY: number): void {
   if (!loupeEnabled || !loupeRoot || !loupeContent || !loupeViewport) return;
   const page = svg.parentElement;
   const sourceCanvas = document.getElementById('pdfCanvas') as HTMLCanvasElement | null;
   if (!page || !sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return;
   const rect = page.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
   const width = page.clientWidth;
   const height = page.clientHeight;
   if (x < 0 || y < 0 || x > width || y > height || !width || !height) return;
-  loupePointer = { x: e.clientX, y: e.clientY, valid: true };
+  loupePointer = { x: clientX, y: clientY, valid: true };
 
   const viewWidth = loupeViewport.clientWidth;
   const viewHeight = loupeViewport.clientHeight;
@@ -374,7 +394,10 @@ function setLoupeEnabled(enabled: boolean): void {
   button?.classList.toggle('active', enabled);
   button?.setAttribute('aria-pressed', String(enabled));
   if (!enabled) loupeRoot?.classList.add('hidden');
-  else hint('Precision loupe enabled · move over the drawing; drag its title bar to reposition it');
+  else {
+    hint('Precision loupe enabled · move over the drawing; drag its title bar to reposition it');
+    if (loupePointer.valid) refreshLoupe(loupePointer.x, loupePointer.y);
+  }
 }
 
 export function initTools(overlay: SVGSVGElement): void {
@@ -404,6 +427,19 @@ export function initTools(overlay: SVGSVGElement): void {
   loupeViewport = document.getElementById('loupeViewport');
   loupeContent = document.getElementById('loupeContent');
   loupeRaster = document.getElementById('loupeRaster') as HTMLCanvasElement | null;
+  for (const id of ['annotationColor', 'annotationWidth', 'annotationOpacity', 'annotationLineStyle']) {
+    document.getElementById(id)?.addEventListener('change', () => {
+      const annotation = state.annotations.find((item) => item.id === state.selectedAnnotationId);
+      if (!annotation) return;
+      recordHistory();
+      if (id === 'annotationColor') annotation.color = (document.getElementById(id) as HTMLInputElement).value;
+      if (id === 'annotationWidth') annotation.strokeWidth = Math.max(0.5, Math.min(16, Number((document.getElementById(id) as HTMLInputElement).value) || 2));
+      if (id === 'annotationOpacity') annotation.opacity = Math.max(0, Math.min(1, Number((document.getElementById(id) as HTMLInputElement).value) || 0));
+      if (id === 'annotationLineStyle') annotation.lineStyle = (document.getElementById(id) as HTMLSelectElement).value as 'solid' | 'dashed' | 'dotted';
+      renderMarkups();
+      emit();
+    });
+  }
   document.getElementById('loupeToggle')?.addEventListener('click', () => setLoupeEnabled(!loupeEnabled));
   document.getElementById('loupeClose')?.addEventListener('click', () => setLoupeEnabled(false));
   const loupeHeader = document.getElementById('loupeHeader');
@@ -424,11 +460,40 @@ export function initTools(overlay: SVGSVGElement): void {
   });
   window.addEventListener('pointerup', () => { loupeDragging = false; });
   svg.addEventListener('pointermove', onPointerMove);
-  // Registered after onPointerMove so the copied SVG includes the latest preview and snap glyph.
-  svg.addEventListener('pointermove', refreshLoupe);
-  svg.addEventListener('pointerleave', () => {
+  // Track the pointer independently of the active tool. The loupe must also
+  // work in Select mode and should appear immediately if toggled while the
+  // pointer is already over the sheet. Drawing into its raster is capped at
+  // one update per animation frame to avoid competing with pointer feedback.
+  window.addEventListener('pointermove', (event) => {
+    if (loupeDragging) {
+      positionLoupe();
+      return;
+    }
+    const rect = svg.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right &&
+      event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!inside) {
+      if (loupeRoot && event.target instanceof Node && loupeRoot.contains(event.target)) return;
+      if (loupeEnabled) {
+        loupePointer.valid = false;
+        loupeRoot?.classList.add('hidden');
+      }
+      return;
+    }
+    loupePointer = { x: event.clientX, y: event.clientY, valid: true };
+    if (!loupeEnabled || loupeFrame) return;
+    loupePending = { x: event.clientX, y: event.clientY };
+    loupeFrame = requestAnimationFrame(() => {
+      loupeFrame = 0;
+      refreshLoupe(loupePending.x, loupePending.y);
+    });
+  });
+  svg.addEventListener('pointerleave', (event) => {
     cursor = null;
     refreshPreview();
+    if (loupeEnabled && !(event.relatedTarget instanceof Node && loupeRoot?.contains(event.relatedTarget))) {
+      loupeRoot?.classList.add('hidden');
+    }
   });
   svg.addEventListener('dblclick', onDoubleClick);
   window.addEventListener('keydown', onKeyDown);
@@ -502,14 +567,146 @@ function eventToPdf(e: PointerEvent | MouseEvent): Pt | null {
   return viewToPdf(v);
 }
 
+
+
+function beginAnnotationDrag(annotation: import('../engine/types').DrawingAnnotation, event: PointerEvent): void {
+  const start = eventToPdf(event);
+  if (!start) return;
+  const before = annotation.points.map((point) => ({ ...point }));
+  recordHistory();
+  try { svg.setPointerCapture(event.pointerId); } catch { /* pointer may already be captured */ }
+  const move = (ev: PointerEvent) => {
+    const current = eventToPdf(ev);
+    if (!current) return;
+    const dx = current.x - start.x, dy = current.y - start.y;
+    annotation.points = before.map((point) => ({ x: point.x + dx, y: point.y + dy }));
+    renderMarkups();
+  };
+  const finish = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    renderMarkups();
+    emit();
+    try { if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', finish, { once: true });
+  window.addEventListener('pointercancel', finish, { once: true });
+}
+
+function beginDrawingAnnotation(kind: import('../engine/types').DrawingAnnotationKind, start: Pt, event: PointerEvent): void {
+  const color = (document.getElementById('annotationColor') as HTMLInputElement | null)?.value || '#e11d48';
+  const width = Number((document.getElementById('annotationWidth') as HTMLInputElement | null)?.value || 2);
+  const opacity = Number((document.getElementById('annotationOpacity') as HTMLInputElement | null)?.value || 0.9);
+  const lineStyle = ((document.getElementById('annotationLineStyle') as HTMLSelectElement | null)?.value || 'solid') as 'solid' | 'dashed' | 'dotted';
+  const make = (end: Pt) => {
+    recordHistory();
+    const id = nextId('an');
+    state.annotations.push({
+      id, page: state.pageNum, kind, points: [start, end], color,
+      strokeWidth: Math.max(0.5, Math.min(16, width)),
+      opacity: Math.max(0, Math.min(1, opacity)),
+      fillOpacity: 0.2, lineStyle,
+    });
+    state.selectedAnnotationId = id;
+    emit();
+    hint(`${kind} annotation added · excluded from quantities`);
+  };
+  try { svg.setPointerCapture(event.pointerId); } catch { /* pointer may already be captured */ }
+  const update = (ev: PointerEvent) => {
+    const end = eventToPdf(ev);
+    if (!end) return;
+    const a = pdfToView(start), b = pdfToView(end);
+    previewLayer.replaceChildren();
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', kind === 'ellipse' ? 'ellipse' : kind === 'rectangle' || kind === 'highlight' || kind === 'cloud' ? 'rect' : 'line');
+    if (shape.tagName === 'line') {
+      shape.setAttribute('x1', String(a.x)); shape.setAttribute('y1', String(a.y));
+      shape.setAttribute('x2', String(b.x)); shape.setAttribute('y2', String(b.y));
+    } else if (shape.tagName === 'ellipse') {
+      shape.setAttribute('cx', String((a.x+b.x)/2)); shape.setAttribute('cy', String((a.y+b.y)/2));
+      shape.setAttribute('rx', String(Math.abs(b.x-a.x)/2)); shape.setAttribute('ry', String(Math.abs(b.y-a.y)/2));
+    } else {
+      shape.setAttribute('x', String(Math.min(a.x,b.x))); shape.setAttribute('y', String(Math.min(a.y,b.y)));
+      shape.setAttribute('width', String(Math.max(1,Math.abs(b.x-a.x)))); shape.setAttribute('height', String(Math.max(1,Math.abs(b.y-a.y))));
+    }
+    shape.setAttribute('fill', kind === 'highlight' ? color : 'none');
+    shape.setAttribute('fill-opacity', kind === 'highlight' ? '0.2' : '0');
+    shape.setAttribute('stroke', color); shape.setAttribute('stroke-width', String(width));
+    if (lineStyle === 'dashed') shape.setAttribute('stroke-dasharray', '7 4');
+    if (lineStyle === 'dotted') shape.setAttribute('stroke-dasharray', '1 4');
+    previewLayer.appendChild(shape);
+  };
+  const finish = (ev: PointerEvent) => {
+    window.removeEventListener('pointermove', update);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', cancel);
+    const end = eventToPdf(ev);
+    previewLayer.replaceChildren();
+    if (end && Math.hypot(end.x-start.x, end.y-start.y) > 2) make(end);
+    try { if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  };
+  const cancel = () => {
+    window.removeEventListener('pointermove', update);
+    window.removeEventListener('pointerup', finish);
+    previewLayer.replaceChildren();
+  };
+  window.addEventListener('pointermove', update);
+  window.addEventListener('pointerup', finish, { once: true });
+  window.addEventListener('pointercancel', cancel, { once: true });
+}
+
 async function onPointerDown(e: PointerEvent): Promise<void> {
   if (e.button !== 0) return;
+  if (state.tool === 'pan' && e.target instanceof Element) {
+    const annotationGroup = e.target.closest<SVGGElement>('[data-annotation-id]');
+    const annotationId = annotationGroup?.getAttribute('data-annotation-id');
+    const annotation = annotationId ? state.annotations.find((item) => item.id === annotationId) : undefined;
+    if (annotation) {
+      state.selectedAnnotationId = annotation.id;
+      state.selectedId = null;
+      const colorInput = document.getElementById('annotationColor') as HTMLInputElement | null;
+      const widthInput = document.getElementById('annotationWidth') as HTMLInputElement | null;
+      const opacityInput = document.getElementById('annotationOpacity') as HTMLInputElement | null;
+      const lineInput = document.getElementById('annotationLineStyle') as HTMLSelectElement | null;
+      if (colorInput) colorInput.value = annotation.color || '#e11d48';
+      if (widthInput) widthInput.value = String(annotation.strokeWidth ?? 2);
+      if (opacityInput) opacityInput.value = String(annotation.opacity ?? 0.9);
+      if (lineInput) lineInput.value = annotation.lineStyle || 'solid';
+      renderMarkups();
+      emit();
+      beginAnnotationDrag(annotation, e);
+      return;
+    }
+  }
+  if (state.tool.startsWith('annot-')) {
+    e.preventDefault();
+    const point = eventToPdf(e);
+    if (!point) return;
+    const kind = state.tool.slice(6) as import('../engine/types').DrawingAnnotationKind;
+    if (kind === 'text') {
+      const text = window.prompt('Annotation text');
+      if (text?.trim()) {
+        recordHistory();
+        const annotationId = nextId('an');
+        state.annotations.push({
+          id: annotationId, page: state.pageNum, kind, points: [point], text: text.trim(),
+          color: (document.getElementById('annotationColor') as HTMLInputElement | null)?.value || '#e11d48',
+          strokeWidth: 2, opacity: 1,
+        });
+        state.selectedAnnotationId = annotationId;
+        emit();
+      }
+    } else beginDrawingAnnotation(kind, point, e);
+    return;
+  }
   if (e.target instanceof Element && e.target.closest('[data-id]') && state.tool === 'pan') {
     const g = e.target.closest('[data-id]')!;
     const id = g.getAttribute('data-id')!;
     const m = state.markups.find((x) => x.id === id);
     if (m) {
       state.selectedId = id;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
       if (m.page === state.pageNum) {
@@ -605,6 +802,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
       break;
     case 'pan':
       state.selectedId = null;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
       break;
@@ -615,26 +813,27 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
 function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: PointerEvent): void {
   const start = eventToPdf(e);
   if (!start) return;
-  const before = m.points.map((p) => ({ ...p }));
+  const geometry = m.sourceId ? state.markups.find((item) => item.id === m.sourceId) ?? m : m;
+  const before = geometry.points.map((p) => ({ ...p }));
   recordHistory();
-  state.lastAction = { kind: 'move', id: m.id, before };
+  state.lastAction = { kind: 'move', id: geometry.id, before };
   if (vtxIdx !== null) void loadSnapSegments(m.page);
   const move = (ev: PointerEvent) => {
     let cur = eventToPdf(ev);
     if (!cur) return;
-    if (vtxIdx != null && vtxIdx >= 0 && vtxIdx < m.points.length) {
+    if (vtxIdx != null && vtxIdx >= 0 && vtxIdx < geometry.points.length) {
       if (snapEnabled) {
         const snapped = snapPdfPoint(cur);
         if (snapped) cur = snapped.point;
       }
-      m.points[vtxIdx] = cur;
+      geometry.points[vtxIdx] = cur;
     } else {
       const dx = cur.x - start.x;
       const dy = cur.y - start.y;
-      m.points = before.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      geometry.points = before.map((p) => ({ x: p.x + dx, y: p.y + dy }));
     }
     renderMarkups();
-    syncUpsertMarkup(m);
+    syncUpsertMarkup(geometry);
   };
   const up = () => {
     window.removeEventListener('pointermove', move);
@@ -672,8 +871,9 @@ function onDoubleClick(e: MouseEvent): void {
     const group = e.target.closest<SVGGElement>('.markup[data-id]');
     const id = group?.getAttribute('data-id');
     const markup = id ? state.markups.find((m) => m.id === id && m.page === state.pageNum) : undefined;
-    if (markup && ['length', 'area', 'perimeter', 'volume'].includes(markup.type) && markup.points.length >= 2) {
-      const points = markup.points;
+    const geometry = markup?.sourceId ? state.markups.find((m) => m.id === markup.sourceId) ?? markup : markup;
+    if (markup && geometry && ['length', 'area', 'perimeter', 'volume'].includes(markup.type) && geometry.points.length >= 2) {
+      const points = geometry.points;
       const closed = markup.type === 'area' || markup.type === 'perimeter' || markup.type === 'volume';
       let best: { index: number; point: Pt; distance: number } | null = null;
       const segmentCount = closed ? points.length : points.length - 1;
@@ -691,9 +891,9 @@ function onDoubleClick(e: MouseEvent): void {
         const before = points.map((point) => ({ ...point }));
         recordHistory();
         state.lastAction = { kind: 'move', id: markup.id, before };
-        markup.points.splice(best.index + 1, 0, best.point);
+        geometry.points.splice(best.index + 1, 0, best.point);
         state.selectedId = markup.id;
-        syncUpsertMarkup(markup);
+        syncUpsertMarkup(geometry);
         renderMarkups();
         emit();
         e.preventDefault();
@@ -1281,8 +1481,9 @@ function onKeyDown(e: KeyboardEvent): void {
         emit();
       }
       hint('Select mode · choose a markup to edit, or drag the sheet to pan');
-    } else if (state.selectedId) {
+    } else if (state.selectedId || state.selectedAnnotationId) {
       state.selectedId = null;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
     }
@@ -1298,6 +1499,14 @@ function onKeyDown(e: KeyboardEvent): void {
       refreshPreview();
       return; // don't delete a selected markup while drawing
     }
+  }
+  if ((k === 'delete' || k === 'backspace') && state.selectedAnnotationId) {
+    recordHistory();
+    state.annotations = state.annotations.filter((item) => item.id !== state.selectedAnnotationId);
+    state.selectedAnnotationId = null;
+    renderMarkups();
+    emit();
+    return;
   }
   if ((k === 'delete' || k === 'backspace') && state.selectedId) {
     const deleted = state.selectedId;

@@ -50,30 +50,65 @@ export function groupsOf(markups: Markup[]): Group[] {
  * item can be totalled (angles and notes never are); `uncalibrated` counts
  * the items left out because their page has no scale yet.
  */
+/** Resolve the geometry/formula result before per-entry timesing and sign. */
+export function baseQuantityWithLinks(
+  m: Markup,
+  allMarkups: Markup[],
+  calFor: (m: Markup) => Calibration | undefined,
+  visiting = new Set<string>(),
+): number | null {
+  if (m.sourceId) {
+    if (visiting.has(m.id)) return null;
+    visiting.add(m.id);
+    const source = allMarkups.find((item) => item.id === m.sourceId);
+    const result = source ? baseQuantityWithLinks(source, allMarkups, calFor, visiting) : baseQuantity(m, calFor(m));
+    visiting.delete(m.id);
+    return result;
+  }
+  const formula = m.formula?.trim();
+  if (!formula) return baseQuantity(m, calFor(m));
+  if (visiting.has(m.id)) return null;
+  visiting.add(m.id);
+  const vars: Record<string, number> = {};
+  for (let i = 0; i < (m.links ?? []).length; i++) {
+    const link = m.links![i];
+    const target = allMarkups.find((item) => item.id === link.markupId);
+    if (!target) { visiting.delete(m.id); return null; }
+    const variable = link.variable || String.fromCharCode(65 + i);
+    const value = quantityForMarkup(target, allMarkups, calFor, visiting);
+    if (value === null) { visiting.delete(m.id); return null; }
+    vars[variable] = value;
+  }
+  const result = evaluateFormula(formula, vars);
+  visiting.delete(m.id);
+  return result;
+}
+
+/** Live quantity, including linked formula, timesing and add/deduct sign. */
+export function quantityForMarkup(
+  m: Markup,
+  allMarkups: Markup[],
+  calFor: (m: Markup) => Calibration | undefined,
+  visiting = new Set<string>(),
+): number | null {
+  const base = baseQuantityWithLinks(m, allMarkups, calFor, visiting);
+  return base === null ? null : base * (m.timesing ?? 1) * (m.sign ?? 1);
+}
+
 export function groupTotal(
   g: Group,
   calFor: (m: Markup) => Calibration | undefined,
+  allMarkups: Markup[] = g.items,
 ): { total: number | null; uncalibrated: number } {
-  // Links are user-authored references only. They never change quantities.
-  if (g.type === 'count') {
-    return { total: g.items.reduce((sum, m) => sum + (m.timesing ?? 1) * (m.sign ?? 1), 0), uncalibrated: 0 };
-  }
   if (g.type === 'angle' || g.type === 'note') return { total: null, uncalibrated: 0 };
   let total = 0;
   let counted = 0;
   let uncalibrated = 0;
   for (const m of g.items) {
-    const cal = calFor(m);
-    if (!cal) {
-      uncalibrated++;
-      continue;
-    }
+    const quantity = quantityForMarkup(m, allMarkups, calFor);
+    if (quantity === null) { uncalibrated++; continue; }
     counted++;
-    const factor = (m.timesing ?? 1) * (m.sign ?? 1);
-    if (g.type === 'length') total += markupLength(m, cal.metersPerPt) * factor;
-    else if (g.type === 'perimeter') total += markupPerimeter(m, cal.metersPerPt) * factor;
-    else if (g.type === 'volume') total += markupVolume(m, cal.metersPerPt) * factor;
-    else total += markupArea(m, cal.metersPerPt) * factor;
+    total += quantity;
   }
   return { total: counted ? total : null, uncalibrated };
 }
@@ -100,9 +135,10 @@ export function valueParts(
   m: Markup,
   cal: Calibration | undefined,
   u: DisplayUnit,
+  quantityOverride?: number | null,
 ): { value: string; unit: string } {
   const base = u === 'ft-in' ? 'ft' : u;
-  const value = adjustedQuantity(m, cal);
+  const value = quantityOverride === undefined ? adjustedQuantity(m, cal) : quantityOverride;
   if (m.type === 'note' || value === null) return { value: '', unit: '' };
   if (m.type === 'count') return { value: String(value), unit: 'each' };
   if (m.type === 'angle') return { value: String(value), unit: 'deg' };
@@ -112,8 +148,8 @@ export function valueParts(
 }
 
 /** Formatted single-markup adjusted value ('' when the page isn't calibrated). */
-export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: DisplayUnit): string {
-  const value = adjustedQuantity(m, cal);
+export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: DisplayUnit, quantityOverride?: number | null): string {
+  const value = quantityOverride === undefined ? adjustedQuantity(m, cal) : quantityOverride;
   if (m.type === 'note' || value === null) return '';
   if (m.type === 'angle') return `${value.toFixed(1)}°`;
   if (m.type === 'count') return String(value);
@@ -125,40 +161,44 @@ export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: Di
 /** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
 export function buildMatrix(d: TakeoffData): Matrix {
   const cols = d.columns ?? [];
-  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Timesing', 'Sign', 'Base quantity', 'Adjusted quantity', 'Parameters', 'Remarks', 'Links', 'Status', 'Layer', ...cols.map((c) => c.name)];
+  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Timesing', 'Sign', 'Base quantity', 'Adjusted quantity', 'Parameters', 'Remarks', 'Links', 'Quantity formula', 'Status', 'Layer', 'Item code', 'Parent item', ...cols.map((c) => c.name)];
   const rows: Matrix = [header];
   const round = (n: number) => Math.round(n * 10000) / 10000;
+  const calFor = (m: Markup) => m.calibration ?? resolveCalibration(m, d.calibrations, d.viewports);
   for (const m of d.markups) {
-    const cal = m.calibration ?? resolveCalibration(m, d.calibrations, d.viewports);
-    const { value, unit } = valueParts(m, cal, d.displayUnit);
-    const base = baseQuantity(m, cal);
-    const adjusted = adjustedQuantity(m, cal);
+    const cal = calFor(m);
+    const base = baseQuantityWithLinks(m, d.markups, calFor);
+    const adjusted = quantityForMarkup(m, d.markups, calFor);
+    const { value, unit } = valueParts(m, cal, d.displayUnit, adjusted);
     const numeric = adjusted;
     const extras = cols.map((c) => {
       const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: 1 });
       return out === null ? 'ERR' : round(out);
     });
     const params = Object.entries(m.parameters ?? {}).map(([k, v]) => `${k}: ${v}`).join('; ');
-    const links = (m.links ?? []).map((link) => {
-      const target = d.markups.find((item) => item.id === link.markupId);
-      return `${link.logic?.trim() || link.note?.trim() || link.relation?.trim() || 'Linked to'}: ${target?.label ?? link.markupId}`;
-    }).join('; ');
+    const links = [
+      ...(m.sourceId ? [`Shared geometry: ${d.markups.find((item) => item.id === m.sourceId)?.label ?? m.sourceId}`] : []),
+      ...(m.links ?? []).map((link) => {
+        const target = d.markups.find((item) => item.id === link.markupId);
+        return `${link.variable ? `${link.variable} = ` : ''}${link.logic?.trim() || link.note?.trim() || link.relation?.trim() || 'Linked to'}: ${target?.label ?? link.markupId}`;
+      }),
+    ].join('; ');
     rows.push([
       m.label, m.type, m.page, value === '' ? '' : Number(value), unit,
       m.timesing ?? 1, (m.sign ?? 1) > 0 ? '+' : '−',
       base === null ? '' : round(base), adjusted === null ? '' : round(adjusted),
-      params, m.remarks ?? '', links, m.status ?? '', m.layer ?? '', ...extras,
+      params, m.remarks ?? '', links, m.formula ?? '', m.status ?? '', m.layer ?? '', m.itemCode ?? '', d.markups.find((item) => item.id === m.parentId)?.label ?? '', ...extras,
     ]);
   }
   const gs = groupsOf(d.markups);
   if (gs.length) {
     rows.push([]);
-    rows.push(['Group', 'Type', 'Items', 'Total', 'Unit', '', '', '', '', '', '', '', 'Status', 'Layer', ...cols.map((col) => col.name)]);
+    rows.push(['Group', 'Type', 'Items', 'Total', 'Unit', '', '', '', '', '', '', '', '', 'Status', 'Layer', 'Item code', 'Parent item', ...cols.map((col) => col.name)]);
     for (const g of gs) {
       const calFor = (m: Markup) => m.calibration ?? resolveCalibration(m, d.calibrations, d.viewports);
       const cal = calFor(g.items[0]);
       // each item at its own scale; a group with any unscaled item has no honest total
-      const sum = groupTotal(g, calFor);
+      const sum = groupTotal(g, calFor, d.markups);
       const total: string | number = sum.total !== null && !sum.uncalibrated ? sum.total : '';
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
       const confirmed = g.items.filter((m) => m.status === 'confirmed').length;
@@ -167,7 +207,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
         const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: g.items.length });
         return out === null ? 'ERR' : round(out);
       });
-      rows.push([g.label, g.type, g.items.length, total, unit, '', '', '', '', '', '', '', confirmed ? `${confirmed}/${g.items.length} confirmed` : '', '', ...extras]);
+      rows.push([g.label, g.type, g.items.length, total, unit, '', '', '', '', '', '', '', '', confirmed ? `${confirmed}/${g.items.length} confirmed` : '', '', '', '', ...extras]);
     }
   }
   return rows;

@@ -79,11 +79,12 @@ async function loadSnapSegments(page: number): Promise<VecSeg[]> {
     const segs = vec?.segs ?? [];
     // A safety ceiling avoids making pointer interaction unresponsive on unusually
     // complex vector sheets. No geometry is changed or discarded from the PDF.
-    snapSegments = segs.length <= 250000 ? segs : [];
-    return snapSegments;
+    const usable = segs.length <= 250000 ? segs : [];
+    if (snapPage === page) snapSegments = usable;
+    return usable;
   }).catch(() => {
-    snapSegments = [];
-    return snapSegments;
+    if (snapPage === page) snapSegments = [];
+    return [];
   });
   return snapPromise;
 }
@@ -112,11 +113,11 @@ function snapPdfPoint(p: Pt): { point: Pt; kind: string } | null {
   if (!snapEnabled || !snapSegments.length) return null;
   const tolerance = 10 / Math.max(0.05, state.zoom);
   const tol2 = tolerance * tolerance;
-  let best: { point: Pt; kind: string; d2: number } | null = null;
+  const best: { current: { point: Pt; kind: string; d2: number } | null } = { current: null };
   const nearby: VecSeg[] = [];
   const offer = (point: Pt, kind: string) => {
     const dx = point.x - p.x, dy = point.y - p.y, d2 = dx * dx + dy * dy;
-    if (d2 <= tol2 && (!best || d2 < best.d2)) best = { point, kind, d2 };
+    if (d2 <= tol2 && (!best.current || d2 < best.current.d2)) best.current = { point, kind, d2 };
   };
   for (const s of snapSegments) {
     const a = { x: s.x1, y: s.y1 }, b = { x: s.x2, y: s.y2 };
@@ -137,7 +138,7 @@ function snapPdfPoint(p: Pt): { point: Pt; kind: string } | null {
       if (hit) offer(hit, 'Intersection');
     }
   }
-  return best ? { point: best.point, kind: best.kind } : null;
+  return best.current ? { point: best.current.point, kind: best.current.kind } : null;
 }
 
 function updateSnapToggle(): void {
@@ -145,7 +146,7 @@ function updateSnapToggle(): void {
   if (!button) return;
   button.classList.toggle('active', snapEnabled);
   button.setAttribute('aria-pressed', String(snapEnabled));
-  button.title = snapEnabled ? 'Object snapping on (S)' : 'Object snapping off (S)';
+  button.title = snapEnabled ? 'Object snapping on' : 'Object snapping off';
 }
 
 function drawSnapMarker(): void {
@@ -161,7 +162,13 @@ function drawSnapMarker(): void {
   c.setAttribute('stroke', '#00a6a0'); c.setAttribute('stroke-width', '1.6');
   const h = document.createElementNS(ns, 'path');
   h.setAttribute('d', 'M-8 0H8M0 -8V8'); h.setAttribute('stroke', '#00a6a0'); h.setAttribute('stroke-width', '1');
-  g.append(c,h); previewLayer.appendChild(g);
+  const label = document.createElementNS(ns, 'text');
+  label.setAttribute('x', '9'); label.setAttribute('y', '-8');
+  label.setAttribute('font-size', '8'); label.setAttribute('font-weight', '700');
+  label.setAttribute('fill', '#007f79'); label.setAttribute('stroke', '#ffffff');
+  label.setAttribute('stroke-width', '2.5'); label.setAttribute('paint-order', 'stroke');
+  label.textContent = snapPoint.kind === 'Endpoint' ? 'END' : snapPoint.kind === 'Midpoint' ? 'MID' : snapPoint.kind === 'Intersection' ? 'INT' : 'NEAR';
+  g.append(c,h,label); previewLayer.appendChild(g);
 }
 
 export function initTools(overlay: SVGSVGElement): void {
@@ -1024,14 +1031,6 @@ function onKeyDown(e: KeyboardEvent): void {
       renderMarkups();
       emit();
     }
-    return;
-  }
-  if (k === 's' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-    snapEnabled = !snapEnabled;
-    snapPoint = null;
-    updateSnapToggle();
-    hint(snapEnabled ? 'Object snapping enabled' : 'Object snapping disabled');
-    refreshPreview();
     return;
   }
   if (toolKeys[k] && !e.metaKey && !e.ctrlKey && !e.altKey) {

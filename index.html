@@ -271,6 +271,11 @@
           </div>
         </div>
 
+        <div id="loupeWindow" class="loupe-window hidden" aria-label="Precision magnifier">
+          <div id="loupeHeader" class="loupe-header"><span>Precision loupe · 2.5×</span><button type="button" id="loupeClose" aria-label="Close loupe">×</button></div>
+          <div id="loupeViewport" class="loupe-viewport"><div id="loupeContent" class="loupe-content"></div></div>
+        </div>
+
         <div class="hint-pill" id="hintPill" role="status" aria-live="polite"><span id="toolHint">Open a drawing (PDF or image) to begin</span></div>
 
         <div class="zoom-pill" role="group" aria-label="Zoom">
@@ -282,6 +287,10 @@
           <select id="drawingViewMode" aria-label="Drawing display mode" title="Change drawing appearance">
             <option value="normal">Normal</option><option value="grayscale">Grayscale</option><option value="blueprint">Blueprint</option>
           </select>
+          <select id="pageToneMode" aria-label="Page background" title="Change the drawing page to light or black">
+            <option value="light">Light page</option><option value="black">Black page</option>
+          </select>
+          <button type="button" id="loupeToggle" class="snap-toggle" aria-pressed="false" title="Toggle precision loupe (movable magnifier)">Loupe</button>
           <button type="button" id="undoBtn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">↶</button>
           <button type="button" id="redoBtn" aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y)">↷</button>
           <button type="button" id="snapToggle" class="snap-toggle active" aria-pressed="true" title="Object snapping on (S)">Snap</button>

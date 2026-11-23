@@ -45,6 +45,10 @@ export interface Markup {
   status?: 'check' | 'confirmed';
   /** Layer name; absent = the default layer. */
   layer?: string;
+  /** Optional per-markup display colour; absent uses the automatic type colour. */
+  color?: string;
+  /** Drawing visibility only; hidden quantities remain in schedules and exports. */
+  visible?: boolean;
   /** Count markups only: set when this markup is a proposed or confirmed door, Window or space (see inventory.ts). */
   item?: ItemAttrs;
 }

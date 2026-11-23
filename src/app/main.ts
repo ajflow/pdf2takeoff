@@ -212,6 +212,13 @@ unitSel.addEventListener('change', () => {
   emit();
 });
 
+const drawingViewMode = $('drawingViewMode') as HTMLSelectElement;
+drawingViewMode.addEventListener('change', () => {
+  const canvas = $('pdfCanvas');
+  canvas.classList.remove('drawing-grayscale', 'drawing-blueprint');
+  if (drawingViewMode.value === 'grayscale') canvas.classList.add('drawing-grayscale');
+  if (drawingViewMode.value === 'blueprint') canvas.classList.add('drawing-blueprint');
+});
 $('zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.25));
 $('zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
 $('zoomFit').addEventListener('click', () => {

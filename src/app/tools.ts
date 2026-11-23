@@ -612,6 +612,7 @@ async function runFill(p: Pt): Promise<void> {
       points: result.points,
       createdAt: Date.now(),
     };
+    recordHistory();
     state.markups.push(m);
     state.lastAction = null;
     syncUpsertMarkup(m);
@@ -661,6 +662,7 @@ async function runScan(p: Pt): Promise<void> {
   const doubtful = new Set<string>();
   let example: string | null = null;
   let nearest = Infinity;
+  recordHistory();
   for (const hit of hits) {
     const scanned: Markup = {
       id: nextId('mk'),
@@ -980,6 +982,7 @@ function applyCalibration(): void {
     hint('The calibration could not be calculated. Check the length and redraw the dimension.');
     return;
   }
+  recordHistory();
   applyScaleToPages(metersPerPt, `measured ${calibInput.value.trim()} ${unit}`);
   closeCalibModal();
   renderMarkups();

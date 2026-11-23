@@ -13,7 +13,7 @@
 import * as Y from 'yjs';
 import { state, emit, nextId } from './state';
 import { fileHash } from '../engine/export';
-import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
+import type { Calibration, Markup } from '../engine/types';
 
 let doc: Y.Doc | null = null;
 let channel: BroadcastChannel | null = null;

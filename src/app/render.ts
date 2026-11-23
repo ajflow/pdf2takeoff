@@ -90,7 +90,7 @@ export function renderMarkups(): void {
   for (const v of state.viewports.filter((x) => x.page === page)) {
     markupsLayer.appendChild(renderViewport(v));
   }
-  for (const m of state.markups.filter((x) => x.page === page && isVisibleLayer(x))) {
+  for (const m of state.markups.filter((x) => x.page === page && x.visible !== false && isVisibleLayer(x))) {
     markupsLayer.appendChild(renderMarkup(m));
   }
 }
@@ -137,7 +137,7 @@ function addVertices(g: SVGGElement, pts: { x: number; y: number }[], color: str
 }
 
 function renderMarkup(m: Markup): SVGGElement {
-  const color = COLORS[m.type] ?? '#333';
+  const color = m.color || COLORS[m.type] || '#333';
   const selected = m.id === state.selectedId;
   const focus = state.focusLabel === `${m.type}|${m.label}`;
   const g = el('g', {

@@ -2271,3 +2271,23 @@ table.demo-results td.mono {
     width: auto;
   }
 }
+
+
+/* CAD object-snap toggle */
+.zoom-pill .snap-toggle {
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 4px 8px;
+  color: var(--text-dim);
+  background: var(--field);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.zoom-pill .snap-toggle.active {
+  color: var(--teal);
+  border-color: var(--teal);
+  background: rgb(var(--teal-rgb) / 0.12);
+  font-weight: 700;
+}
+#overlay .snap-marker { pointer-events: none; }

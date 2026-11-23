@@ -118,6 +118,7 @@ const HINTS: Record<string, string> = {
 let svg: SVGSVGElement;
 let loupeRoot: HTMLElement | null = null;
 let loupeViewport: HTMLElement | null = null;
+let loupeRaster: HTMLCanvasElement | null = null;
 let loupeContent: HTMLElement | null = null;
 let loupeEnabled = false;
 let loupePointer = { x: 0, y: 0, valid: false };
@@ -309,40 +310,37 @@ function refreshLoupe(e: PointerEvent): void {
   if (x < 0 || y < 0 || x > width || y > height || !width || !height) return;
   loupePointer = { x: e.clientX, y: e.clientY, valid: true };
 
-  let pageCopy = loupeContent.querySelector<HTMLCanvasElement>('canvas[data-loupe-page]');
-  if (!pageCopy) {
-    pageCopy = document.createElement('canvas');
-    pageCopy.dataset.loupePage = 'true';
-    loupeContent.appendChild(pageCopy);
+  const viewWidth = loupeViewport.clientWidth;
+  const viewHeight = loupeViewport.clientHeight;
+  if (!loupeRaster || !viewWidth || !viewHeight) return;
+  const outputScale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const outputWidth = Math.round(viewWidth * outputScale);
+  const outputHeight = Math.round(viewHeight * outputScale);
+  if (loupeRaster.width !== outputWidth || loupeRaster.height !== outputHeight) {
+    loupeRaster.width = outputWidth;
+    loupeRaster.height = outputHeight;
   }
-  if (pageCopy.width !== sourceCanvas.width || pageCopy.height !== sourceCanvas.height) {
-    pageCopy.width = sourceCanvas.width;
-    pageCopy.height = sourceCanvas.height;
-  }
-  pageCopy.className = sourceCanvas.className;
-  pageCopy.style.filter = getComputedStyle(sourceCanvas).filter;
-  pageCopy.style.width = `${width}px`;
-  pageCopy.style.height = `${height}px`;
-  const pageContext = pageCopy.getContext('2d');
-  if (pageContext) pageContext.drawImage(sourceCanvas, 0, 0);
-
-  const fxSource = document.getElementById('fxCanvas') as HTMLCanvasElement | null;
-  if (fxSource && fxSource.width && fxSource.height) {
-    let fxCopy = loupeContent.querySelector<HTMLCanvasElement>('canvas[data-loupe-fx]');
-    if (!fxCopy) {
-      fxCopy = document.createElement('canvas');
-      fxCopy.dataset.loupeFx = 'true';
-      loupeContent.appendChild(fxCopy);
+  const context = loupeRaster.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, outputWidth, outputHeight);
+    const sourceX = x * sourceCanvas.width / width;
+    const sourceY = y * sourceCanvas.height / height;
+    const cropWidth = viewWidth / LOUPE_MAGNIFICATION * sourceCanvas.width / width;
+    const cropHeight = viewHeight / LOUPE_MAGNIFICATION * sourceCanvas.height / height;
+    const sx = sourceX - cropWidth / 2;
+    const sy = sourceY - cropHeight / 2;
+    context.filter = getComputedStyle(sourceCanvas).filter;
+    context.drawImage(sourceCanvas, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
+    const fxSource = document.getElementById('fxCanvas') as HTMLCanvasElement | null;
+    if (fxSource && fxSource.width && fxSource.height) {
+      const fxX = x * fxSource.width / width;
+      const fxY = y * fxSource.height / height;
+      const fxW = viewWidth / LOUPE_MAGNIFICATION * fxSource.width / width;
+      const fxH = viewHeight / LOUPE_MAGNIFICATION * fxSource.height / height;
+      context.filter = 'none';
+      context.drawImage(fxSource, fxX - fxW / 2, fxY - fxH / 2, fxW, fxH, 0, 0, outputWidth, outputHeight);
     }
-    if (fxCopy.width !== fxSource.width || fxCopy.height !== fxSource.height) {
-      fxCopy.width = fxSource.width;
-      fxCopy.height = fxSource.height;
-    }
-    fxCopy.style.width = `${width}px`;
-    fxCopy.style.height = `${height}px`;
-    const fxContext = fxCopy.getContext('2d');
-    fxContext?.clearRect(0, 0, fxCopy.width, fxCopy.height);
-    fxContext?.drawImage(fxSource, 0, 0);
+    context.filter = 'none';
   }
 
   let overlayCopy = loupeContent.querySelector<SVGSVGElement>('svg[data-loupe-overlay]');
@@ -405,6 +403,7 @@ export function initTools(overlay: SVGSVGElement): void {
   loupeRoot = document.getElementById('loupeWindow');
   loupeViewport = document.getElementById('loupeViewport');
   loupeContent = document.getElementById('loupeContent');
+  loupeRaster = document.getElementById('loupeRaster') as HTMLCanvasElement | null;
   document.getElementById('loupeToggle')?.addEventListener('click', () => setLoupeEnabled(!loupeEnabled));
   document.getElementById('loupeClose')?.addEventListener('click', () => setLoupeEnabled(false));
   const loupeHeader = document.getElementById('loupeHeader');

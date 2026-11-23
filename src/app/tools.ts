@@ -12,7 +12,7 @@ import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
-import { getActiveLayer, DEFAULT_LAYER } from './layers';
+import { getActiveLayer, DEFAULT_LAYER, isLockedLayer, layerOf } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
 import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
@@ -540,6 +540,10 @@ export function initTools(overlay: SVGSVGElement): void {
 }
 
 export function setTool(tool: typeof state.tool): void {
+  if (['length', 'area', 'count', 'perimeter', 'volume', 'angle', 'note', 'fill', 'scan'].includes(tool) && isLockedLayer(getActiveLayer())) {
+    hint('The active layer is locked · choose or unlock another layer before measuring');
+    return;
+  }
   state.tool = tool;
   // manual tool switching drops an active preset unless the type still matches;
   // a count preset survives the scan tool so scan hits come out pre-labelled
@@ -811,6 +815,7 @@ async function onPointerDown(e: PointerEvent): Promise<void> {
 
 /** Drag a whole markup, or one vertex when vtxIdx is given. Live value updates. */
 function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: PointerEvent): void {
+  if (isLockedLayer(layerOf(m))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
   const start = eventToPdf(e);
   if (!start) return;
   const geometry = m.sourceId ? state.markups.find((item) => item.id === m.sourceId) ?? m : m;
@@ -1066,6 +1071,7 @@ function finishDraft(): void {
 }
 
 function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'angle', depth?: number): void {
+  if (isLockedLayer(getActiveLayer())) { hint('The active layer is locked · measurement was not added'); return; }
   const markup: Markup = {
     id: nextId('mk'),
     page: state.pageNum,

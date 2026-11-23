@@ -47,13 +47,13 @@ export function groupsOf(markups: Markup[]): Group[] {
 /** Read a dimensional parameter as metres. Bare width/height values default to mm. */
 function parameterMetres(m: Markup, names: string[]): number | null {
   for (const [rawKey, rawValue] of Object.entries(m.parameters ?? {})) {
-    const key = rawKey.toLowerCase().replace(/\\s*\\([^)]*\\)\\s*/g, '').replace(/[^a-z]/g, '');
+    const key = rawKey.toLowerCase().replace(/\s*\([^)]*\)\s*/g, '').replace(/[^a-z]/g, '');
     if (!names.includes(key)) continue;
     const value = String(rawValue).trim().replace(/,/g, '');
-    const match = /^([-+]?(?:\\d+\\.?\\d*|\\.\\d+))\\s*(mm|millimet(?:re|er)s?|cm|centimet(?:re|er)s?|m|met(?:re|er)s?|in|inch(?:es)?|ft|feet)?$/i.exec(value);
+    const match = /^([-+]?(?:\d+\.?\d*|\.\d+))\s*(mm|millimet(?:re|er)s?|cm|centimet(?:re|er)s?|m|met(?:re|er)s?|in|inch(?:es)?|ft|feet)?$/i.exec(value);
     if (!match) continue;
     const n = Number(match[1]);
-    const unit = (match[2] ?? (rawKey.match(/\\((mm|cm|m|in|ft)\\)/i)?.[1] ?? 'mm')).toLowerCase();
+    const unit = (match[2] ?? (rawKey.match(/\((mm|cm|m|in|ft)\)/i)?.[1] ?? 'mm')).toLowerCase();
     const factor = unit === 'mm' || unit.startsWith('millimet') ? 0.001
       : unit === 'cm' || unit.startsWith('centimet') ? 0.01
       : unit === 'in' || unit.startsWith('inch') ? 0.0254

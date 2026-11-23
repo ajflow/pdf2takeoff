@@ -32,13 +32,13 @@ export interface ItemAttrs {
   agreement?: { runs: number; of: number };
 }
 
-export type MarkupLinkRelation = 'associated' | 'deduct' | 'add' | 'derive';
-
 export interface MarkupLink {
   /** The other markup's stable id. */
   markupId: string;
-  /** How the two take-off entries relate; links are informational unless an explicit rule is selected. */
-  relation: MarkupLinkRelation;
+  /** User-authored description of the relationship or intended QS logic. Never executed automatically. */
+  logic?: string;
+  /** Legacy field retained as inert text when opening older project files. */
+  relation?: string;
   note?: string;
 }
 
@@ -61,6 +61,8 @@ export interface Markup {
   visible?: boolean;
   /** Count markups only: set when this markup is a proposed or confirmed door, Window or space (see inventory.ts). */
   item?: ItemAttrs;
+  /** Scale frozen when this measurement was created; later page/viewport scale edits do not alter it. */
+  calibration?: Calibration;
   /** Per-entry QS timesing. Defaults to 1 for projects created before this field existed. */
   timesing?: number;
   /** Per-entry quantity sign: +1 adds, -1 deducts. Defaults to +1. */

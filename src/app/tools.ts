@@ -21,7 +21,7 @@ import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dyna
 import { renderRaster } from './raster';
 import type { RasterPage } from '../engine/ports';
 import { scanDeps } from './adapters';
-import { parseLength, toMeters, PRESET_SCALES, METERS_PER_PT, type Unit } from '../engine/units';
+import { parseLength, toMeters, formatLength, PRESET_SCALES, METERS_PER_PT, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -851,6 +851,14 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
     window.removeEventListener('pointermove', move);
     renderMarkups();
     emit();
+    if (vtxIdx !== null && geometry.points[vtxIdx]) {
+      const point = geometry.points[vtxIdx];
+      const closed = m.type === 'area' || m.type === 'perimeter' || m.type === 'volume';
+      const adjacent = [vtxIdx - 1, vtxIdx].filter((index) => index >= 0 && index < (closed ? geometry.points.length : geometry.points.length - 1));
+      const cal = calibrationForMarkup(m);
+      const lengths = cal ? adjacent.map((index) => formatLength(distPt(geometry.points[index], geometry.points[(index + 1) % geometry.points.length]) * cal.metersPerPt, state.displayUnit)) : [];
+      hint(`Vertex ${vtxIdx + 1} · X ${point.x.toFixed(2)} pt · Y ${point.y.toFixed(2)} pt${lengths.length ? ` · adjacent: ${lengths.join(' / ')}` : ''}`);
+    }
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up, { once: true });

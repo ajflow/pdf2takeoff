@@ -79,16 +79,9 @@ function rebuildFromDoc(): void {
 export function syncUpsertMarkup(m: Markup): void {
   const d = doc;
   if (!d) return;
-  const value: Markup = {
-    id: m.id,
-    page: m.page,
-    type: m.type as MarkupType,
-    label: m.label,
-    points: m.points.map((p): Pt => ({ x: p.x, y: p.y })),
-    createdAt: m.createdAt,
-    ...(m.depth !== undefined ? { depth: m.depth } : {}),
-    ...(m.status !== undefined ? { status: m.status } : {}),
-  };
+  // Preserve the complete markup payload, including QS attributes, links,
+  // colours, visibility and inventory metadata, across live-session sync.
+  const value: Markup = structuredClone(m);
   d.getMap<Markup>('markups').set(m.id, value);
 }
 

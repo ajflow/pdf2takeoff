@@ -24,6 +24,15 @@ const hidden = new Set<string>();
 export function getActiveLayer(): string {
   return activeLayer;
 }
+export function exportLayerState(): { activeLayer: string; hidden: string[] } {
+  return { activeLayer, hidden: [...hidden] };
+}
+export function importLayerState(value: { activeLayer?: string; hidden?: string[] } | undefined): void {
+  activeLayer = value?.activeLayer || DEFAULT_LAYER;
+  hidden.clear();
+  for (const name of value?.hidden ?? []) if (typeof name === 'string') hidden.add(name);
+  renderLayers();
+}
 
 export function isVisibleLayer(m: { layer?: string }): boolean {
   return !hidden.has(layerOf(m));

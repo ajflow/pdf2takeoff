@@ -254,17 +254,18 @@ function renderMarkup(m: Markup): SVGGElement {
   // thin take-off lines selectable without changing their stored PDF points.
   // Selected markups keep their vertex handles on top for precise editing.
   if (!selected) {
+    const hitRadius = 12 / Math.max(0.05, state.zoom);
     if (m.type === 'count' || m.type === 'note') {
       const p = pts[0];
       g.appendChild(el('circle', {
-        cx: p.x, cy: p.y, r: 12, fill: 'transparent',
+        cx: p.x, cy: p.y, r: hitRadius, fill: 'transparent',
         'pointer-events': 'all',
       }));
     } else if (m.type === 'angle') {
       for (const end of [pts[1], pts[2]]) {
         if (end) g.appendChild(el('line', {
           x1: pts[0].x, y1: pts[0].y, x2: end.x, y2: end.y,
-          stroke: 'transparent', 'stroke-width': 12,
+          stroke: 'transparent', 'stroke-width': hitRadius,
           'stroke-linecap': 'round', 'pointer-events': 'stroke',
         }));
       }
@@ -273,7 +274,7 @@ function renderMarkup(m: Markup): SVGGElement {
       g.appendChild(el(closed ? 'polygon' : 'polyline', {
         points: pts.map((p) => `${p.x},${p.y}`).join(' '),
         fill: closed ? 'transparent' : 'none',
-        stroke: 'transparent', 'stroke-width': 12,
+        stroke: 'transparent', 'stroke-width': hitRadius,
         'stroke-linecap': 'round', 'stroke-linejoin': 'round',
         'pointer-events': closed ? 'all' : 'stroke',
       }));

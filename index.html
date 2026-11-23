@@ -131,6 +131,7 @@
     </script>
   </head>
   <body class="landing">
+    <input type="file" id="projectInput" accept=".p2t,.json,application/json" hidden />
     <input type="file" id="fileInput" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" multiple hidden />
     <input type="file" id="cmpFileA" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
     <input type="file" id="cmpFileB" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
@@ -180,6 +181,10 @@
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
         </button>
         <div class="menu hidden" id="moreMenu" role="menu" aria-label="More">
+          <button class="menu-item" type="button" role="menuitem" id="newProjectBtn">New project</button>
+          <button class="menu-item" type="button" role="menuitem" id="saveProjectBtn">Save project (.p2t)</button>
+          <button class="menu-item" type="button" role="menuitem" id="openProjectBtn">Open project (.p2t)</button>
+          <button class="menu-item" type="button" role="menuitem" id="closeProjectBtn">Close project</button>
           <button class="menu-item" type="button" role="menuitem" id="openBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Open a drawing</span></button>
           <label class="menu-item menu-field"><span>Units</span><select id="unitSelect" aria-label="Display units"></select></label>
           <button class="menu-item" type="button" role="menuitem" id="sessionBtn" title="Share this takeoff live with other tabs and windows of the same drawing (same machine)">Live</button>
@@ -200,7 +205,7 @@
 
     <div id="app">
       <nav class="rail" role="toolbar" aria-label="Tools" aria-orientation="vertical">
-        <button class="tool" type="button" data-tool="pan" aria-label="Select / pan (V)">
+        <button class="tool" type="button" data-tool="pan" aria-label="Select / pan (V)" title="Select / pan. Press Escape to cancel an active tool.">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
           <span class="tip" aria-hidden="true">Pan <kbd>V</kbd></span>
         </button>

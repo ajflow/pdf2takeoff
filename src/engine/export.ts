@@ -51,7 +51,12 @@ export function groupsOf(markups: Markup[]): Group[] {
  * the items left out because their page has no scale yet.
  */
 export function groupTotal(g: Group, calFor: (m: Markup) => Calibration | undefined): { total: number | null; uncalibrated: number } {
-  if (g.type === 'count') return { total: g.items.length, uncalibrated: 0 };
+  if (g.type === 'count') {
+    return {
+      total: g.items.reduce((sum, m) => sum + (m.timesing ?? 1) * (m.sign ?? 1), 0),
+      uncalibrated: 0,
+    };
+  }
   if (g.type === 'angle' || g.type === 'note') return { total: null, uncalibrated: 0 };
   let total = 0;
   let counted = 0;
@@ -71,49 +76,77 @@ export function groupTotal(g: Group, calFor: (m: Markup) => Calibration | undefi
   return { total: counted ? total : null, uncalibrated };
 }
 
+/** Geometry-derived quantity before per-entry timesing/sign adjustments. */
+export function baseQuantity(m: Markup, cal: Calibration | undefined): number | null {
+  if (m.type === 'note') return null;
+  if (m.type === 'count') return 1;
+  if (m.type === 'angle') return markupAngle(m);
+  if (!cal) return null;
+  if (m.type === 'length') return markupLength(m, cal.metersPerPt);
+  if (m.type === 'perimeter') return markupPerimeter(m, cal.metersPerPt);
+  if (m.type === 'volume') return markupVolume(m, cal.metersPerPt);
+  return markupArea(m, cal.metersPerPt);
+}
+
+/** Per-entry adjusted quantity = geometry × timesing × sign. */
+export function adjustedQuantity(m: Markup, cal: Calibration | undefined): number | null {
+  const base = baseQuantity(m, cal);
+  return base === null ? null : base * (m.timesing ?? 1) * (m.sign ?? 1);
+}
+
 export function valueParts(
   m: Markup,
   cal: Calibration | undefined,
   u: DisplayUnit,
 ): { value: string; unit: string } {
   const base = u === 'ft-in' ? 'ft' : u;
-  if (m.type === 'note') return { value: '', unit: '' };
-  if (m.type === 'count') return { value: '1', unit: 'each' };
-  if (m.type === 'angle') return { value: String(markupAngle(m)), unit: 'deg' };
-  if (!cal) return { value: '', unit: '' };
-  if (m.type === 'length') return { value: String(markupLength(m, cal.metersPerPt)), unit: base };
-  if (m.type === 'perimeter') return { value: String(markupPerimeter(m, cal.metersPerPt)), unit: base };
-  if (m.type === 'volume') return { value: String(markupVolume(m, cal.metersPerPt)), unit: `${base}3` };
-  return { value: String(markupArea(m, cal.metersPerPt)), unit: `${base}2` };
+  const value = adjustedQuantity(m, cal);
+  if (m.type === 'note' || value === null) return { value: '', unit: '' };
+  if (m.type === 'count') return { value: String(value), unit: 'each' };
+  if (m.type === 'angle') return { value: String(value), unit: 'deg' };
+  if (m.type === 'length' || m.type === 'perimeter') return { value: String(value), unit: base };
+  if (m.type === 'volume') return { value: String(value), unit: `${base}3` };
+  return { value: String(value), unit: `${base}2` };
 }
 
-/** Formatted single-markup value ('' when the page isn't calibrated). */
+/** Formatted single-markup adjusted value ('' when the page isn't calibrated). */
 export function formatMarkupValue(m: Markup, cal: Calibration | undefined, u: DisplayUnit): string {
-  if (m.type === 'note') return '';
-  if (m.type === 'angle') return `${markupAngle(m).toFixed(1)}°`;
-  if (!cal) return '';
-  if (m.type === 'count') return '1';
-  if (m.type === 'perimeter') return formatLength(markupPerimeter(m, cal.metersPerPt), u);
-  if (m.type === 'volume') return formatVolume(markupVolume(m, cal.metersPerPt), u);
-  return m.type === 'length'
-    ? formatLength(markupLength(m, cal.metersPerPt), u)
-    : formatArea(markupArea(m, cal.metersPerPt), u);
+  const value = adjustedQuantity(m, cal);
+  if (m.type === 'note' || value === null) return '';
+  if (m.type === 'angle') return `${value.toFixed(1)}°`;
+  if (m.type === 'count') return String(value);
+  if (m.type === 'perimeter' || m.type === 'length') return formatLength(value, u);
+  if (m.type === 'volume') return formatVolume(value, u);
+  return formatArea(value, u);
 }
 
 /** Items + group totals as a matrix, shared by CSV / clipboard / Excel / report. */
 export function buildMatrix(d: TakeoffData): Matrix {
   const cols = d.columns ?? [];
-  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Status', 'Layer', ...cols.map((c) => c.name)];
+  const header = ['Label', 'Type', 'Page', 'Value', 'Unit', 'Timesing', 'Sign', 'Base quantity', 'Adjusted quantity', 'Parameters', 'Remarks', 'Links', 'Status', 'Layer', ...cols.map((c) => c.name)];
   const rows: Matrix = [header];
   const round = (n: number) => Math.round(n * 10000) / 10000;
   for (const m of d.markups) {
-    const { value, unit } = valueParts(m, resolveCalibration(m, d.calibrations, d.viewports), d.displayUnit);
-    const numeric = value === '' ? null : Number(value);
+    const cal = resolveCalibration(m, d.calibrations, d.viewports);
+    const { value, unit } = valueParts(m, cal, d.displayUnit);
+    const base = baseQuantity(m, cal);
+    const adjusted = adjustedQuantity(m, cal);
+    const numeric = adjusted;
     const extras = cols.map((c) => {
       const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: 1 });
       return out === null ? 'ERR' : round(out);
     });
-    rows.push([m.label, m.type, m.page, value === '' ? '' : Number(value), unit, m.status ?? '', m.layer ?? '', ...extras]);
+    const params = Object.entries(m.parameters ?? {}).map(([k, v]) => `${k}: ${v}`).join('; ');
+    const links = (m.links ?? []).map((link) => {
+      const target = d.markups.find((item) => item.id === link.markupId);
+      return `${link.relation}: ${target?.label ?? link.markupId}`;
+    }).join('; ');
+    rows.push([
+      m.label, m.type, m.page, value === '' ? '' : Number(value), unit,
+      m.timesing ?? 1, (m.sign ?? 1) > 0 ? '+' : '−',
+      base === null ? '' : round(base), adjusted === null ? '' : round(adjusted),
+      params, m.remarks ?? '', links, m.status ?? '', m.layer ?? '', ...extras,
+    ]);
   }
   const gs = groupsOf(d.markups);
   if (gs.length) {

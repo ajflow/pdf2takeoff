@@ -541,6 +541,7 @@ export function initTools(overlay: SVGSVGElement): void {
 }
 
 export function setTool(tool: typeof state.tool): void {
+  selectedVertex = null;
   if (['length', 'area', 'count', 'perimeter', 'volume', 'angle', 'note', 'fill', 'scan'].includes(tool) && isLockedLayer(getActiveLayer())) {
     hint('The active layer is locked · choose or unlock another layer before measuring');
     return;
@@ -1505,6 +1506,7 @@ function onKeyDown(e: KeyboardEvent): void {
       }
       hint('Select mode · choose a markup to edit, or drag the sheet to pan');
     } else if (state.selectedId || state.selectedAnnotationId) {
+      selectedVertex = null;
       state.selectedId = null;
       state.selectedAnnotationId = null;
       renderMarkups();

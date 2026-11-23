@@ -1,7 +1,7 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
+import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, freezeMarkupCalibration, metersPerPtForRatioOn, ratioOn } from './state';
 import { openScanReview, isDoubtful } from './scanreview';
 import { eventToView, viewToPdf, pdfToView, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers, previewLayer } from './viewer';
 import type { VecSeg } from '../engine/vector';
@@ -634,6 +634,7 @@ async function runFill(p: Pt): Promise<void> {
       points: result.points,
       createdAt: Date.now(),
     };
+    freezeMarkupCalibration(m);
     recordHistory();
     state.markups.push(m);
     state.lastAction = null;
@@ -739,8 +740,7 @@ function finishDraft(): void {
 }
 
 function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'angle', depth?: number): void {
-  recordHistory();
-  state.markups.push({
+  const markup: Markup = {
     id: nextId('mk'),
     page: state.pageNum,
     type,
@@ -749,9 +749,12 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
     createdAt: Date.now(),
     ...(depth !== undefined ? { depth } : {}),
     ...(getActiveLayer() !== DEFAULT_LAYER ? { layer: getActiveLayer() } : {}),
-  });
+  };
+  freezeMarkupCalibration(markup);
+  recordHistory();
+  state.markups.push(markup);
   state.lastAction = null;
-  syncUpsertMarkup(state.markups[state.markups.length - 1]);
+  syncUpsertMarkup(markup);
 }
 
 function refreshPreview(): void {

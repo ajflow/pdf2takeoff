@@ -320,6 +320,7 @@ function refreshLoupe(e: PointerEvent): void {
     pageCopy.height = sourceCanvas.height;
   }
   pageCopy.className = sourceCanvas.className;
+  pageCopy.style.filter = getComputedStyle(sourceCanvas).filter;
   pageCopy.style.width = `${width}px`;
   pageCopy.style.height = `${height}px`;
   const pageContext = pageCopy.getContext('2d');

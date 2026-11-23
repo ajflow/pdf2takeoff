@@ -44,51 +44,6 @@ export function groupsOf(markups: Markup[]): Group[] {
   return [...map.values()];
 }
 
-/** Read a dimensional parameter as metres. Bare width/height values default to mm. */
-function parameterMetres(m: Markup, names: string[]): number | null {
-  for (const [rawKey, rawValue] of Object.entries(m.parameters ?? {})) {
-    const key = rawKey.toLowerCase().replace(/\s*\([^)]*\)\s*/g, '').replace(/[^a-z]/g, '');
-    if (!names.includes(key)) continue;
-    const value = String(rawValue).trim().replace(/,/g, '');
-    const match = /^([-+]?(?:\d+\.?\d*|\.\d+))\s*(mm|millimet(?:re|er)s?|cm|centimet(?:re|er)s?|m|met(?:re|er)s?|in|inch(?:es)?|ft|feet)?$/i.exec(value);
-    if (!match) continue;
-    const n = Number(match[1]);
-    const unit = (match[2] ?? (rawKey.match(/\((mm|cm|m|in|ft)\)/i)?.[1] ?? 'mm')).toLowerCase();
-    const factor = unit === 'mm' || unit.startsWith('millimet') ? 0.001
-      : unit === 'cm' || unit.startsWith('centimet') ? 0.01
-      : unit === 'in' || unit.startsWith('inch') ? 0.0254
-      : unit === 'ft' || unit === 'feet' ? 0.3048 : 1;
-    return n * factor;
-  }
-  return null;
-}
-
-/** Quantity contribution from a source markup linked to a target entry. */
-function linkedContribution(source: Markup, target: Markup, calFor: (m: Markup) => Calibration | undefined): number | null {
-  const cal = calFor(source);
-  const measured = baseQuantity(source, cal);
-  let amount: number | null = null;
-  if (source.type === 'count') {
-    const width = parameterMetres(source, ['width', 'w']);
-    const height = parameterMetres(source, ['height', 'h']);
-    const depth = parameterMetres(source, ['depth', 'd']);
-    if (target.type === 'length' || target.type === 'perimeter') amount = width;
-    else if (target.type === 'area' && width !== null && height !== null) amount = width * height;
-    else if (target.type === 'volume' && width !== null && height !== null && depth !== null) amount = width * height * depth;
-    else if (target.type === 'count') amount = 1;
-  } else if (measured !== null) {
-    if (source.type === target.type) amount = measured;
-    else if ((source.type === 'length' || source.type === 'perimeter') && target.type === 'area') {
-      const height = parameterMetres(source, ['height', 'h']);
-      if (height !== null) amount = measured * height;
-    } else if (source.type === 'area' && target.type === 'volume') {
-      const depth = parameterMetres(source, ['depth', 'd']);
-      if (depth !== null) amount = measured * depth;
-    }
-  }
-  return amount === null ? null : amount * (source.timesing ?? 1) * (source.sign ?? 1);
-}
-
 /**
  * A group's total with each markup at its own scale: one label can span
  * pages, or viewports, drawn at different scales. `total` is null when no
@@ -98,19 +53,10 @@ function linkedContribution(source: Markup, target: Markup, calFor: (m: Markup) 
 export function groupTotal(
   g: Group,
   calFor: (m: Markup) => Calibration | undefined,
-  allMarkups: Markup[] = g.items,
 ): { total: number | null; uncalibrated: number } {
+  // Links are user-authored references only. They never change quantities.
   if (g.type === 'count') {
-    let total = g.items.reduce((sum, m) => sum + (m.timesing ?? 1) * (m.sign ?? 1), 0);
-    for (const source of allMarkups) {
-      for (const link of source.links ?? []) {
-        const target = g.items.find((m) => m.id === link.markupId);
-        if (!target || (link.relation !== 'add' && link.relation !== 'deduct')) continue;
-        const amount = linkedContribution(source, target, calFor);
-        if (amount !== null) total += (link.relation === 'deduct' ? -1 : 1) * amount;
-      }
-    }
-    return { total, uncalibrated: 0 };
+    return { total: g.items.reduce((sum, m) => sum + (m.timesing ?? 1) * (m.sign ?? 1), 0), uncalibrated: 0 };
   }
   if (g.type === 'angle' || g.type === 'note') return { total: null, uncalibrated: 0 };
   let total = 0;
@@ -128,14 +74,6 @@ export function groupTotal(
     else if (g.type === 'perimeter') total += markupPerimeter(m, cal.metersPerPt) * factor;
     else if (g.type === 'volume') total += markupVolume(m, cal.metersPerPt) * factor;
     else total += markupArea(m, cal.metersPerPt) * factor;
-  }
-  for (const source of allMarkups) {
-    for (const link of source.links ?? []) {
-      const target = g.items.find((m) => m.id === link.markupId);
-      if (!target || (link.relation !== 'add' && link.relation !== 'deduct')) continue;
-      const amount = linkedContribution(source, target, calFor);
-      if (amount !== null) total += (link.relation === 'deduct' ? -1 : 1) * amount;
-    }
   }
   return { total: counted ? total : null, uncalibrated };
 }
@@ -191,7 +129,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
   const rows: Matrix = [header];
   const round = (n: number) => Math.round(n * 10000) / 10000;
   for (const m of d.markups) {
-    const cal = resolveCalibration(m, d.calibrations, d.viewports);
+    const cal = m.calibration ?? resolveCalibration(m, d.calibrations, d.viewports);
     const { value, unit } = valueParts(m, cal, d.displayUnit);
     const base = baseQuantity(m, cal);
     const adjusted = adjustedQuantity(m, cal);
@@ -203,7 +141,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
     const params = Object.entries(m.parameters ?? {}).map(([k, v]) => `${k}: ${v}`).join('; ');
     const links = (m.links ?? []).map((link) => {
       const target = d.markups.find((item) => item.id === link.markupId);
-      return `${link.relation}: ${target?.label ?? link.markupId}`;
+      return `${link.logic?.trim() || link.note?.trim() || link.relation?.trim() || 'Linked to'}: ${target?.label ?? link.markupId}`;
     }).join('; ');
     rows.push([
       m.label, m.type, m.page, value === '' ? '' : Number(value), unit,
@@ -220,7 +158,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
       const calFor = (m: Markup) => resolveCalibration(m, d.calibrations, d.viewports);
       const cal = calFor(g.items[0]);
       // each item at its own scale; a group with any unscaled item has no honest total
-      const sum = groupTotal(g, calFor, d.markups);
+      const sum = groupTotal(g, calFor);
       const total: string | number = sum.total !== null && !sum.uncalibrated ? sum.total : '';
       const unit = g.type === 'count' ? 'each' : valueParts(g.items[0], cal, d.displayUnit).unit;
       const confirmed = g.items.filter((m) => m.status === 'confirmed').length;

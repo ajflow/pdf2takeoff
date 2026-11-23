@@ -286,10 +286,10 @@ function onDoubleClick(e: MouseEvent): void {
   const p = eventToPdf(e);
   if (!p) return;
   if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport') {
-    // the second click of a double-click registers as a duplicate vertex
-    if (draft.length >= 2 && distPt(draft[draft.length - 1], draft[draft.length - 2]) < 1) {
-      draft.pop();
-    }
+    // Both pointerdowns have already been processed by the time the
+    // browser dispatches dblclick. The second click is the duplicate end
+    // vertex, even when sub-pixel rounding makes its PDF coordinates differ.
+    if (draft.length) draft.pop();
     finishDraft();
   }
 }

@@ -2297,3 +2297,48 @@ table.demo-results td.mono {
   font-weight: 700;
 }
 #overlay .snap-marker { pointer-events: none; }
+
+
+/* Named count setup */
+.count-manager {
+  margin: 10px 16px 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--chrome);
+}
+.count-manager-title {
+  margin-bottom: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.count-manager-row {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.count-manager input,
+.count-manager select {
+  min-width: 0;
+  flex: 1 1 0;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+.count-manager .btn {
+  flex: none;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 6px 9px;
+}
+.count-manager .lib-hint { margin-top: 7px; }
+.zoom-pill button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

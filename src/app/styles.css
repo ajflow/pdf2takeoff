@@ -2345,10 +2345,60 @@ table.demo-results td.mono {
 
 
 /* Drawing-only display filters: measurements and annotations remain in colour. */
-#pdfCanvas.drawing-grayscale { filter: grayscale(1) contrast(1.12); }
+#pdfCanvas#pdfCanvas { filter: var(--drawing-filter, none) var(--page-tone-filter, none); }
+#pdfCanvas.drawing-grayscale { --drawing-filter: grayscale(1) contrast(1.12); }
 #pdfCanvas.drawing-blueprint {
-  filter: grayscale(1) invert(1) sepia(1) saturate(5) hue-rotate(165deg) brightness(.72) contrast(1.45);
+  --drawing-filter: grayscale(1) invert(1) sepia(1) saturate(5) hue-rotate(165deg) brightness(.72) contrast(1.45);
 }
+#pdfCanvas.paper-black { --page-tone-filter: invert(1) hue-rotate(180deg); }
+#pageWrap.paper-black { background: #080d16; }
+
+/* Movable precision loupe: a live magnified copy of the page canvas and SVG overlay. */
+.loupe-window {
+  position: fixed;
+  z-index: 80;
+  width: 360px;
+  height: 252px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--raised);
+  box-shadow: 0 12px 36px rgba(0,0,0,.32);
+  pointer-events: none;
+}
+.loupe-window.hidden { display: none; }
+.loupe-header {
+  height: 28px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 11px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font: 600 11px/1 var(--font);
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+}
+.loupe-header button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 17px;
+  cursor: pointer;
+}
+.loupe-header button:hover { background: var(--line); color: var(--text); }
+.loupe-viewport { position: relative; width: 100%; height: calc(100% - 28px); overflow: hidden; background: #fff; }
+.loupe-content { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.loupe-content canvas, .loupe-content svg { position: absolute; inset: 0; display: block; }
+.loupe-content svg { overflow: visible; pointer-events: none; }
+
 .markup-color {
   width: 20px;
   height: 20px;

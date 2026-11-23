@@ -18,7 +18,7 @@ import { formatLength, formatArea, formatVolume } from '../engine/units';
 import { exportReport } from './report';
 import { syncUpsertMarkup, syncDeleteMarkup, syncClearMarkups } from './session';
 import { columnValuesFor } from './columns';
-import { isVisibleLayer } from './layers';
+import { isVisibleLayer, isLockedLayer, layerOf } from './layers';
 import { fileStem } from './inputs';
 import { COLORS, scanStyle } from './render';
 import { templateById, templateSummary, templateMatrix } from '../engine/templates';
@@ -44,7 +44,7 @@ export function initTable(): void {
     const cloneButton = target.closest<HTMLElement>('[data-clone-for]');
     if (linkedCloneButton) {
       const source = state.markups.find((m) => m.id === linkedCloneButton.dataset.linkedCloneFor);
-      if (source) {
+      if (source && !isLockedLayer(layerOf(source))) {
         const clone = structuredClone(source);
         clone.id = nextId('mk');
         clone.label = `${source.label} linked copy`;
@@ -65,7 +65,7 @@ export function initTable(): void {
     }
     if (cloneButton) {
       const source = state.markups.find((m) => m.id === cloneButton.dataset.cloneFor);
-      if (source) {
+      if (source && !isLockedLayer(layerOf(source))) {
         const clone = structuredClone(source);
         clone.id = nextId('mk');
         clone.label = `${source.label} copy`;
@@ -87,9 +87,9 @@ export function initTable(): void {
       if (!action) return;
       if (action.dataset.applyStyleFor) {
         const source = state.markups.find((x) => x.id === action.dataset.applyStyleFor);
-        if (source) {
+        if (source && !isLockedLayer(layerOf(source))) {
           recordTakeoffHistory();
-          for (const target of state.markups.filter((x) => x.type === source.type)) {
+          for (const target of state.markups.filter((x) => x.type === source.type && !isLockedLayer(layerOf(x)))) {
             if (source.color) target.color = source.color; else delete target.color;
             for (const key of ['strokeWidth', 'strokeOpacity', 'fillOpacity', 'lineStyle'] as const) {
               if (source[key] === undefined) delete target[key];
@@ -103,7 +103,7 @@ export function initTable(): void {
       }
       if (action.dataset.addParamFor) {
         const m = state.markups.find((x) => x.id === action.dataset.addParamFor);
-        if (m) {
+        if (m && !isLockedLayer(layerOf(m))) {
           recordTakeoffHistory();
           m.parameters ??= {};
           let n = Object.keys(m.parameters).length + 1;
@@ -119,7 +119,7 @@ export function initTable(): void {
       if (action.dataset.addLinkFor) {
         const m = state.markups.find((x) => x.id === action.dataset.addLinkFor);
         const targetMarkup = state.markups.find((x) => x.id !== m?.id && !(m?.links ?? []).some((link) => link.markupId === x.id));
-        if (m && targetMarkup) {
+        if (m && targetMarkup && !isLockedLayer(layerOf(m))) {
           recordTakeoffHistory();
           m.links ??= [];
           if (!m.links.some((x) => x.markupId === targetMarkup.id)) {
@@ -137,7 +137,7 @@ export function initTable(): void {
       if (action.dataset.removeParam !== undefined) {
         const [id, key] = action.dataset.removeParam.split('::');
         const m = state.markups.find((x) => x.id === id);
-        if (m?.parameters) {
+        if (m?.parameters && !isLockedLayer(layerOf(m))) {
           recordTakeoffHistory();
           delete m.parameters[key];
           if (!Object.keys(m.parameters).length) delete m.parameters;
@@ -149,7 +149,7 @@ export function initTable(): void {
       if (action.dataset.removeLink !== undefined) {
         const [id, index] = action.dataset.removeLink.split('::');
         const m = state.markups.find((x) => x.id === id);
-        if (m?.links) {
+        if (m?.links && !isLockedLayer(layerOf(m))) {
           recordTakeoffHistory();
           m.links.splice(Number(index), 1);
           syncUpsertMarkup(m);
@@ -162,7 +162,7 @@ export function initTable(): void {
     const st = target.closest('[data-status-for]');
     if (st) {
       const m = state.markups.find((x) => x.id === st.getAttribute('data-status-for'));
-      if (m) {
+      if (m && !isLockedLayer(layerOf(m))) {
         // cycle none -> check -> confirmed -> none
         recordTakeoffHistory();
         m.status = m.status === 'check' ? 'confirmed' : m.status === 'confirmed' ? undefined : 'check';
@@ -186,6 +186,8 @@ export function initTable(): void {
     const del = target.closest('[data-del]');
     if (del) {
       const id = del.getAttribute('data-del')!;
+      const targetMarkup = state.markups.find((m) => m.id === id);
+      if (!targetMarkup || isLockedLayer(layerOf(targetMarkup))) return;
       recordTakeoffHistory();
       state.markups = state.markups.filter((m) => m.id !== id);
       for (const m of state.markups) {
@@ -229,7 +231,7 @@ export function initTable(): void {
       input.dataset.parameterKeyFor || input.dataset.parameterValueFor || input.dataset.linkTargetFor || input.dataset.linkLogicFor || input.dataset.linkVariableFor || input.dataset.formulaFor || input.dataset.itemCodeFor || input.dataset.parentFor || input.dataset.strokeWidthFor || input.dataset.strokeOpacityFor || input.dataset.fillOpacityFor || input.dataset.lineStyleFor;
     if (markupId) {
       const m = state.markups.find((x) => x.id === markupId);
-      if (!m) return;
+      if (!m || isLockedLayer(layerOf(m))) return;
       if (input.dataset.timesingFor) {
         const n = Number(input.value);
         if (!Number.isFinite(n) || n < 0) { input.value = String(m.timesing ?? 1); return; }
@@ -319,7 +321,7 @@ export function initTable(): void {
     }
     if (input.dataset.colorFor) {
       const m = state.markups.find((x) => x.id === input.dataset.colorFor);
-      if (m) {
+      if (m && !isLockedLayer(layerOf(m))) {
         recordTakeoffHistory();
         m.color = input.value.toLowerCase();
         syncUpsertMarkup(m);
@@ -329,7 +331,7 @@ export function initTable(): void {
     }
     if (input.dataset.labelFor) {
       const m = state.markups.find((x) => x.id === input.dataset.labelFor);
-      if (m) {
+      if (m && !isLockedLayer(layerOf(m))) {
         recordTakeoffHistory();
         m.label = input.value.trim() || defaultLabel(m.type);
         syncUpsertMarkup(m);

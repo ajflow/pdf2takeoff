@@ -1133,7 +1133,8 @@ function onKeyDown(e: KeyboardEvent): void {
       draft = [];
       calibFirst = null;
       renderPreview(null);
-      hint(HINTS[state.tool]);
+      if (state.tool !== 'pan') setTool('pan');
+      hint('Measurement cancelled · Select mode');
     } else if (state.tool !== 'pan') {
       setTool('pan');
       if (state.selectedId) {

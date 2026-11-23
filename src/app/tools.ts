@@ -196,18 +196,19 @@ function drawSnapMarker(): void {
   const p = pdfToView(snapPoint);
   const ns = 'http://www.w3.org/2000/svg';
   const g = document.createElementNS(ns, 'g');
+  const invZoom = 1 / Math.max(0.05, state.zoom);
   g.setAttribute('class', 'snap-marker');
   g.setAttribute('transform', `translate(${p.x} ${p.y})`);
   const c = document.createElementNS(ns, 'circle');
-  c.setAttribute('r', '5'); c.setAttribute('fill', '#ffffff');
-  c.setAttribute('stroke', '#00a6a0'); c.setAttribute('stroke-width', '1.6');
+  c.setAttribute('r', String(5 * invZoom)); c.setAttribute('fill', '#ffffff');
+  c.setAttribute('stroke', '#00a6a0'); c.setAttribute('stroke-width', String(1.6 * invZoom));
   const h = document.createElementNS(ns, 'path');
-  h.setAttribute('d', 'M-8 0H8M0 -8V8'); h.setAttribute('stroke', '#00a6a0'); h.setAttribute('stroke-width', '1');
+  h.setAttribute('d', `M${-8 * invZoom} 0H${8 * invZoom}M0 ${-8 * invZoom}V${8 * invZoom}`); h.setAttribute('stroke', '#00a6a0'); h.setAttribute('stroke-width', String(invZoom));
   const label = document.createElementNS(ns, 'text');
-  label.setAttribute('x', '9'); label.setAttribute('y', '-8');
-  label.setAttribute('font-size', '8'); label.setAttribute('font-weight', '700');
+  label.setAttribute('x', String(9 * invZoom)); label.setAttribute('y', String(-8 * invZoom));
+  label.setAttribute('font-size', String(8 * invZoom)); label.setAttribute('font-weight', '700');
   label.setAttribute('fill', '#007f79'); label.setAttribute('stroke', '#ffffff');
-  label.setAttribute('stroke-width', '2.5'); label.setAttribute('paint-order', 'stroke');
+  label.setAttribute('stroke-width', String(2.5 * invZoom)); label.setAttribute('paint-order', 'stroke');
   label.textContent = snapPoint.kind === 'Endpoint' ? 'END' : snapPoint.kind === 'Midpoint' ? 'MID' : snapPoint.kind === 'Intersection' ? 'INT' : 'NEAR';
   g.append(c,h,label); previewLayer.appendChild(g);
 }

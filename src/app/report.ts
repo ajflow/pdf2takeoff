@@ -115,7 +115,7 @@ async function renderSheet(
       const parameters = Object.entries(m.parameters ?? {}).map(([key, value]) => `${key}: ${value}`).join('; ');
       const links = (m.links ?? []).map((link) => {
         const target = state.markups.find((item) => item.id === link.markupId);
-        return `${link.relation}: ${target?.label ?? link.markupId}`;
+        return `${link.logic?.trim() || link.note?.trim() || link.relation?.trim() || 'Linked to'}: ${target?.label ?? link.markupId}`;
       }).join('; ');
       return `<tr><td>${escapeHtml(m.label)}</td><td>${m.type}</td><td class="n">${v || '<span style="color:#b45309">not calibrated</span>'}</td><td class="n">${m.timesing ?? 1}</td><td>${(m.sign ?? 1) > 0 ? '+' : '−'}</td><td>${escapeHtml(parameters)}</td><td>${escapeHtml(m.remarks ?? '')}</td><td>${escapeHtml(links)}</td></tr>`;
     })

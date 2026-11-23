@@ -69,7 +69,8 @@ initLayers();
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebarToggle') as HTMLButtonElement | null;
 if (sidebar && sidebarToggle) {
-  const collapsed = localStorage.getItem('pdf2takeoff.sidebarCollapsed') === 'true';
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('pdf2takeoff.sidebarCollapsed') === 'true'; } catch { /* storage may be blocked */ }
   sidebar.classList.toggle('sidebar-collapsed', collapsed);
   sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
   sidebarToggle.textContent = collapsed ? '›' : '‹';
@@ -78,7 +79,7 @@ if (sidebar && sidebarToggle) {
   sidebarToggle.addEventListener('click', () => {
     const next = !sidebar.classList.contains('sidebar-collapsed');
     sidebar.classList.toggle('sidebar-collapsed', next);
-    localStorage.setItem('pdf2takeoff.sidebarCollapsed', String(next));
+    try { localStorage.setItem('pdf2takeoff.sidebarCollapsed', String(next)); } catch { /* the control still works for this session */ }
     sidebarToggle.setAttribute('aria-expanded', String(!next));
     sidebarToggle.textContent = next ? '›' : '‹';
     sidebarToggle.title = next ? 'Expand quantities panel' : 'Collapse quantities panel';

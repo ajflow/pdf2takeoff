@@ -101,7 +101,7 @@ export function showHint(text: string): void {
 }
 
 const HINTS: Record<string, string> = {
-  pan: 'Select mode · click a markup to select and edit it · drag the sheet to pan · wheel to zoom',
+  pan: 'Select mode · click a markup to select it · drag nodes to refine · double-click a segment to insert a node · drag the sheet to pan · wheel to zoom',
   calibrate: 'Click two ends of a known dimension to calibrate the scale',
   length: 'Click each vertex of the run · double-click or Enter to finish · Esc cancels',
   area: 'Click each corner of the area · double-click or Enter to finish · Esc cancels',

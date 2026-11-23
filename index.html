@@ -273,7 +273,7 @@
 
         <div id="loupeWindow" class="loupe-window hidden" aria-label="Precision magnifier">
           <div id="loupeHeader" class="loupe-header"><span>Precision loupe · 2.5×</span><button type="button" id="loupeClose" aria-label="Close loupe">×</button></div>
-          <div id="loupeViewport" class="loupe-viewport"><div id="loupeContent" class="loupe-content"></div></div>
+          <div id="loupeViewport" class="loupe-viewport"><canvas id="loupeRaster" class="loupe-raster" aria-hidden="true"></canvas><div id="loupeContent" class="loupe-content"></div></div>
         </div>
 
         <div class="hint-pill" id="hintPill" role="status" aria-live="polite"><span id="toolHint">Open a drawing (PDF or image) to begin</span></div>

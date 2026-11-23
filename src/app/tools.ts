@@ -48,6 +48,10 @@ function snapshotTakeoff(): HistorySnapshot {
     viewports: structuredClone(state.viewports),
   };
 }
+export function recordTakeoffHistory(): void {
+  recordHistory();
+}
+
 function recordHistory(): void {
   undoStack.push(snapshotTakeoff());
   if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
@@ -488,10 +492,15 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
   const before = m.points.map((p) => ({ ...p }));
   recordHistory();
   state.lastAction = { kind: 'move', id: m.id, before };
+  if (vtxIdx !== null) void loadSnapSegments(m.page);
   const move = (ev: PointerEvent) => {
-    const cur = eventToPdf(ev);
+    let cur = eventToPdf(ev);
     if (!cur) return;
     if (vtxIdx != null && vtxIdx >= 0 && vtxIdx < m.points.length) {
+      if (snapEnabled) {
+        const snapped = snapPdfPoint(cur);
+        if (snapped) cur = snapped.point;
+      }
       m.points[vtxIdx] = cur;
     } else {
       const dx = cur.x - start.x;

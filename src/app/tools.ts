@@ -340,7 +340,9 @@ function refreshLoupe(e: PointerEvent): void {
     }
     fxCopy.style.width = `${width}px`;
     fxCopy.style.height = `${height}px`;
-    fxCopy.getContext('2d')?.drawImage(fxSource, 0, 0);
+    const fxContext = fxCopy.getContext('2d');
+    fxContext?.clearRect(0, 0, fxCopy.width, fxCopy.height);
+    fxContext?.drawImage(fxSource, 0, 0);
   }
 
   let overlayCopy = loupeContent.querySelector<SVGSVGElement>('svg[data-loupe-overlay]');

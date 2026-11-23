@@ -633,8 +633,8 @@ async function runFill(p: Pt): Promise<void> {
       label: state.activePreset?.type === 'area' ? state.activePreset.label : 'Filled area',
       points: result.points,
       createdAt: Date.now(),
+      ...(clickCal ? { calibration: { metersPerPt: clickCal.metersPerPt, source: clickCal.source } } : {}),
     };
-    freezeMarkupCalibration(m);
     recordHistory();
     state.markups.push(m);
     state.lastAction = null;

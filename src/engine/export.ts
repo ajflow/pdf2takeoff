@@ -215,7 +215,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
   const gs = groupsOf(d.markups);
   if (gs.length) {
     rows.push([]);
-    rows.push(['Group', 'Type', 'Items', 'Total', '']);
+    rows.push(['Group', 'Type', 'Items', 'Total', 'Unit', '', '', '', '', '', '', '', 'Status', 'Layer', ...cols.map((col) => col.name)]);
     for (const g of gs) {
       const calFor = (m: Markup) => resolveCalibration(m, d.calibrations, d.viewports);
       const cal = calFor(g.items[0]);
@@ -229,7 +229,7 @@ export function buildMatrix(d: TakeoffData): Matrix {
         const out = evaluateFormula(c.formula, { value: numeric ?? 0, count: g.items.length });
         return out === null ? 'ERR' : round(out);
       });
-      rows.push([g.label, g.type, g.items.length, total, unit, confirmed ? `${confirmed}/${g.items.length} confirmed` : '', '', ...extras]);
+      rows.push([g.label, g.type, g.items.length, total, unit, '', '', '', '', '', '', '', confirmed ? `${confirmed}/${g.items.length} confirmed` : '', '', ...extras]);
     }
   }
   return rows;

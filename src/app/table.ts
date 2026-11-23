@@ -429,6 +429,7 @@ export function renderTable(): void {
   if (state.markups.length === 0) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td colspan="6" class="empty">No measurements yet; calibrate the scale, then use the Length, Area and Count tools.</td>`;
+    if (locked) tr.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button:not([data-visibility-for])').forEach((control) => { control.disabled = true; });
     tbody.appendChild(tr);
   } else if (rows.length === 0) {
     const tr = document.createElement('tr');
@@ -437,6 +438,7 @@ export function renderTable(): void {
   }
   for (const m of rows) {
     const tr = document.createElement('tr');
+    const locked = isLockedLayer(layerOf(m));
     tr.dataset.id = m.id;
     if (m.id === state.selectedId) tr.classList.add('selected');
     if (m.visible === false) tr.classList.add('markup-hidden');
@@ -484,6 +486,7 @@ export function renderTable(): void {
       </div>
       <small>Adjusted quantity = measured quantity × timesing × sign. Defaults for older projects are 1 and +.</small>
     </details></td>`;
+    if (locked) detail.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button').forEach((control) => { control.disabled = true; });
     tbody.appendChild(detail);
   }
   renderTotals();

@@ -38,29 +38,30 @@ export function initTable(): void {
   }, true);
   tbody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
-    if (target.closest('summary') || target.closest('.markup-details')) {
-      const action = target.closest<HTMLElement>('[data-clone-for], [data-add-param-for], [data-add-link-for], [data-remove-param], [data-remove-link]');
-      if (!action) return;
-      if (action.dataset.cloneFor) {
-        const source = state.markups.find((m) => m.id === action.dataset.cloneFor);
-        if (source) {
-          const clone = structuredClone(source);
-          clone.id = nextId('mk');
-          clone.label = `${source.label} copy`;
-          clone.createdAt = Date.now();
-          clone.points = source.points.map((p) => ({ ...p }));
-          recordTakeoffHistory();
-          state.markups.push(clone);
-          syncUpsertMarkup(clone);
-          state.selectedId = clone.id;
-          expandedIds.add(clone.id);
-          emit();
-        }
-        return;
+    const cloneButton = target.closest<HTMLElement>('[data-clone-for]');
+    if (cloneButton) {
+      const source = state.markups.find((m) => m.id === cloneButton.dataset.cloneFor);
+      if (source) {
+        const clone = structuredClone(source);
+        clone.id = nextId('mk');
+        clone.label = `${source.label} copy`;
+        clone.createdAt = Date.now();
+        clone.points = source.points.map((p) => ({ ...p }));
+        recordTakeoffHistory();
+        state.markups.push(clone);
+        syncUpsertMarkup(clone);
+        state.selectedId = clone.id;
+        expandedIds.add(clone.id);
+        emit();
       }
-      if (action.dataset.addParamFor) {
+      return;
+    }
+    if (target.closest('summary') || target.closest('.markup-details')) {
+      const action = target.closest<HTMLElement>('[data-add-param-for], [data-add-link-for], [data-remove-param], [data-remove-link]');
+      if (!action) return;      if (action.dataset.addParamFor) {
         const m = state.markups.find((x) => x.id === action.dataset.addParamFor);
         if (m) {
+          recordTakeoffHistory();
           m.parameters ??= {};
           let n = Object.keys(m.parameters).length + 1;
           let key = `Parameter ${n}`;
@@ -76,6 +77,7 @@ export function initTable(): void {
         const m = state.markups.find((x) => x.id === action.dataset.addLinkFor);
         const targetMarkup = state.markups.find((x) => x.id !== m?.id && !(m?.links ?? []).some((link) => link.markupId === x.id));
         if (m && targetMarkup) {
+          recordTakeoffHistory();
           m.links ??= [];
           if (!m.links.some((x) => x.markupId === targetMarkup.id)) {
             m.links.push({ markupId: targetMarkup.id, relation: 'associated' });
@@ -90,6 +92,7 @@ export function initTable(): void {
         const [id, key] = action.dataset.removeParam.split('::');
         const m = state.markups.find((x) => x.id === id);
         if (m?.parameters) {
+          recordTakeoffHistory();
           delete m.parameters[key];
           if (!Object.keys(m.parameters).length) delete m.parameters;
           syncUpsertMarkup(m);
@@ -101,6 +104,7 @@ export function initTable(): void {
         const [id, index] = action.dataset.removeLink.split('::');
         const m = state.markups.find((x) => x.id === id);
         if (m?.links) {
+          recordTakeoffHistory();
           m.links.splice(Number(index), 1);
           syncUpsertMarkup(m);
           emit();
@@ -114,6 +118,7 @@ export function initTable(): void {
       const m = state.markups.find((x) => x.id === st.getAttribute('data-status-for'));
       if (m) {
         // cycle none -> check -> confirmed -> none
+        recordTakeoffHistory();
         m.status = m.status === 'check' ? 'confirmed' : m.status === 'confirmed' ? undefined : 'check';
         syncUpsertMarkup(m);
         emit();
@@ -125,6 +130,7 @@ export function initTable(): void {
       const id = visibility.getAttribute('data-visibility-for')!;
       const m = state.markups.find((x) => x.id === id);
       if (m) {
+        recordTakeoffHistory();
         m.visible = m.visible === false;
         syncUpsertMarkup(m);
         emit();
@@ -134,7 +140,14 @@ export function initTable(): void {
     const del = target.closest('[data-del]');
     if (del) {
       const id = del.getAttribute('data-del')!;
+      recordTakeoffHistory();
       state.markups = state.markups.filter((m) => m.id !== id);
+      for (const m of state.markups) {
+        if (m.links?.some((link) => link.markupId === id)) {
+          m.links = m.links.filter((link) => link.markupId !== id);
+          syncUpsertMarkup(m);
+        }
+      }
       if (state.selectedId === id) state.selectedId = null;
       syncDeleteMarkup(id);
       emit();
@@ -174,10 +187,13 @@ export function initTable(): void {
       if (input.dataset.timesingFor) {
         const n = Number(input.value);
         if (!Number.isFinite(n) || n < 0) { input.value = String(m.timesing ?? 1); return; }
+        recordTakeoffHistory();
         m.timesing = n;
       } else if (input.dataset.signFor) {
+        recordTakeoffHistory();
         m.sign = input.value === '-1' ? -1 : 1;
       } else if (input.dataset.remarksFor) {
+        recordTakeoffHistory();
         m.remarks = input.value;
       } else if (input.dataset.parameterKeyFor) {
         const oldKey = input.dataset.parameterKey ?? '';
@@ -185,15 +201,19 @@ export function initTable(): void {
         const key = input.value.trim();
         if (!key) { input.value = oldKey; return; }
         if (key !== oldKey && m.parameters) {
+          recordTakeoffHistory();
           delete m.parameters[oldKey];
           m.parameters[key] = value;
         }
       } else if (input.dataset.parameterValueFor) {
+        recordTakeoffHistory();
         if (m.parameters) m.parameters[input.dataset.parameterKey ?? ''] = input.value;
       } else if (input.dataset.linkTargetFor) {
+        recordTakeoffHistory();
         const index = Number(input.dataset.linkIndex);
         if (m.links?.[index]) m.links[index].markupId = input.value;
       } else if (input.dataset.linkRelationFor) {
+        recordTakeoffHistory();
         const index = Number(input.dataset.linkIndex);
         if (m.links?.[index]) m.links[index].relation = input.value as NonNullable<Markup['links']>[number]['relation'];
       }
@@ -204,6 +224,7 @@ export function initTable(): void {
     if (input.dataset.colorFor) {
       const m = state.markups.find((x) => x.id === input.dataset.colorFor);
       if (m) {
+        recordTakeoffHistory();
         m.color = input.value.toLowerCase();
         syncUpsertMarkup(m);
         emit();
@@ -213,6 +234,7 @@ export function initTable(): void {
     if (input.dataset.labelFor) {
       const m = state.markups.find((x) => x.id === input.dataset.labelFor);
       if (m) {
+        recordTakeoffHistory();
         m.label = input.value.trim() || defaultLabel(m.type);
         syncUpsertMarkup(m);
         emit();
@@ -229,6 +251,7 @@ export function initTable(): void {
   document.getElementById('clearMarkups')?.addEventListener('click', () => {
     if (state.markups.length === 0) return;
     if (!window.confirm(`Remove all ${state.markups.length} measurements in this takeoff?`)) return;
+    recordTakeoffHistory();
     state.markups = [];
     state.selectedId = null;
     syncClearMarkups();

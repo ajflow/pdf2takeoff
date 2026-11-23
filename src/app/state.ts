@@ -3,17 +3,17 @@
 // them so UI modules have one familiar import site.
 
 import type { DisplayUnit } from '../engine/units';
-import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
+import type { Calibration, Markup, MarkupType, Pt, DrawingAnnotation } from '../engine/types';
 import type { Viewport } from '../engine/viewports';
 import { resolveCalibration } from '../engine/viewports';
 import { paperFactor } from '../engine/inputs';
 import { metersPerPtForRatio, ratioForMetersPerPt } from '../engine/units';
 import type { CustomColumn, TakeoffData } from '../engine/export';
 
-export type { Calibration, Markup, MarkupType, Pt };
+export type { Calibration, Markup, MarkupType, Pt, DrawingAnnotation };
 export { markupLength, markupArea, distPt, defaultLabel, nextId } from '../engine/geometry';
 
-export type ToolId = 'pan' | 'calibrate' | 'viewport' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note' | 'fill' | 'scan';
+export type ToolId = 'pan' | 'calibrate' | 'viewport' | 'length' | 'area' | 'count' | 'perimeter' | 'volume' | 'angle' | 'note' | 'fill' | 'scan' | 'annot-line' | 'annot-arrow' | 'annot-rectangle' | 'annot-ellipse' | 'annot-highlight' | 'annot-cloud' | 'annot-text';
 
 export interface ToolPreset {
   type: MarkupType;
@@ -44,6 +44,9 @@ export interface AppState {
   /** The quantity row selected in the panel: its markups stay bright, the rest fade. */
   focusLabel: string | null;
   markups: Markup[];
+  /** Drawing annotations are not quantity markups and are excluded from BOQ exports. */
+  annotations: DrawingAnnotation[];
+  selectedAnnotationId: string | null;
   selectedId: string | null;
   /** last reversible action, so Ctrl+Z can restore a drag before falling back to delete-newest */
   lastAction: { kind: 'move'; id: string; before: Pt[] } | null;
@@ -74,6 +77,8 @@ export const state: AppState = {
   scaleChecks: new Map(),
   focusLabel: null,
   markups: [],
+  annotations: [],
+  selectedAnnotationId: null,
   selectedId: null,
   lastAction: null,
   presets: [],
@@ -118,7 +123,14 @@ export function calibrationFor(page: number): Calibration | undefined {
 
 /** Calibration for a markup, honouring viewports (per-region scales). */
 export function calibrationForMarkup(m: Markup): Calibration | undefined {
-  return resolveCalibration(m, state.calibrations, state.viewports);
+  return m.calibration ?? resolveCalibration(m, state.calibrations, state.viewports);
+}
+
+/** Freeze the applicable page/viewport calibration on legacy markups when loading a project. */
+export function freezeMarkupCalibration(m: Markup): void {
+  if (m.calibration || m.type === 'count' || m.type === 'note' || m.type === 'angle') return;
+  const cal = resolveCalibration(m, state.calibrations, state.viewports);
+  if (cal) m.calibration = { metersPerPt: cal.metersPerPt, source: cal.source };
 }
 
 /** Everything the engine needs to serialize this session's takeoff. */

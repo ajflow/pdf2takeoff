@@ -131,6 +131,7 @@
     </script>
   </head>
   <body class="landing">
+    <input type="file" id="projectInput" accept=".p2t,.json,application/json" hidden />
     <input type="file" id="fileInput" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" multiple hidden />
     <input type="file" id="cmpFileA" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
     <input type="file" id="cmpFileB" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.tif,.tiff,.heic,.heif,.dxf,.dwg" hidden />
@@ -180,6 +181,10 @@
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
         </button>
         <div class="menu hidden" id="moreMenu" role="menu" aria-label="More">
+          <button class="menu-item" type="button" role="menuitem" id="newProjectBtn">New project</button>
+          <button class="menu-item" type="button" role="menuitem" id="saveProjectBtn">Save project (.p2t)</button>
+          <button class="menu-item" type="button" role="menuitem" id="openProjectBtn">Open project (.p2t)</button>
+          <button class="menu-item" type="button" role="menuitem" id="closeProjectBtn">Close project</button>
           <button class="menu-item" type="button" role="menuitem" id="openBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Open a drawing</span></button>
           <label class="menu-item menu-field"><span>Units</span><select id="unitSelect" aria-label="Display units"></select></label>
           <button class="menu-item" type="button" role="menuitem" id="sessionBtn" title="Share this takeoff live with other tabs and windows of the same drawing (same machine)">Live</button>
@@ -200,9 +205,9 @@
 
     <div id="app">
       <nav class="rail" role="toolbar" aria-label="Tools" aria-orientation="vertical">
-        <button class="tool" type="button" data-tool="pan" aria-label="Select / pan (V)">
+        <button class="tool" type="button" data-tool="pan" aria-label="Select (V)" title="Select measurements; drag the sheet with Space or the middle mouse button.">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg>
-          <span class="tip" aria-hidden="true">Pan <kbd>V</kbd></span>
+          <span class="tip" aria-hidden="true">Select <kbd>V</kbd></span>
         </button>
         <span class="rail-gap" aria-hidden="true"></span>
         <button class="tool" type="button" data-tool="calibrate" aria-label="Calibrate scale (C)">
@@ -252,6 +257,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/><path d="M14 6l4 4"/></svg>
           <span class="tip" aria-hidden="true">Note <kbd>T</kbd></span>
         </button>
+        <span class="rail-gap" aria-hidden="true"></span>
+        <button class="tool" type="button" data-tool="annot-line" aria-label="Annotation line">╱<span class="tip">Line annotation</span></button>
+        <button class="tool" type="button" data-tool="annot-arrow" aria-label="Annotation arrow">➜<span class="tip">Arrow annotation</span></button>
+        <button class="tool" type="button" data-tool="annot-rectangle" aria-label="Annotation rectangle">▭<span class="tip">Rectangle</span></button>
+        <button class="tool" type="button" data-tool="annot-ellipse" aria-label="Annotation ellipse">◯<span class="tip">Ellipse</span></button>
+        <button class="tool" type="button" data-tool="annot-highlight" aria-label="Area highlight">▨<span class="tip">Area highlight</span></button>
+        <button class="tool" type="button" data-tool="annot-cloud" aria-label="Revision cloud">☁<span class="tip">Revision cloud</span></button>
+        <button class="tool" type="button" data-tool="annot-text" aria-label="Text annotation">T<span class="tip">Text annotation</span></button>
       </nav>
 
       <main id="workspace">
@@ -261,9 +274,15 @@
             <canvas id="fxCanvas" aria-hidden="true"></canvas>
             <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
               <g id="previewLayer"></g>
+              <g id="annotationLayer"></g>
               <g id="markupsLayer"></g>
             </svg>
           </div>
+        </div>
+
+        <div id="loupeWindow" class="loupe-window hidden" aria-label="Precision magnifier">
+          <div id="loupeHeader" class="loupe-header"><span>Precision loupe · 2.5×</span><button type="button" id="loupeClose" aria-label="Close loupe">×</button></div>
+          <div id="loupeViewport" class="loupe-viewport"><canvas id="loupeRaster" class="loupe-raster" aria-hidden="true"></canvas><div id="loupeContent" class="loupe-content"></div></div>
         </div>
 
         <div class="hint-pill" id="hintPill" role="status" aria-live="polite"><span id="toolHint">Open a drawing (PDF or image) to begin</span></div>
@@ -274,6 +293,20 @@
           <button type="button" id="zoomIn" aria-label="Zoom in (+)">+</button>
           <i aria-hidden="true"></i>
           <button type="button" id="zoomFit" aria-label="Fit width (F)">Fit</button>
+          <select id="drawingViewMode" aria-label="Drawing display mode" title="Change drawing appearance">
+            <option value="normal">Normal</option><option value="grayscale">Grayscale</option><option value="blueprint">Blueprint</option>
+          </select>
+          <select id="pageToneMode" aria-label="Page background" title="Change the drawing page to light or black">
+            <option value="light">Light page</option><option value="black">Black page</option>
+          </select>
+          <button type="button" id="loupeToggle" class="snap-toggle" aria-pressed="false" title="Toggle precision loupe (movable magnifier)">Loupe</button>
+          <input type="color" id="annotationColor" value="#e11d48" title="Annotation colour" aria-label="Annotation colour">
+          <input type="number" id="annotationWidth" min="0.5" max="16" step="0.5" value="2" title="Annotation line width" aria-label="Annotation line width">
+          <input type="number" id="annotationOpacity" min="0" max="1" step="0.05" value="0.9" title="Annotation opacity" aria-label="Annotation opacity">
+          <select id="annotationLineStyle" title="Annotation line type" aria-label="Annotation line type"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select>
+          <button type="button" id="undoBtn" aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">↶</button>
+          <button type="button" id="redoBtn" aria-label="Redo (Ctrl+Y)" title="Redo (Ctrl+Y)">↷</button>
+          <button type="button" id="snapToggle" class="snap-toggle active" aria-pressed="true" title="Object snapping on (S)">Snap</button>
           <span id="cursorPos" aria-hidden="true"></span>
         </div>
 
@@ -404,6 +437,7 @@
           <button type="button" role="tab" class="panel-tab" id="tabQty" aria-controls="viewQty" aria-selected="true">Quantities</button>
           <button type="button" role="tab" class="panel-tab" id="tabMarkups" aria-controls="viewMarkups" aria-selected="false" tabindex="-1">Markups <span class="count" id="markupCount"></span></button>
           <button type="button" role="tab" class="panel-tab" id="tabLibrary" aria-controls="viewLibrary" aria-selected="false" tabindex="-1">Library</button>
+          <button type="button" class="panel-collapse" id="sidebarToggle" aria-label="Collapse quantities panel" aria-expanded="true" title="Collapse panel">‹</button>
         </div>
 
         <section class="panel-view" id="viewQty" role="tabpanel" aria-labelledby="tabQty">
@@ -424,6 +458,11 @@
             <option value="label">Label A–Z</option>
             <option value="page">Page</option>
           </select>
+        </div>
+        <div class="list-visibility-tools" role="group" aria-label="Measurement visibility">
+          <button class="pill" type="button" id="hideAllMarkupsBtn" title="Hide all measurement markups on the drawing">Hide all</button>
+          <button class="pill" type="button" id="showAllMarkupsBtn" title="Show all measurement markups on the drawing">Show all</button>
+          <button class="pill" type="button" id="hideOtherMarkupsBtn" title="Hide every measurement except the selected one">Hide others</button>
         </div>
         <div class="markup-table-wrap">
           <table class="markup-table">
@@ -457,6 +496,19 @@
             <input type="text" id="presetLabel" placeholder="Label, e.g. Skirting" autocomplete="off" aria-label="Preset label" />
             <button class="btn" id="presetSave" title="Save the current tool + this label as a reusable preset">+ Save</button>
           </div>
+          <div class="count-manager" aria-label="Smart count setup">
+            <div class="count-manager-title">Count items</div>
+            <div class="count-manager-row">
+              <input id="countCategory" type="text" placeholder="Category (e.g. Windows)" aria-label="Count category" />
+              <input id="countType" type="text" placeholder="Type / code (e.g. W01 Aluminium)" aria-label="Count type or code" />
+            </div>
+            <div class="count-manager-row">
+              <button class="btn primary" type="button" id="countStart">Start new count</button>
+              <select id="countContinue" aria-label="Choose an existing count"><option value="">Choose existing count…</option></select>
+              <button class="btn" type="button" id="countResume">Continue</button>
+            </div>
+            <p class="lib-hint">Each click adds one marker to the selected item. Switch items or resume a previous count without losing its markers.</p>
+          </div>
           <div id="presetList" class="preset-list" aria-label="Saved tool presets"></div>
         </div>
         <details class="columns-box" id="columnsBox">
@@ -467,7 +519,7 @@
         </details>
         <details class="columns-box" id="layersBox">
           <summary>Layers</summary>
-          <p class="columns-hint">Click a layer to place on it; click the eye to hide it while you measure the next trade.</p>
+          <p class="columns-hint">Choose an active layer, set its default colour, hide it, lock it against edits, rename it or delete it. Deleting a layer moves its measurements to Default.</p>
           <div id="layerList" class="layer-list"></div>
           <div class="lib-add">
             <input type="text" id="layerNewName" placeholder="New layer, e.g. Electrical" autocomplete="off" aria-label="New layer name" />

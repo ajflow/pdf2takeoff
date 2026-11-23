@@ -59,6 +59,48 @@ export function initLibrary(): void {
   }
   const input = document.getElementById('presetLabel') as HTMLInputElement;
 
+  const categoryInput = document.getElementById('countCategory') as HTMLInputElement | null;
+  const typeInput = document.getElementById('countType') as HTMLInputElement | null;
+  const continueSelect = document.getElementById('countContinue') as HTMLSelectElement | null;
+  const refreshCountChoices = () => {
+    if (!continueSelect) return;
+    const current = continueSelect.value;
+    continueSelect.replaceChildren(new Option('Choose existing count…', ''));
+    state.presets.forEach((p, i) => {
+      if (p.type === 'count') continueSelect.add(new Option(p.label, String(i)));
+    });
+    if ([...continueSelect.options].some((o) => o.value === current)) continueSelect.value = current;
+  };
+  document.getElementById('countStart')?.addEventListener('click', () => {
+    const category = categoryInput?.value.trim() ?? '';
+    const itemType = typeInput?.value.trim() ?? '';
+    if (!category || !itemType) {
+      showHint('Enter both a count category and a type / code');
+      (category ? typeInput : categoryInput)?.focus();
+      return;
+    }
+    const label = `${category} — ${itemType}`;
+    let index = state.presets.findIndex((p) => p.type === 'count' && p.label.toLowerCase() === label.toLowerCase());
+    if (index < 0) {
+      state.presets.push({ type: 'count', label });
+      index = state.presets.length - 1;
+      void savePresets(state.presets);
+    }
+    activatePreset(index);
+    refreshCountChoices();
+    if (continueSelect) continueSelect.value = String(index);
+    showHint(`Counting ${label}. Click each instance; choose another item or Continue later to resume.`);
+  });
+  document.getElementById('countResume')?.addEventListener('click', () => {
+    const index = Number(continueSelect?.value);
+    if (!continueSelect?.value || !state.presets[index] || state.presets[index].type !== 'count') {
+      showHint('Choose an existing count item to continue');
+      return;
+    }
+    activatePreset(index);
+    showHint(`Continuing ${state.presets[index].label}. New markers will be added to its existing total.`);
+  });
+
   document.getElementById('presetSave')?.addEventListener('click', () => {
     const label = input.value.trim();
     if (!label) {
@@ -121,6 +163,13 @@ export function activatePreset(index: number): void {
 export function renderLibrary(): void {
   if (!listEl) return;
   listEl.replaceChildren();
+  const countSelect = document.getElementById('countContinue') as HTMLSelectElement | null;
+  if (countSelect) {
+    const current = countSelect.value;
+    countSelect.replaceChildren(new Option('Choose existing count…', ''));
+    state.presets.forEach((p, i) => { if (p.type === 'count') countSelect.add(new Option(p.label, String(i))); });
+    if ([...countSelect.options].some((o) => o.value === current)) countSelect.value = current;
+  }
   if (state.presets.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'preset-empty';

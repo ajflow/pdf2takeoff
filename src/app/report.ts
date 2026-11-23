@@ -112,14 +112,19 @@ async function renderSheet(
   const rows = markups
     .map((m) => {
       const v = displayValue(m);
-      return `<tr><td>${escapeHtml(m.label)}</td><td>${m.type}</td><td class="n">${v || '<span style="color:#b45309">not calibrated</span>'}</td></tr>`;
+      const parameters = Object.entries(m.parameters ?? {}).map(([key, value]) => `${key}: ${value}`).join('; ');
+      const links = (m.links ?? []).map((link) => {
+        const target = state.markups.find((item) => item.id === link.markupId);
+        return `${link.logic?.trim() || link.note?.trim() || link.relation?.trim() || 'Linked to'}: ${target?.label ?? link.markupId}`;
+      }).join('; ');
+      return `<tr><td>${escapeHtml(m.label)}</td><td>${m.type}</td><td class="n">${v || '<span style="color:#b45309">not calibrated</span>'}</td><td class="n">${m.timesing ?? 1}</td><td>${(m.sign ?? 1) > 0 ? '+' : '−'}</td><td>${escapeHtml(parameters)}</td><td>${escapeHtml(m.remarks ?? '')}</td><td>${escapeHtml(links)}</td></tr>`;
     })
     .join('\n');
   return `<section class="sheet">
   <h2>Sheet ${pageNum} of ${state.pageCount}<span class="scale">scale: ${escapeHtml(cal?.source ?? 'not calibrated')}</span></h2>
   <img src="${canvas.toDataURL('image/png')}" alt="Sheet ${pageNum} with markups" />
   <table>
-    <thead><tr><th>Label</th><th>Type</th><th class="n">Value</th></tr></thead>
+    <thead><tr><th>Label</th><th>Type</th><th class="n">Adjusted value</th><th class="n">Timesing</th><th>Sign</th><th>Dimensions / attributes</th><th>Remarks</th><th>Links</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </section>`;

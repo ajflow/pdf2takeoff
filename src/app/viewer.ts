@@ -44,6 +44,12 @@ const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 16;
 const MAX_CANVAS_PIXELS = 2.5e7;
 
+let zoomChangeHandler: ((zoom: number) => void) | null = null;
+
+export function setZoomChangeHandler(handler: ((zoom: number) => void) | null): void {
+  zoomChangeHandler = handler;
+}
+
 export function initViewer(
   scroll: HTMLElement,
   page: HTMLElement,
@@ -53,6 +59,12 @@ export function initViewer(
   pl: SVGGElement,
 ): void {
   scrollEl = scroll;
+  // Keep the drawing workspace as the only scroll/zoom surface. Disable
+  // browser scroll anchoring: resizing a centred page across the overflow
+  // threshold must not let the browser independently rewrite scroll offsets.
+  scrollEl.style.overscrollBehavior = 'none';
+  scrollEl.style.overflowAnchor = 'none';
+  scrollEl.style.touchAction = 'none';
   pageEl = page;
   canvas = cnv;
   svg = overlay;
@@ -77,6 +89,8 @@ export async function loadPdf(bytes: Uint8Array, name: string): Promise<void> {
   state.fileBytes = bytes;
   state.pageNum = 1;
   state.markups = [];
+  state.annotations = [];
+  state.selectedAnnotationId = null;
   state.selectedId = null;
   state.calibrations.clear();
   state.scaleChecks.clear();
@@ -251,19 +265,39 @@ export function setZoom(z: number): void {
 }
 
 export function zoomAt(clientX: number, clientY: number, factor: number): void {
-  const cr = scrollEl.getBoundingClientRect();
-  const cx = clientX - cr.left;
-  const cy = clientY - cr.top;
-  const z2 = clampZoom(state.zoom * factor);
-  if (z2 === state.zoom) return;
-  const ratio = z2 / state.zoom;
-  const contentX = scrollEl.scrollLeft + cx;
-  const contentY = scrollEl.scrollTop + cy;
+  const z1 = state.zoom;
+  const z2 = clampZoom(z1 * factor);
+  if (z2 === z1) return;
+
+  // Anchor against the actual page box, not the scrollport origin. The page
+  // is centred with auto margins while it is narrower than the workspace, so
+  // its left edge can move when zoom changes.
+  const before = pageEl.getBoundingClientRect();
+  const scrollRect = scrollEl.getBoundingClientRect();
+  const localX = clientX - before.left;
+  const localY = clientY - before.top;
+  const pointerX = clientX - scrollRect.left;
+  const pointerY = clientY - scrollRect.top;
+  const pageX = localX / z1;
+  const pageY = localY / z1;
   state.zoom = z2;
   previewResize();
-  scrollEl.scrollLeft = contentX * ratio - cx;
-  scrollEl.scrollTop = contentY * ratio - cy;
-  emit();
+
+  // Compute the required scroll offsets from the page-space anchor rather
+  // than adding a delta to the previous offsets. This is stable when the
+  // page changes from auto-centred to horizontally/vertically overflowing.
+  const after = pageEl.getBoundingClientRect();
+  const afterOriginX = after.left - scrollRect.left + scrollEl.scrollLeft;
+  const afterOriginY = after.top - scrollRect.top + scrollEl.scrollTop;
+  const desiredLeft = afterOriginX + pageX * z2 - pointerX;
+  const desiredTop = afterOriginY + pageY * z2 - pointerY;
+  scrollEl.scrollLeft = Math.max(0, desiredLeft);
+  scrollEl.scrollTop = Math.max(0, desiredTop);
+  // Wheel gestures can fire dozens of times per second. Avoid broadcasting a
+  // full application state update (tables, layers, library and persistence)
+  // for each tick; the host updates the zoom readout and debounces the raster.
+  if (zoomChangeHandler) zoomChangeHandler(state.zoom);
+  else emit();
 }
 
 function clampZoom(z: number): number {
@@ -296,27 +330,44 @@ async function paintCanvas(page: pdfjsLib.PDFPageProxy, mySeq: number): Promise<
   if (px * py > MAX_CANVAS_PIXELS) {
     dpr = Math.max(1, Math.sqrt(MAX_CANVAS_PIXELS / (viewport.width * viewport.height)));
   }
-  canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
-  canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
-  applyLayoutSize();
-  const ctx = canvas.getContext('2d');
+
+  // Render off-screen. Resizing the visible canvas clears it immediately and
+  // caused a blank flash while PDF.js rasterised complex sheets. Keep the last
+  // completed frame visible until this render is ready to be swapped in.
+  const nextCanvas = document.createElement('canvas');
+  nextCanvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+  nextCanvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+  const ctx = nextCanvas.getContext('2d');
   if (!ctx) return;
+  const task = page.render({
+    canvas: nextCanvas,
+    canvasContext: ctx,
+    viewport,
+    transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+  });
+  renderTask = task;
   try {
-    renderTask = page.render({
-      canvas,
-      canvasContext: ctx,
-      viewport,
-      transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
-    });
-    await renderTask.promise;
+    await task.promise;
   } catch {
+    if (renderTask === task) renderTask = null;
     return; // cancelled or superseded
   }
-  if (mySeq === renderSeq && onFirstRender) {
+  if (mySeq !== renderSeq) {
+    if (renderTask === task) renderTask = null;
+    return;
+  }
+
+  canvas.width = nextCanvas.width;
+  canvas.height = nextCanvas.height;
+  const visible = canvas.getContext('2d');
+  if (visible) visible.drawImage(nextCanvas, 0, 0);
+  applyLayoutSize();
+
+  if (onFirstRender) {
     onFirstRender();
     onFirstRender = null;
   }
-  renderTask = null;
+  if (renderTask === task) renderTask = null;
 }
 
 export function viewSize(): { w: number; h: number } {
@@ -348,26 +399,49 @@ export function pdfToView(p: { x: number; y: number }): ViewPt {
 // --- interaction: wheel zoom, drag pan ---
 
 function bindWheel(): void {
-  scrollEl.addEventListener(
+  // Capture at window level so the browser never gets a chance to chain a
+  // wheel gesture to the document when the sheet starts overflowing or a
+  // canvas/SVG redraw changes the event target. Only intercept gestures that
+  // originate inside this drawing workspace.
+  window.addEventListener(
     'wheel',
     (e) => {
-      if (!doc) return;
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const factor = Math.exp(-e.deltaY * 0.01);
-        zoomAt(e.clientX, e.clientY, factor);
-      }
-      // plain wheel/touchpad scrolls the container natively
+      if (!doc || !(e.target instanceof Node) || !scrollEl.contains(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const delta =
+        e.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? e.deltaY * 16
+          : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? e.deltaY * Math.max(1, scrollEl.clientHeight)
+            : e.deltaY;
+      // Smooth exponential scaling works for both detented wheels and
+      // high-resolution trackpads. At either zoom limit the event remains
+      // consumed, rather than falling through to page scrolling.
+      const factor = Math.exp(-Math.max(-2400, Math.min(2400, delta)) * 0.0012);
+      zoomAt(e.clientX, e.clientY, factor);
     },
-    { passive: false },
+    { passive: false, capture: true },
   );
+
+  // Double-click zoom is navigation-only. Measurement tools retain their
+  // existing double-click-to-finish gesture.
+  svg.addEventListener('dblclick', (e) => {
+    if (!doc || state.tool !== 'pan') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    zoomAt(e.clientX, e.clientY, 1.5);
+  });
 }
 
 let spaceDown = false;
 
 function bindPan(): void {
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && !isTypingTarget(e.target)) spaceDown = true;
+    if (e.code === 'Space' && !isTypingTarget(e.target)) {
+      e.preventDefault(); // Space is a temporary navigation modifier, not page-scroll.
+      spaceDown = true;
+    }
   });
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Space') spaceDown = false;
@@ -375,12 +449,24 @@ function bindPan(): void {
 
   svg.addEventListener('pointerdown', (e) => {
     if (!doc) return;
-    const wantPan = e.button === 1 || spaceDown || state.tool === 'pan';
-    if (!wantPan) return;
-    // clicking a markup selects/drags it — don't also pan the canvas
-    if (state.tool === 'pan' && e.target instanceof Element && e.target.closest('[data-id]')) return;
+    const middlePan = e.button === 1;
+    const spacePan = e.button === 0 && spaceDown;
+    const toolPan = e.button === 0 && state.tool === 'pan';
+    if (!middlePan && !spacePan && !toolPan) return;
+
+    // In selection mode a markup drag belongs to the markup, not the canvas.
+    if (toolPan && e.target instanceof Element && e.target.closest('[data-id], [data-annotation-id]')) return;
+
     e.preventDefault();
-    svg.setPointerCapture(e.pointerId);
+    // Navigation gestures must never reach the measurement state machine.
+    if (middlePan || spacePan) e.stopImmediatePropagation();
+
+    try {
+      svg.setPointerCapture(e.pointerId);
+    } catch {
+      // The pointer may already have been cancelled by the browser.
+    }
+
     let lastX = e.clientX;
     let lastY = e.clientY;
     const move = (ev: PointerEvent) => {
@@ -389,14 +475,23 @@ function bindPan(): void {
       lastX = ev.clientX;
       lastY = ev.clientY;
     };
-    const up = () => {
+    const finish = () => {
       svg.removeEventListener('pointermove', move);
-      svg.removeEventListener('pointerup', up);
-      svg.removeEventListener('pointercancel', up);
+      svg.removeEventListener('pointerup', finish);
+      svg.removeEventListener('pointercancel', finish);
+      svg.removeEventListener('lostpointercapture', finish);
+      if (svg.hasPointerCapture(e.pointerId)) {
+        try {
+          svg.releasePointerCapture(e.pointerId);
+        } catch {
+          // Capture may already have been released by the browser.
+        }
+      }
     };
     svg.addEventListener('pointermove', move);
-    svg.addEventListener('pointerup', up);
-    svg.addEventListener('pointercancel', up);
+    svg.addEventListener('pointerup', finish);
+    svg.addEventListener('pointercancel', finish);
+    svg.addEventListener('lostpointercapture', finish);
   });
 }
 

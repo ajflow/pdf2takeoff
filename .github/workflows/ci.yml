@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, QS-Takeoff-Development]
   pull_request:
 
 jobs:

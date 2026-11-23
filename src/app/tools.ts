@@ -1,9 +1,10 @@
 // Tool state machine: calibrate, length, area, count, and selection.
 // Click geometry comes in as SVG overlay events, converted to PDF space.
 
-import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
+import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, freezeMarkupCalibration, metersPerPtForRatioOn, ratioOn } from './state';
 import { openScanReview, isDoubtful } from './scanreview';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers } from './viewer';
+import { eventToView, viewToPdf, pdfToView, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers, previewLayer } from './viewer';
+import type { VecSeg } from '../engine/vector';
 import { fillMergesRooms, NOT_A_ROOM_NAME } from '../engine/cad-layers';
 import { dimensionScale, shxWords, checkAgainstDimensions, type DimensionScale } from '../engine/dimensions';
 import { doorBridgesFor } from '../engine/fill-vector';
@@ -11,7 +12,7 @@ import { renderMarkups, renderPreview, type PreviewSpec } from './render';
 import { compareState } from './compare';
 import { scanForSimilar } from '../engine/scan';
 import { syncUpsertMarkup, syncDeleteMarkup, syncCalibration } from './session';
-import { getActiveLayer, DEFAULT_LAYER } from './layers';
+import { getActiveLayer, DEFAULT_LAYER, isLockedLayer, layerOf } from './layers';
 import { PRESET_SCALES as SCALES } from '../engine/units';
 import { ocrPage, ocrCorridor } from './ocr';
 import { findScaleRatio, nearestDimensionValue, roomLabelPoints, wordsFromTextItem } from '../engine/ocr';
@@ -20,7 +21,7 @@ import { dynamicFill, sheetDoorWidthPx, DOOR_CHECK_MAX_PX } from '../engine/dyna
 import { renderRaster } from './raster';
 import type { RasterPage } from '../engine/ports';
 import { scanDeps } from './adapters';
-import { parseLength, toMeters, PRESET_SCALES, METERS_PER_PT, type Unit } from '../engine/units';
+import { parseLength, toMeters, formatLength, PRESET_SCALES, METERS_PER_PT, type Unit } from '../engine/units';
 
 export let onStatusHint: ((text: string) => void) | null = null;
 export function setStatusHint(fn: (text: string) => void): void {
@@ -31,13 +32,87 @@ function hint(text: string): void {
   onStatusHint?.(text);
 }
 
+type HistorySnapshot = {
+  markups: Markup[];
+  annotations: import('../engine/types').DrawingAnnotation[];
+  calibrations: Map<number, import('./state').Calibration>;
+  viewports: import('../engine/viewports').Viewport[];
+};
+const undoStack: HistorySnapshot[] = [];
+const redoStack: HistorySnapshot[] = [];
+const HISTORY_LIMIT = 100;
+
+function snapshotTakeoff(): HistorySnapshot {
+  return {
+    markups: structuredClone(state.markups),
+    annotations: structuredClone(state.annotations),
+    calibrations: new Map([...state.calibrations].map(([page, cal]) => [page, { ...cal }])),
+    viewports: structuredClone(state.viewports),
+  };
+}
+export function recordTakeoffHistory(): void {
+  recordHistory();
+}
+
+/** A new or closed project starts with an empty undo/redo history. */
+export function clearTakeoffHistory(): void {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  state.lastAction = null;
+  updateHistoryButtons();
+}
+
+function recordHistory(): void {
+  undoStack.push(snapshotTakeoff());
+  if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+  updateHistoryButtons();
+}
+function updateHistoryButtons(): void {
+  const undo = document.getElementById('undoBtn') as HTMLButtonElement | null;
+  const redo = document.getElementById('redoBtn') as HTMLButtonElement | null;
+  if (undo) undo.disabled = undoStack.length === 0;
+  if (redo) redo.disabled = redoStack.length === 0;
+}
+function restoreHistory(target: HistorySnapshot): void {
+  const previous = new Map(state.markups.map((m) => [m.id, m]));
+  const next = new Map(target.markups.map((m) => [m.id, m]));
+  for (const id of previous.keys()) if (!next.has(id)) syncDeleteMarkup(id);
+  state.markups = structuredClone(target.markups);
+  state.annotations = structuredClone(target.annotations);
+  for (const m of state.markups) syncUpsertMarkup(m);
+  const pages = new Set([...state.calibrations.keys(), ...target.calibrations.keys()]);
+  state.calibrations = new Map([...target.calibrations].map(([p, c]) => [p, { ...c }]));
+  for (const page of pages) syncCalibration(page, state.calibrations.get(page) ?? null);
+  state.viewports = structuredClone(target.viewports);
+  state.lastAction = null;
+  state.selectedId = null;
+  renderMarkups();
+  emit();
+  updateHistoryButtons();
+}
+function undoTakeoff(): void {
+  const previous = undoStack.pop();
+  if (!previous) { hint('Nothing to undo'); return; }
+  redoStack.push(snapshotTakeoff());
+  restoreHistory(previous);
+  hint('Undo');
+}
+function redoTakeoff(): void {
+  const next = redoStack.pop();
+  if (!next) { hint('Nothing to redo'); return; }
+  undoStack.push(snapshotTakeoff());
+  restoreHistory(next);
+  hint('Redo');
+}
+
 /** One-off hint from other modules (library, etc.). */
 export function showHint(text: string): void {
   hint(text);
 }
 
 const HINTS: Record<string, string> = {
-  pan: 'Drag to pan · Ctrl+wheel to zoom · click a markup to select it',
+  pan: 'Select mode · click a markup to select it · drag nodes to refine · double-click a segment to insert a node · drag the sheet to pan · wheel to zoom',
   calibrate: 'Click two ends of a known dimension to calibrate the scale',
   length: 'Click each vertex of the run · double-click or Enter to finish · Esc cancels',
   area: 'Click each corner of the area · double-click or Enter to finish · Esc cancels',
@@ -49,10 +124,30 @@ const HINTS: Record<string, string> = {
   fill: 'Click inside a room or slab — the fill reads its area off the walls',
   viewport: 'Outline a region drawn at a different scale (e.g. a 1:20 detail), then pick its scale',
   scan: 'Click one instance of a repeated symbol; the scan finds and counts every match on the page',
+  'annot-line': 'Drag to draw a non-measurement line',
+  'annot-arrow': 'Drag to draw a non-measurement arrow',
+  'annot-rectangle': 'Drag to draw a rectangle annotation',
+  'annot-ellipse': 'Drag to draw an ellipse annotation',
+  'annot-highlight': 'Drag to highlight a drawing region',
+  'annot-cloud': 'Drag to draw a revision cloud',
+  'annot-text': 'Click to place a text annotation',
 };
 
 let svg: SVGSVGElement;
+let loupeRoot: HTMLElement | null = null;
+let loupeViewport: HTMLElement | null = null;
+let loupeRaster: HTMLCanvasElement | null = null;
+let loupeContent: HTMLElement | null = null;
+let loupeEnabled = false;
+let loupePointer = { x: 0, y: 0, valid: false };
+let loupeOffset = { x: 28, y: 28 };
+let loupeDragging = false;
+let loupeDragStart = { x: 0, y: 0, offsetX: 28, offsetY: 28 };
+let loupeFrame = 0;
+let loupePending = { x: 0, y: 0 };
+const LOUPE_MAGNIFICATION = 2.5;
 let draft: Pt[] = [];
+let selectedVertex: { markupId: string; index: number } | null = null;
 let cursor: Pt | null = null;
 let calibFirst: Pt | null = null;
 let pendingCalib: { a: Pt; b: Pt } | null = null;
@@ -63,6 +158,248 @@ let calibDrawnText: HTMLElement;
 let calibInput: HTMLInputElement;
 let calibUnitSel: HTMLSelectElement;
 let calibPresetSel: HTMLSelectElement;
+
+let snapEnabled = true;
+let snapPage = 0;
+let snapSegments: VecSeg[] = [];
+let snapGrid = new Map<string, VecSeg[]>();
+let longSnapSegments: VecSeg[] = [];
+let snapPromise: Promise<VecSeg[]> | null = null;
+const SNAP_GRID_SIZE = 128;
+const snapCellKey = (x: number, y: number) => `${x},${y}`;
+let snapPoint: { x: number; y: number; kind: string } | null = null;
+
+async function loadSnapSegments(page: number): Promise<VecSeg[]> {
+  if (snapPage === page && snapSegments.length) return snapSegments;
+  if (snapPromise && snapPage === page) return snapPromise;
+  snapPage = page;
+  snapPromise = getPageVector(page).then((vec) => {
+    const segs = vec?.segs ?? [];
+    // A safety ceiling avoids making pointer interaction unresponsive on unusually
+    // complex vector sheets. No geometry is changed or discarded from the PDF.
+    const usable = segs.length <= 250000 ? segs : [];
+    if (snapPage === page) {
+      snapSegments = usable;
+      snapGrid = new Map();
+      longSnapSegments = [];
+      for (const seg of usable) {
+        const x0 = Math.floor(Math.min(seg.x1, seg.x2) / SNAP_GRID_SIZE);
+        const x1 = Math.floor(Math.max(seg.x1, seg.x2) / SNAP_GRID_SIZE);
+        const y0 = Math.floor(Math.min(seg.y1, seg.y2) / SNAP_GRID_SIZE);
+        const y1 = Math.floor(Math.max(seg.y1, seg.y2) / SNAP_GRID_SIZE);
+        const cells = (x1 - x0 + 1) * (y1 - y0 + 1);
+        if (cells > 64) {
+          longSnapSegments.push(seg);
+          continue;
+        }
+        for (let gx = x0; gx <= x1; gx++) {
+          for (let gy = y0; gy <= y1; gy++) {
+            const key = snapCellKey(gx, gy);
+            const bucket = snapGrid.get(key);
+            if (bucket) bucket.push(seg);
+            else snapGrid.set(key, [seg]);
+          }
+        }
+      }
+    }
+    return usable;
+  }).catch(() => {
+    if (snapPage === page) {
+      snapSegments = [];
+      snapGrid.clear();
+      longSnapSegments = [];
+    }
+    return [];
+  });
+  return snapPromise;
+}
+
+function projectToSegment(p: Pt, s: VecSeg): { point: Pt; distance: number } {
+  const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - s.x1) * dx + (p.y - s.y1) * dy) / len2)) : 0;
+  const point = { x: s.x1 + t * dx, y: s.y1 + t * dy };
+  return { point, distance: Math.hypot(p.x - point.x, p.y - point.y) };
+}
+
+function segmentIntersection(a: VecSeg, b: VecSeg): Pt | null {
+  const rx = a.x2 - a.x1, ry = a.y2 - a.y1;
+  const sx = b.x2 - b.x1, sy = b.y2 - b.y1;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const qx = b.x1 - a.x1, qy = b.y1 - a.y1;
+  const t = (qx * sy - qy * sx) / den;
+  const u = (qx * ry - qy * rx) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: a.x1 + t * rx, y: a.y1 + t * ry };
+}
+
+function snapPdfPoint(p: Pt): { point: Pt; kind: string } | null {
+  if (!snapEnabled || !snapSegments.length) return null;
+  const tolerance = 10 / Math.max(0.05, state.zoom);
+  const tol2 = tolerance * tolerance;
+  const best: { current: { point: Pt; kind: string; d2: number } | null } = { current: null };
+  const nearby: VecSeg[] = [];
+  const candidates = new Set<VecSeg>(longSnapSegments);
+  const gx0 = Math.floor((p.x - tolerance) / SNAP_GRID_SIZE);
+  const gx1 = Math.floor((p.x + tolerance) / SNAP_GRID_SIZE);
+  const gy0 = Math.floor((p.y - tolerance) / SNAP_GRID_SIZE);
+  const gy1 = Math.floor((p.y + tolerance) / SNAP_GRID_SIZE);
+  for (let gx = gx0; gx <= gx1; gx++) {
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (const seg of snapGrid.get(snapCellKey(gx, gy)) ?? []) candidates.add(seg);
+    }
+  }
+  const offer = (point: Pt, kind: string) => {
+    const dx = point.x - p.x, dy = point.y - p.y, d2 = dx * dx + dy * dy;
+    if (d2 <= tol2 && (!best.current || d2 < best.current.d2)) best.current = { point, kind, d2 };
+  };
+  for (const s of candidates) {
+    const a = { x: s.x1, y: s.y1 }, b = { x: s.x2, y: s.y2 };
+    offer(a, 'Endpoint'); offer(b, 'Endpoint');
+    offer({ x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 }, 'Midpoint');
+    const projected = projectToSegment(p, s);
+    if (projected.distance <= tolerance * 1.5) {
+      if (nearby.length < 48) nearby.push(s);
+      offer(projected.point, 'Nearest');
+    }
+  }
+  // Intersections are tested only among segments already close to the cursor,
+  // rather than comparing every pair on the entire drawing.
+  const local = nearby.slice(0, 48);
+  for (let i = 0; i < local.length; i++) {
+    for (let j = i + 1; j < local.length; j++) {
+      const hit = segmentIntersection(local[i], local[j]);
+      if (hit) offer(hit, 'Intersection');
+    }
+  }
+  return best.current ? { point: best.current.point, kind: best.current.kind } : null;
+}
+
+function updateSnapToggle(): void {
+  const button = document.getElementById('snapToggle');
+  if (!button) return;
+  button.classList.toggle('active', snapEnabled);
+  button.setAttribute('aria-pressed', String(snapEnabled));
+  button.title = snapEnabled ? 'Object snapping on' : 'Object snapping off';
+}
+
+function drawSnapMarker(): void {
+  if (!snapPoint) return;
+  // Convert PDF coordinates through the shared viewer transform.
+  const p = pdfToView(snapPoint);
+  const ns = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(ns, 'g');
+  const invZoom = 1 / Math.max(0.05, state.zoom);
+  g.setAttribute('class', 'snap-marker');
+  g.setAttribute('transform', `translate(${p.x} ${p.y})`);
+  const c = document.createElementNS(ns, 'circle');
+  c.setAttribute('r', String(3.5 * invZoom)); c.setAttribute('fill', '#ffffff');
+  c.setAttribute('stroke', '#00a6a0'); c.setAttribute('stroke-width', String(1.6 * invZoom));
+  const h = document.createElementNS(ns, 'path');
+  h.setAttribute('d', `M${-5.5 * invZoom} 0H${5.5 * invZoom}M0 ${-5.5 * invZoom}V${5.5 * invZoom}`); h.setAttribute('stroke', '#00a6a0'); h.setAttribute('stroke-width', String(invZoom));
+  const label = document.createElementNS(ns, 'text');
+  label.setAttribute('x', String(9 * invZoom)); label.setAttribute('y', String(-8 * invZoom));
+  label.setAttribute('font-size', String(7 * invZoom)); label.setAttribute('font-weight', '700');
+  label.setAttribute('fill', '#007f79'); label.setAttribute('stroke', '#ffffff');
+  label.setAttribute('stroke-width', String(2.5 * invZoom)); label.setAttribute('paint-order', 'stroke');
+  label.textContent = snapPoint.kind === 'Endpoint' ? 'END' : snapPoint.kind === 'Midpoint' ? 'MID' : snapPoint.kind === 'Intersection' ? 'INT' : 'NEAR';
+  g.append(c,h,label); previewLayer.appendChild(g);
+}
+
+function positionLoupe(): void {
+  if (!loupeRoot || !loupePointer.valid) return;
+  const width = loupeRoot.offsetWidth || 360;
+  const height = loupeRoot.offsetHeight || 252;
+  const left = Math.max(8, Math.min(window.innerWidth - width - 8, loupePointer.x + loupeOffset.x));
+  const top = Math.max(8, Math.min(window.innerHeight - height - 8, loupePointer.y + loupeOffset.y));
+  loupeRoot.style.left = `${left}px`;
+  loupeRoot.style.top = `${top}px`;
+}
+
+/** Copy the live page canvas and SVG overlay into a movable, magnified window. */
+function refreshLoupe(clientX: number, clientY: number): void {
+  if (!loupeEnabled || !loupeRoot || !loupeContent || !loupeViewport) return;
+  const page = svg.parentElement;
+  const sourceCanvas = document.getElementById('pdfCanvas') as HTMLCanvasElement | null;
+  if (!page || !sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return;
+  const rect = page.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const width = page.clientWidth;
+  const height = page.clientHeight;
+  if (x < 0 || y < 0 || x > width || y > height || !width || !height) return;
+  loupePointer = { x: clientX, y: clientY, valid: true };
+
+  const viewWidth = loupeViewport.clientWidth;
+  const viewHeight = loupeViewport.clientHeight;
+  if (!loupeRaster || !viewWidth || !viewHeight) return;
+  const outputScale = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const outputWidth = Math.round(viewWidth * outputScale);
+  const outputHeight = Math.round(viewHeight * outputScale);
+  if (loupeRaster.width !== outputWidth || loupeRaster.height !== outputHeight) {
+    loupeRaster.width = outputWidth;
+    loupeRaster.height = outputHeight;
+  }
+  const context = loupeRaster.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, outputWidth, outputHeight);
+    const sourceX = x * sourceCanvas.width / width;
+    const sourceY = y * sourceCanvas.height / height;
+    const cropWidth = viewWidth / LOUPE_MAGNIFICATION * sourceCanvas.width / width;
+    const cropHeight = viewHeight / LOUPE_MAGNIFICATION * sourceCanvas.height / height;
+    const sx = sourceX - cropWidth / 2;
+    const sy = sourceY - cropHeight / 2;
+    context.filter = getComputedStyle(sourceCanvas).filter;
+    context.drawImage(sourceCanvas, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
+    const fxSource = document.getElementById('fxCanvas') as HTMLCanvasElement | null;
+    if (fxSource && fxSource.width && fxSource.height) {
+      const fxX = x * fxSource.width / width;
+      const fxY = y * fxSource.height / height;
+      const fxW = viewWidth / LOUPE_MAGNIFICATION * fxSource.width / width;
+      const fxH = viewHeight / LOUPE_MAGNIFICATION * fxSource.height / height;
+      context.filter = 'none';
+      context.drawImage(fxSource, fxX - fxW / 2, fxY - fxH / 2, fxW, fxH, 0, 0, outputWidth, outputHeight);
+    }
+    context.filter = 'none';
+  }
+
+  let overlayCopy = loupeContent.querySelector<SVGSVGElement>('svg[data-loupe-overlay]');
+  if (!overlayCopy) {
+    overlayCopy = svg.cloneNode(false) as SVGSVGElement;
+    overlayCopy.removeAttribute('id');
+    overlayCopy.dataset.loupeOverlay = 'true';
+    loupeContent.appendChild(overlayCopy);
+  }
+  overlayCopy.setAttribute('viewBox', svg.getAttribute('viewBox') ?? `0 0 ${width} ${height}`);
+  overlayCopy.setAttribute('preserveAspectRatio', svg.getAttribute('preserveAspectRatio') ?? 'none');
+  overlayCopy.setAttribute('class', svg.getAttribute('class') ?? '');
+  overlayCopy.innerHTML = svg.innerHTML;
+  overlayCopy.style.width = `${width}px`;
+  overlayCopy.style.height = `${height}px`;
+
+  loupeContent.style.width = `${width}px`;
+  loupeContent.style.height = `${height}px`;
+  const centerX = loupeViewport.clientWidth / 2;
+  const centerY = loupeViewport.clientHeight / 2;
+  const tx = centerX - x * LOUPE_MAGNIFICATION;
+  const ty = centerY - y * LOUPE_MAGNIFICATION;
+  loupeContent.style.transform = `translate(${tx}px, ${ty}px) scale(${LOUPE_MAGNIFICATION})`;
+  loupeRoot.classList.remove('hidden');
+  positionLoupe();
+}
+
+function setLoupeEnabled(enabled: boolean): void {
+  loupeEnabled = enabled;
+  const button = document.getElementById('loupeToggle');
+  button?.classList.toggle('active', enabled);
+  button?.setAttribute('aria-pressed', String(enabled));
+  if (!enabled) loupeRoot?.classList.add('hidden');
+  else {
+    hint('Precision loupe enabled · move over the drawing; drag its title bar to reposition it');
+    if (loupePointer.valid) refreshLoupe(loupePointer.x, loupePointer.y);
+  }
+}
 
 export function initTools(overlay: SVGSVGElement): void {
   svg = overlay;
@@ -76,10 +413,88 @@ export function initTools(overlay: SVGSVGElement): void {
   for (const p of PRESET_SCALES) calibPresetSel.add(new Option(p.label, String(p.ratio)));
 
   svg.addEventListener('pointerdown', onPointerDown);
+  document.getElementById('undoBtn')?.addEventListener('click', undoTakeoff);
+  document.getElementById('redoBtn')?.addEventListener('click', redoTakeoff);
+  updateHistoryButtons();
+  document.getElementById('snapToggle')?.addEventListener('click', () => {
+    snapEnabled = !snapEnabled;
+    snapPoint = null;
+    updateSnapToggle();
+    hint(snapEnabled ? 'Object snapping enabled' : 'Object snapping disabled');
+    refreshPreview();
+  });
+  updateSnapToggle();
+  loupeRoot = document.getElementById('loupeWindow');
+  loupeViewport = document.getElementById('loupeViewport');
+  loupeContent = document.getElementById('loupeContent');
+  loupeRaster = document.getElementById('loupeRaster') as HTMLCanvasElement | null;
+  for (const id of ['annotationColor', 'annotationWidth', 'annotationOpacity', 'annotationLineStyle']) {
+    document.getElementById(id)?.addEventListener('change', () => {
+      const annotation = state.annotations.find((item) => item.id === state.selectedAnnotationId);
+      if (!annotation) return;
+      recordHistory();
+      if (id === 'annotationColor') annotation.color = (document.getElementById(id) as HTMLInputElement).value;
+      if (id === 'annotationWidth') annotation.strokeWidth = Math.max(0.5, Math.min(16, Number((document.getElementById(id) as HTMLInputElement).value) || 2));
+      if (id === 'annotationOpacity') annotation.opacity = Math.max(0, Math.min(1, Number((document.getElementById(id) as HTMLInputElement).value) || 0));
+      if (id === 'annotationLineStyle') annotation.lineStyle = (document.getElementById(id) as HTMLSelectElement).value as 'solid' | 'dashed' | 'dotted';
+      renderMarkups();
+      emit();
+    });
+  }
+  document.getElementById('loupeToggle')?.addEventListener('click', () => setLoupeEnabled(!loupeEnabled));
+  document.getElementById('loupeClose')?.addEventListener('click', () => setLoupeEnabled(false));
+  const loupeHeader = document.getElementById('loupeHeader');
+  loupeHeader?.addEventListener('pointerdown', (event) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    loupeDragging = true;
+    loupeDragStart = { x: event.clientX, y: event.clientY, offsetX: loupeOffset.x, offsetY: loupeOffset.y };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  window.addEventListener('pointermove', (event) => {
+    if (!loupeDragging) return;
+    loupeOffset = {
+      x: loupeDragStart.offsetX + event.clientX - loupeDragStart.x,
+      y: loupeDragStart.offsetY + event.clientY - loupeDragStart.y,
+    };
+    positionLoupe();
+  });
+  window.addEventListener('pointerup', () => { loupeDragging = false; });
   svg.addEventListener('pointermove', onPointerMove);
-  svg.addEventListener('pointerleave', () => {
+  // Track the pointer independently of the active tool. The loupe must also
+  // work in Select mode and should appear immediately if toggled while the
+  // pointer is already over the sheet. Drawing into its raster is capped at
+  // one update per animation frame to avoid competing with pointer feedback.
+  window.addEventListener('pointermove', (event) => {
+    if (loupeDragging) {
+      positionLoupe();
+      return;
+    }
+    const rect = svg.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right &&
+      event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!inside) {
+      if (loupeRoot && event.target instanceof Node && loupeRoot.contains(event.target)) return;
+      if (loupeEnabled) {
+        loupePointer.valid = false;
+        loupeRoot?.classList.add('hidden');
+      }
+      return;
+    }
+    loupePointer = { x: event.clientX, y: event.clientY, valid: true };
+    if (!loupeEnabled || loupeFrame) return;
+    loupePending = { x: event.clientX, y: event.clientY };
+    loupeFrame = requestAnimationFrame(() => {
+      loupeFrame = 0;
+      refreshLoupe(loupePending.x, loupePending.y);
+    });
+  });
+  svg.addEventListener('pointerleave', (event) => {
     cursor = null;
     refreshPreview();
+    if (loupeEnabled && !(event.relatedTarget instanceof Node && loupeRoot?.contains(event.relatedTarget))) {
+      loupeRoot?.classList.add('hidden');
+    }
   });
   svg.addEventListener('dblclick', onDoubleClick);
   window.addEventListener('keydown', onKeyDown);
@@ -126,6 +541,11 @@ export function initTools(overlay: SVGSVGElement): void {
 }
 
 export function setTool(tool: typeof state.tool): void {
+  selectedVertex = null;
+  if (['length', 'area', 'count', 'perimeter', 'volume', 'angle', 'note', 'fill', 'scan'].includes(tool) && isLockedLayer(getActiveLayer())) {
+    hint('The active layer is locked · choose or unlock another layer before measuring');
+    return;
+  }
   state.tool = tool;
   // manual tool switching drops an active preset unless the type still matches;
   // a count preset survives the scan tool so scan hits come out pre-labelled
@@ -153,25 +573,173 @@ function eventToPdf(e: PointerEvent | MouseEvent): Pt | null {
   return viewToPdf(v);
 }
 
-function onPointerDown(e: PointerEvent): void {
+
+
+function beginAnnotationDrag(annotation: import('../engine/types').DrawingAnnotation, event: PointerEvent): void {
+  const start = eventToPdf(event);
+  if (!start) return;
+  const before = annotation.points.map((point) => ({ ...point }));
+  recordHistory();
+  try { svg.setPointerCapture(event.pointerId); } catch { /* pointer may already be captured */ }
+  const move = (ev: PointerEvent) => {
+    const current = eventToPdf(ev);
+    if (!current) return;
+    const dx = current.x - start.x, dy = current.y - start.y;
+    annotation.points = before.map((point) => ({ x: point.x + dx, y: point.y + dy }));
+    renderMarkups();
+  };
+  const finish = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', finish);
+    renderMarkups();
+    emit();
+    try { if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', finish, { once: true });
+  window.addEventListener('pointercancel', finish, { once: true });
+}
+
+function beginDrawingAnnotation(kind: import('../engine/types').DrawingAnnotationKind, start: Pt, event: PointerEvent): void {
+  const color = (document.getElementById('annotationColor') as HTMLInputElement | null)?.value || '#e11d48';
+  const width = Number((document.getElementById('annotationWidth') as HTMLInputElement | null)?.value || 2);
+  const opacity = Number((document.getElementById('annotationOpacity') as HTMLInputElement | null)?.value || 0.9);
+  const lineStyle = ((document.getElementById('annotationLineStyle') as HTMLSelectElement | null)?.value || 'solid') as 'solid' | 'dashed' | 'dotted';
+  const make = (end: Pt) => {
+    recordHistory();
+    const id = nextId('an');
+    state.annotations.push({
+      id, page: state.pageNum, kind, points: [start, end], color,
+      strokeWidth: Math.max(0.5, Math.min(16, width)),
+      opacity: Math.max(0, Math.min(1, opacity)),
+      fillOpacity: 0.2, lineStyle,
+    });
+    state.selectedAnnotationId = id;
+    emit();
+    hint(`${kind} annotation added · excluded from quantities`);
+  };
+  try { svg.setPointerCapture(event.pointerId); } catch { /* pointer may already be captured */ }
+  const update = (ev: PointerEvent) => {
+    const end = eventToPdf(ev);
+    if (!end) return;
+    const a = pdfToView(start), b = pdfToView(end);
+    previewLayer.replaceChildren();
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', kind === 'ellipse' ? 'ellipse' : kind === 'rectangle' || kind === 'highlight' || kind === 'cloud' ? 'rect' : 'line');
+    if (shape.tagName === 'line') {
+      shape.setAttribute('x1', String(a.x)); shape.setAttribute('y1', String(a.y));
+      shape.setAttribute('x2', String(b.x)); shape.setAttribute('y2', String(b.y));
+    } else if (shape.tagName === 'ellipse') {
+      shape.setAttribute('cx', String((a.x+b.x)/2)); shape.setAttribute('cy', String((a.y+b.y)/2));
+      shape.setAttribute('rx', String(Math.abs(b.x-a.x)/2)); shape.setAttribute('ry', String(Math.abs(b.y-a.y)/2));
+    } else {
+      shape.setAttribute('x', String(Math.min(a.x,b.x))); shape.setAttribute('y', String(Math.min(a.y,b.y)));
+      shape.setAttribute('width', String(Math.max(1,Math.abs(b.x-a.x)))); shape.setAttribute('height', String(Math.max(1,Math.abs(b.y-a.y))));
+    }
+    shape.setAttribute('fill', kind === 'highlight' ? color : 'none');
+    shape.setAttribute('fill-opacity', kind === 'highlight' ? '0.2' : '0');
+    shape.setAttribute('stroke', color); shape.setAttribute('stroke-width', String(width));
+    if (lineStyle === 'dashed') shape.setAttribute('stroke-dasharray', '7 4');
+    if (lineStyle === 'dotted') shape.setAttribute('stroke-dasharray', '1 4');
+    previewLayer.appendChild(shape);
+  };
+  const finish = (ev: PointerEvent) => {
+    window.removeEventListener('pointermove', update);
+    window.removeEventListener('pointerup', finish);
+    window.removeEventListener('pointercancel', cancel);
+    const end = eventToPdf(ev);
+    previewLayer.replaceChildren();
+    if (end && Math.hypot(end.x-start.x, end.y-start.y) > 2) make(end);
+    try { if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+  };
+  const cancel = () => {
+    window.removeEventListener('pointermove', update);
+    window.removeEventListener('pointerup', finish);
+    previewLayer.replaceChildren();
+  };
+  window.addEventListener('pointermove', update);
+  window.addEventListener('pointerup', finish, { once: true });
+  window.addEventListener('pointercancel', cancel, { once: true });
+}
+
+async function onPointerDown(e: PointerEvent): Promise<void> {
   if (e.button !== 0) return;
+  if (state.tool === 'pan' && e.target instanceof Element) {
+    const annotationGroup = e.target.closest<SVGGElement>('[data-annotation-id]');
+    const annotationId = annotationGroup?.getAttribute('data-annotation-id');
+    const annotation = annotationId ? state.annotations.find((item) => item.id === annotationId) : undefined;
+    if (annotation) {
+      state.selectedAnnotationId = annotation.id;
+      state.selectedId = null;
+      const colorInput = document.getElementById('annotationColor') as HTMLInputElement | null;
+      const widthInput = document.getElementById('annotationWidth') as HTMLInputElement | null;
+      const opacityInput = document.getElementById('annotationOpacity') as HTMLInputElement | null;
+      const lineInput = document.getElementById('annotationLineStyle') as HTMLSelectElement | null;
+      if (colorInput) colorInput.value = annotation.color || '#e11d48';
+      if (widthInput) widthInput.value = String(annotation.strokeWidth ?? 2);
+      if (opacityInput) opacityInput.value = String(annotation.opacity ?? 0.9);
+      if (lineInput) lineInput.value = annotation.lineStyle || 'solid';
+      renderMarkups();
+      emit();
+      beginAnnotationDrag(annotation, e);
+      return;
+    }
+  }
+  if (state.tool.startsWith('annot-')) {
+    e.preventDefault();
+    const point = eventToPdf(e);
+    if (!point) return;
+    const kind = state.tool.slice(6) as import('../engine/types').DrawingAnnotationKind;
+    if (kind === 'text') {
+      const text = window.prompt('Annotation text');
+      if (text?.trim()) {
+        recordHistory();
+        const annotationId = nextId('an');
+        state.annotations.push({
+          id: annotationId, page: state.pageNum, kind, points: [point], text: text.trim(),
+          color: (document.getElementById('annotationColor') as HTMLInputElement | null)?.value || '#e11d48',
+          strokeWidth: 2, opacity: 1,
+        });
+        state.selectedAnnotationId = annotationId;
+        emit();
+      }
+    } else beginDrawingAnnotation(kind, point, e);
+    return;
+  }
   if (e.target instanceof Element && e.target.closest('[data-id]') && state.tool === 'pan') {
     const g = e.target.closest('[data-id]')!;
     const id = g.getAttribute('data-id')!;
     const m = state.markups.find((x) => x.id === id);
     if (m) {
       state.selectedId = id;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
       if (m.page === state.pageNum) {
         const vtx = e.target.closest('.vtx');
-        beginDrag(m, vtx ? Number(vtx.getAttribute('data-idx')) : null, e);
+        const vertexIndex = vtx ? Number(vtx.getAttribute('data-idx')) : null;
+        selectedVertex = vertexIndex === null ? null : { markupId: m.id, index: vertexIndex };
+        beginDrag(m, vertexIndex, e);
       }
     }
     return;
   }
-  const p = eventToPdf(e);
+  let p = eventToPdf(e);
   if (!p) return;
+  if (['length', 'area', 'count', 'perimeter', 'volume', 'angle', 'note', 'fill', 'scan'].includes(state.tool) && isLockedLayer(getActiveLayer())) {
+    hint('The active layer is locked · unlock it or choose another layer before measuring');
+    return;
+  }
+  if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
+    await loadSnapSegments(state.pageNum);
+    if (!snapSegments.length) hint('No vector geometry is available for snapping on this page; use manual clicks on this scanned/image sheet.');
+    // Use the original pointer position after the async geometry load.
+    const raw = eventToPdf(e);
+    if (raw) p = raw;
+    const snapped = snapPdfPoint(p);
+    snapPoint = snapped ? { ...snapped.point, kind: snapped.kind } : null;
+    if (snapped) p = snapped.point;
+  }
 
   switch (state.tool) {
     case 'calibrate': {
@@ -209,6 +777,7 @@ function onPointerDown(e: PointerEvent): void {
         points: [p],
         createdAt: Date.now(),
       };
+      recordHistory();
       state.markups.push(m);
       state.lastAction = null;
       syncUpsertMarkup(m);
@@ -217,21 +786,24 @@ function onPointerDown(e: PointerEvent): void {
       break;
     }
     case 'note': {
+      const annotationText = window.prompt('Text annotation', state.activePreset?.type === 'note' ? state.activePreset.label : '');
+      if (annotationText === null) break;
       const note: Markup = {
         id: nextId('mk'),
         page: state.pageNum,
         type: 'note',
         layer: getActiveLayer() !== DEFAULT_LAYER ? getActiveLayer() : undefined,
-        label: state.activePreset?.type === 'note' ? state.activePreset.label : 'Note',
+        label: annotationText.trim() || 'Note',
         points: [p],
         createdAt: Date.now(),
       };
+      recordHistory();
       state.markups.push(note);
       state.lastAction = null;
       syncUpsertMarkup(note);
       renderMarkups();
       emit();
-      hint('Note placed · type its text in the Label column of the list');
+      hint('Text annotation placed · select it to move, or edit its text in the Markups list');
       break;
     }
     case 'fill':
@@ -242,6 +814,7 @@ function onPointerDown(e: PointerEvent): void {
       break;
     case 'pan':
       state.selectedId = null;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
       break;
@@ -250,27 +823,43 @@ function onPointerDown(e: PointerEvent): void {
 
 /** Drag a whole markup, or one vertex when vtxIdx is given. Live value updates. */
 function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: PointerEvent): void {
+  if (isLockedLayer(layerOf(m))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
   const start = eventToPdf(e);
   if (!start) return;
-  const before = m.points.map((p) => ({ ...p }));
-  state.lastAction = { kind: 'move', id: m.id, before };
+  const geometry = m.sourceId ? state.markups.find((item) => item.id === m.sourceId) ?? m : m;
+  const before = geometry.points.map((p) => ({ ...p }));
+  recordHistory();
+  state.lastAction = { kind: 'move', id: geometry.id, before };
+  if (vtxIdx !== null) void loadSnapSegments(m.page);
   const move = (ev: PointerEvent) => {
-    const cur = eventToPdf(ev);
+    let cur = eventToPdf(ev);
     if (!cur) return;
-    if (vtxIdx != null && vtxIdx >= 0 && vtxIdx < m.points.length) {
-      m.points[vtxIdx] = cur;
+    if (vtxIdx != null && vtxIdx >= 0 && vtxIdx < geometry.points.length) {
+      if (snapEnabled) {
+        const snapped = snapPdfPoint(cur);
+        if (snapped) cur = snapped.point;
+      }
+      geometry.points[vtxIdx] = cur;
     } else {
       const dx = cur.x - start.x;
       const dy = cur.y - start.y;
-      m.points = before.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      geometry.points = before.map((p) => ({ x: p.x + dx, y: p.y + dy }));
     }
     renderMarkups();
-    syncUpsertMarkup(m);
+    syncUpsertMarkup(geometry);
   };
   const up = () => {
     window.removeEventListener('pointermove', move);
     renderMarkups();
     emit();
+    if (vtxIdx !== null && geometry.points[vtxIdx]) {
+      const point = geometry.points[vtxIdx];
+      const closed = m.type === 'area' || m.type === 'perimeter' || m.type === 'volume';
+      const adjacent = [vtxIdx - 1, vtxIdx].filter((index) => index >= 0 && index < (closed ? geometry.points.length : geometry.points.length - 1));
+      const cal = calibrationForMarkup(m);
+      const lengths = cal ? adjacent.map((index) => formatLength(distPt(geometry.points[index], geometry.points[(index + 1) % geometry.points.length]) * cal.metersPerPt, state.displayUnit)) : [];
+      hint(`Vertex ${vtxIdx + 1} · X ${point.x.toFixed(2)} pt · Y ${point.y.toFixed(2)} pt${lengths.length ? ` · adjacent: ${lengths.join(' / ')}` : ''}`);
+    }
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up, { once: true });
@@ -278,18 +867,71 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
 
 function onPointerMove(e: PointerEvent): void {
   if (state.tool === 'pan') return;
-  cursor = eventToPdf(e);
+  const raw = eventToPdf(e);
+  if (!raw) return;
+  if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
+    if (snapPage !== state.pageNum || (!snapSegments.length && !snapPromise)) void loadSnapSegments(state.pageNum);
+    const snapped = snapPdfPoint(raw);
+    snapPoint = snapped ? { ...snapped.point, kind: snapped.kind } : null;
+    cursor = snapped?.point ?? raw;
+  } else {
+    snapPoint = null;
+    cursor = raw;
+  }
   refreshPreview();
 }
 
 function onDoubleClick(e: MouseEvent): void {
   const p = eventToPdf(e);
   if (!p) return;
-  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport') {
-    // the second click of a double-click registers as a duplicate vertex
-    if (draft.length >= 2 && distPt(draft[draft.length - 1], draft[draft.length - 2]) < 1) {
-      draft.pop();
+
+  // In pan/select mode, double-click a measurement segment to insert a
+  // vertex at its nearest point. The new node is stored in PDF coordinates,
+  // exactly like the original vertices, and can immediately be dragged.
+  if (state.tool === 'pan' && e.target instanceof Element) {
+    const group = e.target.closest<SVGGElement>('.markup[data-id]');
+    const id = group?.getAttribute('data-id');
+    const markup = id ? state.markups.find((m) => m.id === id && m.page === state.pageNum) : undefined;
+    const geometry = markup?.sourceId ? state.markups.find((m) => m.id === markup.sourceId) ?? markup : markup;
+    if (markup && geometry && ['length', 'area', 'perimeter', 'volume'].includes(markup.type) && geometry.points.length >= 2) {
+      if (isLockedLayer(layerOf(markup))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
+      const points = geometry.points;
+      const closed = markup.type === 'area' || markup.type === 'perimeter' || markup.type === 'volume';
+      let best: { index: number; point: Pt; distance: number } | null = null;
+      const segmentCount = closed ? points.length : points.length - 1;
+      for (let i = 0; i < segmentCount; i++) {
+        const a = points[i];
+        const b = points[(i + 1) % points.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+        const q = { x: a.x + t * dx, y: a.y + t * dy };
+        const distance = Math.hypot(p.x - q.x, p.y - q.y);
+        if (!best || distance < best.distance) best = { index: i, point: q, distance };
+      }
+      if (best && best.distance <= 12 / Math.max(0.05, state.zoom)) {
+        const before = points.map((point) => ({ ...point }));
+        recordHistory();
+        state.lastAction = { kind: 'move', id: markup.id, before };
+        geometry.points.splice(best.index + 1, 0, best.point);
+        selectedVertex = { markupId: markup.id, index: best.index + 1 };
+        state.selectedId = markup.id;
+        syncUpsertMarkup(geometry);
+        renderMarkups();
+        emit();
+        e.preventDefault();
+        e.stopPropagation();
+        hint('Vertex inserted · drag the new node to adjust the measurement');
+        return;
+      }
     }
+  }
+
+  if (state.tool === 'length' || state.tool === 'area' || state.tool === 'perimeter' || state.tool === 'volume' || state.tool === 'viewport') {
+    // Both pointerdowns have already been processed by the time the
+    // browser dispatches dblclick. The second click is the duplicate end
+    // vertex, even when sub-pixel rounding makes its PDF coordinates differ.
+    if (draft.length) draft.pop();
     finishDraft();
   }
 }
@@ -340,14 +982,16 @@ async function runFill(p: Pt): Promise<void> {
       label: state.activePreset?.type === 'area' ? state.activePreset.label : 'Filled area',
       points: result.points,
       createdAt: Date.now(),
+      ...(clickCal ? { calibration: { metersPerPt: clickCal.metersPerPt, source: clickCal.source } } : {}),
     };
+    recordHistory();
     state.markups.push(m);
     state.lastAction = null;
     syncUpsertMarkup(m);
     setTool('pan');
     renderMarkups();
     emit();
-    const cal = state.calibrations.get(state.pageNum);
+    const cal = clickCal;
     // say why the fill stopped where it did, so the polygon can be trusted or overridden
     const why: string[] = [];
     if (result.gapPx) {
@@ -390,6 +1034,7 @@ async function runScan(p: Pt): Promise<void> {
   const doubtful = new Set<string>();
   let example: string | null = null;
   let nearest = Infinity;
+  recordHistory();
   for (const hit of hits) {
     const scanned: Markup = {
       id: nextId('mk'),
@@ -444,7 +1089,8 @@ function finishDraft(): void {
 }
 
 function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'angle', depth?: number): void {
-  state.markups.push({
+  if (isLockedLayer(getActiveLayer())) { hint('The active layer is locked · measurement was not added'); return; }
+  const markup: Markup = {
     id: nextId('mk'),
     page: state.pageNum,
     type,
@@ -453,9 +1099,12 @@ function pushDraftMarkup(type: 'length' | 'area' | 'perimeter' | 'volume' | 'ang
     createdAt: Date.now(),
     ...(depth !== undefined ? { depth } : {}),
     ...(getActiveLayer() !== DEFAULT_LAYER ? { layer: getActiveLayer() } : {}),
-  });
+  };
+  freezeMarkupCalibration(markup);
+  recordHistory();
+  state.markups.push(markup);
   state.lastAction = null;
-  syncUpsertMarkup(state.markups[state.markups.length - 1]);
+  syncUpsertMarkup(markup);
 }
 
 function refreshPreview(): void {
@@ -468,6 +1117,7 @@ function refreshPreview(): void {
     spec = { kind: 'calibrate', points: [calibFirst], cursor };
   }
   renderPreview(spec);
+  drawSnapMarker();
 }
 
 // --- calibration modal ---
@@ -690,14 +1340,24 @@ function applyCalibration(): void {
   if (!pendingCalib) return closeCalibModal();
   const unit = calibUnitSel.value as Unit;
   const value = parseLength(calibInput.value, unit);
-  if (value == null) {
+  const ptDist = distPt(pendingCalib.a, pendingCalib.b);
+  if (value == null || !Number.isFinite(value) || value <= 0 || !Number.isFinite(ptDist) || ptDist <= 0) {
     calibInput.classList.add('invalid');
+    calibInput.focus();
     setTimeout(() => calibInput.classList.remove('invalid'), 600);
+    hint('Enter a real-world length greater than zero before applying the scale');
     return;
   }
-  const ptDist = distPt(pendingCalib.a, pendingCalib.b);
   const meters = toMeters(value, unit);
   const metersPerPt = meters / ptDist;
+  if (!Number.isFinite(metersPerPt) || metersPerPt <= 0) {
+    calibInput.classList.add('invalid');
+    calibInput.focus();
+    setTimeout(() => calibInput.classList.remove('invalid'), 600);
+    hint('The calibration could not be calculated. Check the length and redraw the dimension.');
+    return;
+  }
+  recordHistory();
   applyScaleToPages(metersPerPt, `measured ${calibInput.value.trim()} ${unit}`);
   closeCalibModal();
   renderMarkups();
@@ -835,9 +1495,20 @@ function onKeyDown(e: KeyboardEvent): void {
       draft = [];
       calibFirst = null;
       renderPreview(null);
-      hint(HINTS[state.tool]);
-    } else if (state.selectedId) {
+      if (state.tool !== 'pan') setTool('pan');
+      hint('Measurement cancelled · Select mode');
+    } else if (state.tool !== 'pan') {
+      setTool('pan');
+      if (state.selectedId) {
+        state.selectedId = null;
+        renderMarkups();
+        emit();
+      }
+      hint('Select mode · choose a markup to edit, or drag the sheet to pan');
+    } else if (state.selectedId || state.selectedAnnotationId) {
+      selectedVertex = null;
       state.selectedId = null;
+      state.selectedAnnotationId = null;
       renderMarkups();
       emit();
     }
@@ -854,8 +1525,40 @@ function onKeyDown(e: KeyboardEvent): void {
       return; // don't delete a selected markup while drawing
     }
   }
+  if ((k === 'delete' || k === 'backspace') && selectedVertex) {
+    const vertex = selectedVertex;
+    const selectedMarkup = state.markups.find((m) => m.id === vertex.markupId);
+    const geometry = selectedMarkup?.sourceId ? state.markups.find((m) => m.id === selectedMarkup.sourceId) ?? selectedMarkup : selectedMarkup;
+    if (!selectedMarkup || !geometry) { selectedVertex = null; }
+    else {
+      if (isLockedLayer(layerOf(selectedMarkup))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
+      const minimum = selectedMarkup.type === 'length' ? 2 : 3;
+      if (geometry.points.length <= minimum) { hint(`This measurement needs at least ${minimum} vertices`); return; }
+      if (vertex.index < 0 || vertex.index >= geometry.points.length) { selectedVertex = null; return; }
+      recordHistory();
+      geometry.points.splice(vertex.index, 1);
+      selectedVertex = null;
+      state.lastAction = null;
+      syncUpsertMarkup(geometry);
+      renderMarkups();
+      emit();
+      hint('Vertex deleted · measurement quantity recalculated');
+      return;
+    }
+  }
+  if ((k === 'delete' || k === 'backspace') && state.selectedAnnotationId) {
+    recordHistory();
+    state.annotations = state.annotations.filter((item) => item.id !== state.selectedAnnotationId);
+    state.selectedAnnotationId = null;
+    renderMarkups();
+    emit();
+    return;
+  }
   if ((k === 'delete' || k === 'backspace') && state.selectedId) {
+    const selectedMarkup = state.markups.find((m) => m.id === state.selectedId);
+    if (selectedMarkup && isLockedLayer(layerOf(selectedMarkup))) { hint('This measurement is on a locked layer · unlock it before deleting'); return; }
     const deleted = state.selectedId;
+    recordHistory();
     state.markups = state.markups.filter((m) => m.id !== state.selectedId);
     state.selectedId = null;
     if (deleted) syncDeleteMarkup(deleted);
@@ -863,29 +1566,18 @@ function onKeyDown(e: KeyboardEvent): void {
     emit();
     return;
   }
+  if ((e.metaKey || e.ctrlKey) && (k === 'y' || (k === 'z' && e.shiftKey))) {
+    e.preventDefault();
+    redoTakeoff();
+    return;
+  }
   if ((e.metaKey || e.ctrlKey) && k === 'z') {
     e.preventDefault();
     if (draft.length) {
       draft.pop();
       refreshPreview();
-    } else if (state.lastAction?.kind === 'move') {
-      const moved = state.markups.find((x) => x.id === state.lastAction!.id);
-      if (moved) {
-        moved.points = state.lastAction.before;
-        state.lastAction = null;
-        syncUpsertMarkup(moved);
-        renderMarkups();
-        emit();
-        return;
-      }
-    }
-    if (state.markups.length) {
-      const newest = state.markups.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
-      state.markups = state.markups.filter((m) => m.id !== newest.id);
-      if (state.selectedId === newest.id) state.selectedId = null;
-      syncDeleteMarkup(newest.id);
-      renderMarkups();
-      emit();
+    } else {
+      undoTakeoff();
     }
     return;
   }

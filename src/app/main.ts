@@ -2,9 +2,9 @@
 // boot.ts (the page's entry), which also owns the landing buttons, drag and
 // drop and paste, and calls openFiles / openSample / startDemo here.
 
-import { state, subscribe, emit } from './state';
-import { initViewer, loadPdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf } from './viewer';
-import { initTools, setTool, setStatusHint } from './tools';
+import { state, freezeMarkupCalibration, subscribe, emit } from './state';
+import { initViewer, loadPdf, closePdf, renderPage, fitWidth, setZoom, hasDoc, eventToView, viewToPdf, setZoomChangeHandler } from './viewer';
+import { initTools, setTool, setStatusHint, clearTakeoffHistory } from './tools';
 import { initTable, renderTable } from './table';
 import { renderMarkups } from './render';
 import { saveAnnotatedPdf, importMarkups } from './pdfio';
@@ -15,7 +15,7 @@ import { initLibrary, renderLibrary } from './library';
 import { startSession, stopSession, sessionActive, getPeers } from './session';
 import { loadPresets, loadColumns } from './persistence';
 import { initColumns, renderColumns } from './columns';
-import { initLayers, renderLayers } from './layers';
+import { initLayers, renderLayers, exportLayerState, importLayerState } from './layers';
 import { scheduleSave, restoreSession } from './persistence';
 import {
   compareState,
@@ -51,6 +51,11 @@ const dropzone = $('dropzone');
 const fileInput = $('fileInput') as HTMLInputElement;
 
 initViewer(scrollEl, pageEl, canvas, overlay, markupsLayer, previewLayer);
+setZoomChangeHandler((zoom) => {
+  $('zoomIndicator').textContent = `${Math.round(zoom * 100)}%`;
+  lastZoom = zoom;
+  scheduleRender(120);
+});
 initTools(overlay);
 initTable();
 initCompare(canvas, pageEl);
@@ -58,6 +63,29 @@ initPageStrip(document.getElementById('pageStrip')!);
 initLibrary();
 initColumns();
 initLayers();
+
+// Keep the quantities sidebar collapsible without changing the active tab or
+// discarding any take-off data. The preference is local to this browser.
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle') as HTMLButtonElement | null;
+if (sidebar && sidebarToggle) {
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('pdf2takeoff.sidebarCollapsed') === 'true'; } catch { /* storage may be blocked */ }
+  sidebar.classList.toggle('sidebar-collapsed', collapsed);
+  sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+  sidebarToggle.textContent = collapsed ? '›' : '‹';
+  sidebarToggle.title = collapsed ? 'Expand quantities panel' : 'Collapse quantities panel';
+  sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+  sidebarToggle.addEventListener('click', () => {
+    const next = !sidebar.classList.contains('sidebar-collapsed');
+    sidebar.classList.toggle('sidebar-collapsed', next);
+    try { localStorage.setItem('pdf2takeoff.sidebarCollapsed', String(next)); } catch { /* the control still works for this session */ }
+    sidebarToggle.setAttribute('aria-expanded', String(!next));
+    sidebarToggle.textContent = next ? '›' : '‹';
+    sidebarToggle.title = next ? 'Expand quantities panel' : 'Collapse quantities panel';
+    sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+  });
+}
 void loadPresets().then((presets) => {
   state.presets = presets;
   renderLibrary();
@@ -85,6 +113,7 @@ async function openBytes(bytes: Uint8Array, name: string, notes: string[] = []):
   $('loading').classList.remove('hidden');
   try {
     await loadPdf(bytes, name);
+    clearTakeoffHistory();
     window.scrollTo(0, 0);
     dropzone.classList.add('hidden');
     let restored = await importMarkups();
@@ -110,6 +139,111 @@ async function openBytes(bytes: Uint8Array, name: string, notes: string[] = []):
     $('loading').classList.add('hidden');
     emit();
   }
+}
+
+
+type ProjectFile = {
+  format: 'pdf2takeoff-project';
+  version: 1;
+  name: string;
+  drawing: string;
+  pageNum: number;
+  displayUnit: typeof state.displayUnit;
+  markups: typeof state.markups;
+  calibrations: [number, import('../engine/types').Calibration][];
+  viewports: typeof state.viewports;
+  presets: typeof state.presets;
+  columns: typeof state.columns;
+  template: string | null;
+  annotations?: typeof state.annotations;
+  layerState?: ReturnType<typeof exportLayerState>;
+};
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+function saveProject(): void {
+  if (!state.fileBytes || !hasDoc()) { showMessage('Open a drawing before saving a project.'); return; }
+  const project: ProjectFile = {
+    format: 'pdf2takeoff-project', version: 1, name: state.fileName,
+    drawing: bytesToBase64(state.fileBytes), pageNum: state.pageNum,
+    displayUnit: state.displayUnit, markups: state.markups, annotations: state.annotations,
+    calibrations: [...state.calibrations.entries()], viewports: state.viewports,
+    presets: state.presets, columns: state.columns, template: state.template,
+    layerState: exportLayerState(),
+  };
+  const blob = new Blob([JSON.stringify(project)], { type: 'application/vnd.pdf2takeoff.project+json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${state.fileName.replace(/\.[^.]+$/, '') || 'takeoff'}.p2t`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  $('toolHint').textContent = 'Project saved. Keep the .p2t file to reopen the drawing and its take-off.';
+}
+async function openProject(file: File): Promise<void> {
+  const project = JSON.parse(await file.text()) as ProjectFile;
+  if (project.format !== 'pdf2takeoff-project' || project.version !== 1 || typeof project.drawing !== 'string') {
+    throw new Error('This is not a supported pdf2takeoff project file.');
+  }
+  const bytes = base64ToBytes(project.drawing);
+  await openBytes(bytes, project.name || 'project.pdf');
+  state.markups = Array.isArray(project.markups) ? project.markups : [];
+  state.annotations = Array.isArray(project.annotations) ? project.annotations : [];
+  state.selectedAnnotationId = null;
+  state.calibrations = new Map(Array.isArray(project.calibrations) ? project.calibrations : []);
+  state.viewports = Array.isArray(project.viewports) ? project.viewports : [];
+  // Older .p2t projects did not freeze each measurement's calibration. Freeze
+  // their then-current page/viewport scale once on load; future scale edits are non-retroactive.
+  for (const markup of state.markups) freezeMarkupCalibration(markup);
+  state.presets = Array.isArray(project.presets) ? project.presets : [];
+  state.columns = Array.isArray(project.columns) ? project.columns : [];
+  state.template = project.template ?? null;
+  importLayerState(project.layerState);
+  state.displayUnit = project.displayUnit || 'm';
+  state.pageNum = Math.min(Math.max(1, project.pageNum || 1), state.pageCount);
+  state.selectedId = null;
+  state.lastAction = null;
+  state.activePreset = null;
+  renderMarkups();
+  emit();
+  await renderPage();
+  setTool('pan');
+  $('toolHint').textContent = `Opened project: ${state.fileName}`;
+}
+async function closeProject(): Promise<void> {
+  if (!hasDoc()) return;
+  if (!window.confirm('Close this project? Save it first if you want to keep your latest changes.')) return;
+  stopSession();
+  await closePdf();
+  clearTakeoffHistory();
+  state.fileName = '';
+  state.fileBytes = null;
+  state.pageCount = 0;
+  state.pageNum = 1;
+  state.markups = [];
+  state.annotations = [];
+  state.selectedAnnotationId = null;
+  state.calibrations.clear();
+  state.viewports = [];
+  state.imagePages.clear();
+  state.scaleChecks.clear();
+  state.selectedId = null;
+  state.focusLabel = null;
+  state.activePreset = null;
+  setTool('pan');
+  emit();
 }
 
 /** Open one or more files: a PDF as it is, images and mixed sets as one document. */
@@ -144,6 +278,27 @@ function showMessage(text: string): void {
 
 fileInput.accept = ACCEPT;
 fileInput.multiple = true;
+const projectInput = $('projectInput') as HTMLInputElement;
+$('saveProjectBtn').addEventListener('click', saveProject);
+$('openProjectBtn').addEventListener('click', () => {
+  if (hasDoc() && !window.confirm('Open another project? The current drawing and take-off will be replaced. Save it first if you need to keep your changes.')) return;
+  projectInput.click();
+});
+$('newProjectBtn').addEventListener('click', () => {
+  if (hasDoc() && !window.confirm('Start a new take-off? The current drawing and measurements will be replaced. Save the current project first if needed.')) return;
+  $('fileInput').click();
+});
+$('closeProjectBtn').addEventListener('click', () => void closeProject());
+projectInput.addEventListener('change', () => {
+  const file = projectInput.files?.[0];
+  projectInput.value = '';
+  if (!file) return;
+  void openProject(file).catch((err) => {
+    const message = `Could not open project: ${err instanceof Error ? err.message : String(err)}`;
+    $('toolHint').textContent = message;
+    showMessage(message);
+  });
+});
 
 export async function openSample(): Promise<void> {
   const resp = await fetch('examples/sample-floor-plan.pdf');
@@ -201,7 +356,11 @@ function updateLanding(): void {
 // --- toolbar ---
 
 document.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((btn) => {
-  btn.addEventListener('click', () => setTool(btn.dataset.tool as typeof state.tool));
+  btn.addEventListener('click', () => {
+    const requested = btn.dataset.tool as typeof state.tool;
+    // Clicking the active drawing tool again returns to Select mode.
+    setTool(requested === state.tool && requested !== 'pan' ? 'pan' : requested);
+  });
 });
 
 const unitSel = $('unitSelect') as HTMLSelectElement;
@@ -212,6 +371,19 @@ unitSel.addEventListener('change', () => {
   emit();
 });
 
+const drawingViewMode = $('drawingViewMode') as HTMLSelectElement;
+drawingViewMode.addEventListener('change', () => {
+  const canvas = $('pdfCanvas');
+  canvas.classList.remove('drawing-grayscale', 'drawing-blueprint');
+  if (drawingViewMode.value === 'grayscale') canvas.classList.add('drawing-grayscale');
+  if (drawingViewMode.value === 'blueprint') canvas.classList.add('drawing-blueprint');
+});
+const pageToneMode = $('pageToneMode') as HTMLSelectElement;
+pageToneMode.addEventListener('change', () => {
+  const dark = pageToneMode.value === 'black';
+  $('pdfCanvas').classList.toggle('paper-black', dark);
+  $('pageWrap').classList.toggle('paper-black', dark);
+});
 $('zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.25));
 $('zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
 $('zoomFit').addEventListener('click', () => {
@@ -396,9 +568,6 @@ subscribe(() => {
 function scheduleRender(delayMs: number): void {
   if (renderTimer) window.clearTimeout(renderTimer);
   renderTimer = window.setTimeout(() => {
-    // keep the workspace anchored while the tool is in use; on the landing page
-    // the app may arrive after someone has started scrolling, so leave them be
-    if (hasDoc() || compareState.active) window.scrollTo(0, 0);
     if (compareState.active) {
       setCompareZoom(state.zoom);
       void renderCompare(state.zoom);

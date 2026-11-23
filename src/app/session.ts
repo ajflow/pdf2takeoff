@@ -13,7 +13,7 @@
 import * as Y from 'yjs';
 import { state, emit, nextId } from './state';
 import { fileHash } from '../engine/export';
-import type { Calibration, Markup, MarkupType, Pt } from '../engine/types';
+import type { Calibration, Markup } from '../engine/types';
 
 let doc: Y.Doc | null = null;
 let channel: BroadcastChannel | null = null;
@@ -79,16 +79,9 @@ function rebuildFromDoc(): void {
 export function syncUpsertMarkup(m: Markup): void {
   const d = doc;
   if (!d) return;
-  const value: Markup = {
-    id: m.id,
-    page: m.page,
-    type: m.type as MarkupType,
-    label: m.label,
-    points: m.points.map((p): Pt => ({ x: p.x, y: p.y })),
-    createdAt: m.createdAt,
-    ...(m.depth !== undefined ? { depth: m.depth } : {}),
-    ...(m.status !== undefined ? { status: m.status } : {}),
-  };
+  // Preserve the complete markup payload, including QS attributes, links,
+  // colours, visibility and inventory metadata, across live-session sync.
+  const value: Markup = structuredClone(m);
   d.getMap<Markup>('markups').set(m.id, value);
 }
 

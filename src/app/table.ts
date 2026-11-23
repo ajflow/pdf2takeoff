@@ -219,7 +219,11 @@ export function initTable(): void {
         if (m.links?.[index]) {
           const logic = input.value.trim();
           if (logic) m.links[index].logic = logic;
-          else delete m.links[index].logic;
+          else {
+            delete m.links[index].logic;
+            delete m.links[index].relation;
+            delete m.links[index].note;
+          }
         }
       }
       syncUpsertMarkup(m);

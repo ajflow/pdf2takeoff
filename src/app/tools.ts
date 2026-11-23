@@ -3,7 +3,8 @@
 
 import { state, emit, nextId, type Pt, type Markup, type ScaleCheck, defaultLabel, distPt, calibrationForMarkup, metersPerPtForRatioOn, ratioOn } from './state';
 import { openScanReview, isDoubtful } from './scanreview';
-import { eventToView, viewToPdf, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers } from './viewer';
+import { eventToView, viewToPdf, pdfToView, isTypingTarget, getPageTextItems, getPageVector, getPageAnnotations, getPdfDoc, getFillLayers, previewLayer } from './viewer';
+import type { VecSeg } from '../engine/vector';
 import { fillMergesRooms, NOT_A_ROOM_NAME } from '../engine/cad-layers';
 import { dimensionScale, shxWords, checkAgainstDimensions, type DimensionScale } from '../engine/dimensions';
 import { doorBridgesFor } from '../engine/fill-vector';
@@ -64,6 +65,105 @@ let calibInput: HTMLInputElement;
 let calibUnitSel: HTMLSelectElement;
 let calibPresetSel: HTMLSelectElement;
 
+let snapEnabled = true;
+let snapPage = 0;
+let snapSegments: VecSeg[] = [];
+let snapPromise: Promise<VecSeg[]> | null = null;
+let snapPoint: { x: number; y: number; kind: string } | null = null;
+
+async function loadSnapSegments(page: number): Promise<VecSeg[]> {
+  if (snapPage === page && snapSegments.length) return snapSegments;
+  if (snapPromise && snapPage === page) return snapPromise;
+  snapPage = page;
+  snapPromise = getPageVector(page).then((vec) => {
+    const segs = vec?.segs ?? [];
+    // A safety ceiling avoids making pointer interaction unresponsive on unusually
+    // complex vector sheets. No geometry is changed or discarded from the PDF.
+    snapSegments = segs.length <= 250000 ? segs : [];
+    return snapSegments;
+  }).catch(() => {
+    snapSegments = [];
+    return snapSegments;
+  });
+  return snapPromise;
+}
+
+function projectToSegment(p: Pt, s: VecSeg): { point: Pt; distance: number } {
+  const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - s.x1) * dx + (p.y - s.y1) * dy) / len2)) : 0;
+  const point = { x: s.x1 + t * dx, y: s.y1 + t * dy };
+  return { point, distance: Math.hypot(p.x - point.x, p.y - point.y) };
+}
+
+function segmentIntersection(a: VecSeg, b: VecSeg): Pt | null {
+  const rx = a.x2 - a.x1, ry = a.y2 - a.y1;
+  const sx = b.x2 - b.x1, sy = b.y2 - b.y1;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-9) return null;
+  const qx = b.x1 - a.x1, qy = b.y1 - a.y1;
+  const t = (qx * sy - qy * sx) / den;
+  const u = (qx * ry - qy * rx) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: a.x1 + t * rx, y: a.y1 + t * ry };
+}
+
+function snapPdfPoint(p: Pt): { point: Pt; kind: string } | null {
+  if (!snapEnabled || !snapSegments.length) return null;
+  const tolerance = 10 / Math.max(0.05, state.zoom);
+  const tol2 = tolerance * tolerance;
+  let best: { point: Pt; kind: string; d2: number } | null = null;
+  const nearby: VecSeg[] = [];
+  const offer = (point: Pt, kind: string) => {
+    const dx = point.x - p.x, dy = point.y - p.y, d2 = dx * dx + dy * dy;
+    if (d2 <= tol2 && (!best || d2 < best.d2)) best = { point, kind, d2 };
+  };
+  for (const s of snapSegments) {
+    const a = { x: s.x1, y: s.y1 }, b = { x: s.x2, y: s.y2 };
+    offer(a, 'Endpoint'); offer(b, 'Endpoint');
+    offer({ x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 }, 'Midpoint');
+    const projected = projectToSegment(p, s);
+    if (projected.distance <= tolerance * 1.5) {
+      nearby.push(s);
+      offer(projected.point, 'Nearest');
+    }
+  }
+  // Intersections are tested only among segments already close to the cursor,
+  // rather than comparing every pair on the entire drawing.
+  const local = nearby.slice(0, 48);
+  for (let i = 0; i < local.length; i++) {
+    for (let j = i + 1; j < local.length; j++) {
+      const hit = segmentIntersection(local[i], local[j]);
+      if (hit) offer(hit, 'Intersection');
+    }
+  }
+  return best ? { point: best.point, kind: best.kind } : null;
+}
+
+function updateSnapToggle(): void {
+  const button = document.getElementById('snapToggle');
+  if (!button) return;
+  button.classList.toggle('active', snapEnabled);
+  button.setAttribute('aria-pressed', String(snapEnabled));
+  button.title = snapEnabled ? 'Object snapping on (S)' : 'Object snapping off (S)';
+}
+
+function drawSnapMarker(): void {
+  if (!snapPoint) return;
+  // Convert PDF coordinates through the shared viewer transform.
+  const p = pdfToView(snapPoint);
+  const ns = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(ns, 'g');
+  g.setAttribute('class', 'snap-marker');
+  g.setAttribute('transform', `translate(${p.x} ${p.y})`);
+  const c = document.createElementNS(ns, 'circle');
+  c.setAttribute('r', '5'); c.setAttribute('fill', '#ffffff');
+  c.setAttribute('stroke', '#00a6a0'); c.setAttribute('stroke-width', '1.6');
+  const h = document.createElementNS(ns, 'path');
+  h.setAttribute('d', 'M-8 0H8M0 -8V8'); h.setAttribute('stroke', '#00a6a0'); h.setAttribute('stroke-width', '1');
+  g.append(c,h); previewLayer.appendChild(g);
+}
+
 export function initTools(overlay: SVGSVGElement): void {
   svg = overlay;
   calibModal = document.getElementById('calibModal')!;
@@ -76,6 +176,14 @@ export function initTools(overlay: SVGSVGElement): void {
   for (const p of PRESET_SCALES) calibPresetSel.add(new Option(p.label, String(p.ratio)));
 
   svg.addEventListener('pointerdown', onPointerDown);
+  document.getElementById('snapToggle')?.addEventListener('click', () => {
+    snapEnabled = !snapEnabled;
+    snapPoint = null;
+    updateSnapToggle();
+    hint(snapEnabled ? 'Object snapping enabled' : 'Object snapping disabled');
+    refreshPreview();
+  });
+  updateSnapToggle();
   svg.addEventListener('pointermove', onPointerMove);
   svg.addEventListener('pointerleave', () => {
     cursor = null;
@@ -153,7 +261,7 @@ function eventToPdf(e: PointerEvent | MouseEvent): Pt | null {
   return viewToPdf(v);
 }
 
-function onPointerDown(e: PointerEvent): void {
+async function onPointerDown(e: PointerEvent): Promise<void> {
   if (e.button !== 0) return;
   if (e.target instanceof Element && e.target.closest('[data-id]') && state.tool === 'pan') {
     const g = e.target.closest('[data-id]')!;
@@ -170,8 +278,17 @@ function onPointerDown(e: PointerEvent): void {
     }
     return;
   }
-  const p = eventToPdf(e);
+  let p = eventToPdf(e);
   if (!p) return;
+  if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
+    await loadSnapSegments(state.pageNum);
+    // Use the original pointer position after the async geometry load.
+    const raw = eventToPdf(e);
+    if (raw) p = raw;
+    const snapped = snapPdfPoint(p);
+    snapPoint = snapped ? { ...snapped.point, kind: snapped.kind } : null;
+    if (snapped) p = snapped.point;
+  }
 
   switch (state.tool) {
     case 'calibrate': {
@@ -278,7 +395,17 @@ function beginDrag(m: import('./state').Markup, vtxIdx: number | null, e: Pointe
 
 function onPointerMove(e: PointerEvent): void {
   if (state.tool === 'pan') return;
-  cursor = eventToPdf(e);
+  const raw = eventToPdf(e);
+  if (!raw) return;
+  if (snapEnabled && ['calibrate','length','area','perimeter','volume','viewport','angle'].includes(state.tool)) {
+    if (snapPage !== state.pageNum || (!snapSegments.length && !snapPromise)) void loadSnapSegments(state.pageNum);
+    const snapped = snapPdfPoint(raw);
+    snapPoint = snapped ? { ...snapped.point, kind: snapped.kind } : null;
+    cursor = snapped?.point ?? raw;
+  } else {
+    snapPoint = null;
+    cursor = raw;
+  }
   refreshPreview();
 }
 
@@ -468,6 +595,7 @@ function refreshPreview(): void {
     spec = { kind: 'calibrate', points: [calibFirst], cursor };
   }
   renderPreview(spec);
+  drawSnapMarker();
 }
 
 // --- calibration modal ---
@@ -896,6 +1024,14 @@ function onKeyDown(e: KeyboardEvent): void {
       renderMarkups();
       emit();
     }
+    return;
+  }
+  if (k === 's' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    snapEnabled = !snapEnabled;
+    snapPoint = null;
+    updateSnapToggle();
+    hint(snapEnabled ? 'Object snapping enabled' : 'Object snapping disabled');
+    refreshPreview();
     return;
   }
   if (toolKeys[k] && !e.metaKey && !e.ctrlKey && !e.altKey) {

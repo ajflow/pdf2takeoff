@@ -63,6 +63,28 @@ initPageStrip(document.getElementById('pageStrip')!);
 initLibrary();
 initColumns();
 initLayers();
+
+// Keep the quantities sidebar collapsible without changing the active tab or
+// discarding any take-off data. The preference is local to this browser.
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle') as HTMLButtonElement | null;
+if (sidebar && sidebarToggle) {
+  const collapsed = localStorage.getItem('pdf2takeoff.sidebarCollapsed') === 'true';
+  sidebar.classList.toggle('sidebar-collapsed', collapsed);
+  sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+  sidebarToggle.textContent = collapsed ? '›' : '‹';
+  sidebarToggle.title = collapsed ? 'Expand quantities panel' : 'Collapse quantities panel';
+  sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+  sidebarToggle.addEventListener('click', () => {
+    const next = !sidebar.classList.contains('sidebar-collapsed');
+    sidebar.classList.toggle('sidebar-collapsed', next);
+    localStorage.setItem('pdf2takeoff.sidebarCollapsed', String(next));
+    sidebarToggle.setAttribute('aria-expanded', String(!next));
+    sidebarToggle.textContent = next ? '›' : '‹';
+    sidebarToggle.title = next ? 'Expand quantities panel' : 'Collapse quantities panel';
+    sidebarToggle.setAttribute('aria-label', sidebarToggle.title);
+  });
+}
 void loadPresets().then((presets) => {
   state.presets = presets;
   renderLibrary();

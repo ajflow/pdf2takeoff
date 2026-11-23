@@ -767,7 +767,7 @@ async function runFill(p: Pt): Promise<void> {
     setTool('pan');
     renderMarkups();
     emit();
-    const cal = state.calibrations.get(state.pageNum);
+    const cal = clickCal;
     // say why the fill stopped where it did, so the polygon can be trusted or overridden
     const why: string[] = [];
     if (result.gapPx) {

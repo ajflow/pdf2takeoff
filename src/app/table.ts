@@ -81,7 +81,7 @@ export function initTable(): void {
           recordTakeoffHistory();
           m.links ??= [];
           if (!m.links.some((x) => x.markupId === targetMarkup.id)) {
-            m.links.push({ markupId: targetMarkup.id, relation: 'associated' });
+            m.links.push({ markupId: targetMarkup.id, logic: '' });
             expandedIds.add(m.id);
             syncUpsertMarkup(m);
             emit();
@@ -181,7 +181,7 @@ export function initTable(): void {
   tbody.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     const markupId = input.dataset.timesingFor || input.dataset.signFor || input.dataset.remarksFor ||
-      input.dataset.parameterKeyFor || input.dataset.parameterValueFor || input.dataset.linkTargetFor || input.dataset.linkRelationFor;
+      input.dataset.parameterKeyFor || input.dataset.parameterValueFor || input.dataset.linkTargetFor || input.dataset.linkLogicFor;
     if (markupId) {
       const m = state.markups.find((x) => x.id === markupId);
       if (!m) return;
@@ -213,10 +213,14 @@ export function initTable(): void {
         recordTakeoffHistory();
         const index = Number(input.dataset.linkIndex);
         if (m.links?.[index]) m.links[index].markupId = input.value;
-      } else if (input.dataset.linkRelationFor) {
+      } else if (input.dataset.linkLogicFor) {
         recordTakeoffHistory();
         const index = Number(input.dataset.linkIndex);
-        if (m.links?.[index]) m.links[index].relation = input.value as NonNullable<Markup['links']>[number]['relation'];
+        if (m.links?.[index]) {
+          const logic = input.value.trim();
+          if (logic) m.links[index].logic = logic;
+          else delete m.links[index].logic;
+        }
       }
       syncUpsertMarkup(m);
       emit();
@@ -340,9 +344,9 @@ export function renderTable(): void {
         <button type="button" class="btn quiet" data-add-param-for="${m.id}">+ Add attribute</button>
       </div>
       <div class="markup-links"><b>Linked take-off</b>
-        ${(m.links ?? []).map((link, index) => `<div class="markup-link"><select data-link-target-for="${m.id}" data-link-index="${index}">${state.markups.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${x.id === link.markupId ? 'selected' : ''}>${escapeAttr(x.label)} · p${x.page}</option>`).join('')}</select><select data-link-relation-for="${m.id}" data-link-index="${index}"><option value="associated" ${link.relation === 'associated' ? 'selected' : ''}>Associated</option><option value="deduct" ${link.relation === 'deduct' ? 'selected' : ''}>Deduct from</option><option value="add" ${link.relation === 'add' ? 'selected' : ''}>Add to</option><option value="derive" ${link.relation === 'derive' ? 'selected' : ''}>Derived from</option></select><button type="button" data-remove-link="${m.id}::${index}" title="Remove link">×</button></div>`).join('')}
+        ${(m.links ?? []).map((link, index) => `<div class="markup-link"><select data-link-target-for="${m.id}" data-link-index="${index}">${state.markups.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${x.id === link.markupId ? 'selected' : ''}>${escapeAttr(x.label)} · p${x.page}</option>`).join('')}</select><input type="text" aria-label="Your relationship or QS logic" data-link-logic-for="${m.id}" data-link-index="${index}" value="${escapeAttr(link.logic ?? link.note ?? link.relation ?? '')}" placeholder="Describe your linking logic (optional)"><button type="button" data-remove-link="${m.id}::${index}" title="Remove link">×</button></div>`).join('')}
         <button type="button" class="btn quiet" data-add-link-for="${m.id}" ${state.markups.length < 2 || (m.links ?? []).length >= state.markups.length - 1 ? 'disabled' : ''}>+ Link to another measurement</button>
-        <small>Add/Deduct links adjust the linked target's group total. For counted doors/windows, add Width and Height (bare values default to mm): a linear target deducts Width; an area target deducts Width × Height. A measured wall length linked to an area can use its Height attribute. Associated/Derived links are references only.</small>
+        <small>Links are references only. You decide what each relationship means and apply any QS calculation logic yourself; creating or editing a link never changes measured quantities.</small>
       </div>
       <small>Adjusted quantity = measured quantity × timesing × sign. Defaults for older projects are 1 and +.</small>
     </details></td>`;
@@ -371,7 +375,7 @@ function renderTotals(): void {
   const selected = state.markups.find((m) => m.id === state.selectedId);
   const focus = state.focusLabel ?? (selected ? groupKey(selected) : null);
   for (const g of gs) {
-    const { total, uncalibrated } = groupTotal(g, calibrationForMarkup, state.markups);
+    const { total, uncalibrated } = groupTotal(g, calibrationForMarkup);
     let value = '';
     let unit = '';
     if (g.type === 'count') [value, unit] = [String(total ?? 0), 'ea'];

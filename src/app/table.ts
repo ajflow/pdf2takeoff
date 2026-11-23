@@ -74,7 +74,7 @@ export function initTable(): void {
       }
       if (action.dataset.addLinkFor) {
         const m = state.markups.find((x) => x.id === action.dataset.addLinkFor);
-        const targetMarkup = state.markups.find((x) => x.id !== m?.id);
+        const targetMarkup = state.markups.find((x) => x.id !== m?.id && !(m?.links ?? []).some((link) => link.markupId === x.id));
         if (m && targetMarkup) {
           m.links ??= [];
           if (!m.links.some((x) => x.markupId === targetMarkup.id)) {
@@ -318,7 +318,7 @@ export function renderTable(): void {
       <div class="markup-links"><b>Linked take-off</b>
         ${(m.links ?? []).map((link, index) => `<div class="markup-link"><select data-link-target-for="${m.id}" data-link-index="${index}">${state.markups.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${x.id === link.markupId ? 'selected' : ''}>${escapeAttr(x.label)} · p${x.page}</option>`).join('')}</select><select data-link-relation-for="${m.id}" data-link-index="${index}"><option value="associated" ${link.relation === 'associated' ? 'selected' : ''}>Associated</option><option value="deduct" ${link.relation === 'deduct' ? 'selected' : ''}>Deduct from</option><option value="add" ${link.relation === 'add' ? 'selected' : ''}>Add to</option><option value="derive" ${link.relation === 'derive' ? 'selected' : ''}>Derived from</option></select><button type="button" data-remove-link="${m.id}::${index}" title="Remove link">×</button></div>`).join('')}
         <button type="button" class="btn quiet" data-add-link-for="${m.id}" ${state.markups.length < 2 ? 'disabled' : ''}>+ Link to another measurement</button>
-        <small>Links identify related take-off entries. They do not change another quantity automatically; use the explicit +/− and timesing fields to control quantities.</small>
+        <small>Add/Deduct links adjust the linked target's group total. For a counted opening, add Width and Height attributes: a linear target uses Width; an area target uses Width × Height. Associated/Derived links are references only.</small>
       </div>
       <small>Adjusted quantity = measured quantity × timesing × sign. Defaults for older projects are 1 and +.</small>
     </details></td>`;
@@ -347,7 +347,7 @@ function renderTotals(): void {
   const selected = state.markups.find((m) => m.id === state.selectedId);
   const focus = state.focusLabel ?? (selected ? groupKey(selected) : null);
   for (const g of gs) {
-    const { total, uncalibrated } = groupTotal(g, calibrationForMarkup);
+    const { total, uncalibrated } = groupTotal(g, calibrationForMarkup, state.markups);
     let value = '';
     let unit = '';
     if (g.type === 'count') [value, unit] = [String(total ?? 0), 'ea'];

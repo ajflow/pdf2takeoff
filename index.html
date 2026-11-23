@@ -437,6 +437,7 @@
           <button type="button" role="tab" class="panel-tab" id="tabQty" aria-controls="viewQty" aria-selected="true">Quantities</button>
           <button type="button" role="tab" class="panel-tab" id="tabMarkups" aria-controls="viewMarkups" aria-selected="false" tabindex="-1">Markups <span class="count" id="markupCount"></span></button>
           <button type="button" role="tab" class="panel-tab" id="tabLibrary" aria-controls="viewLibrary" aria-selected="false" tabindex="-1">Library</button>
+          <button type="button" class="panel-collapse" id="sidebarToggle" aria-label="Collapse quantities panel" aria-expanded="true" title="Collapse panel">‹</button>
         </div>
 
         <section class="panel-view" id="viewQty" role="tabpanel" aria-labelledby="tabQty">
@@ -457,6 +458,11 @@
             <option value="label">Label A–Z</option>
             <option value="page">Page</option>
           </select>
+        </div>
+        <div class="list-visibility-tools" role="group" aria-label="Measurement visibility">
+          <button class="pill" type="button" id="hideAllMarkupsBtn" title="Hide all measurement markups on the drawing">Hide all</button>
+          <button class="pill" type="button" id="showAllMarkupsBtn" title="Show all measurement markups on the drawing">Show all</button>
+          <button class="pill" type="button" id="hideOtherMarkupsBtn" title="Hide every measurement except the selected one">Hide others</button>
         </div>
         <div class="markup-table-wrap">
           <table class="markup-table">

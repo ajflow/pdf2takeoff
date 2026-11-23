@@ -690,14 +690,23 @@ function applyCalibration(): void {
   if (!pendingCalib) return closeCalibModal();
   const unit = calibUnitSel.value as Unit;
   const value = parseLength(calibInput.value, unit);
-  if (value == null) {
+  const ptDist = distPt(pendingCalib.a, pendingCalib.b);
+  if (value == null || !Number.isFinite(value) || value <= 0 || !Number.isFinite(ptDist) || ptDist <= 0) {
     calibInput.classList.add('invalid');
+    calibInput.focus();
     setTimeout(() => calibInput.classList.remove('invalid'), 600);
+    hint('Enter a real-world length greater than zero before applying the scale');
     return;
   }
-  const ptDist = distPt(pendingCalib.a, pendingCalib.b);
   const meters = toMeters(value, unit);
   const metersPerPt = meters / ptDist;
+  if (!Number.isFinite(metersPerPt) || metersPerPt <= 0) {
+    calibInput.classList.add('invalid');
+    calibInput.focus();
+    setTimeout(() => calibInput.classList.remove('invalid'), 600);
+    hint('The calibration could not be calculated. Check the length and redraw the dimension.');
+    return;
+  }
   applyScaleToPages(metersPerPt, `measured ${calibInput.value.trim()} ${unit}`);
   closeCalibModal();
   renderMarkups();

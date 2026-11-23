@@ -37,7 +37,7 @@ export function showHint(text: string): void {
 }
 
 const HINTS: Record<string, string> = {
-  pan: 'Drag to pan · Ctrl+wheel to zoom · click a markup to select it',
+  pan: 'Drag to pan · wheel to zoom · middle-drag or Space+drag to pan · click a markup to select it',
   calibrate: 'Click two ends of a known dimension to calibrate the scale',
   length: 'Click each vertex of the run · double-click or Enter to finish · Esc cancels',
   area: 'Click each corner of the area · double-click or Enter to finish · Esc cancels',

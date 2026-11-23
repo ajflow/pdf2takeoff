@@ -2,7 +2,7 @@
 // PDF space; converted to the viewBox (viewport@1) here. Sizes are paper-space
 // points, so markups look like printed PDF annotations at any zoom.
 
-import { state, type Markup, type Pt, calibrationFor, calibrationForMarkup, defaultLabel, ratioOn } from './state';
+import { state, type Markup, type Pt, calibrationForMarkup, defaultLabel, ratioOn } from './state';
 import { markupsLayer, previewLayer, pdfToView } from './viewer';
 import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';

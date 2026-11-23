@@ -68,10 +68,11 @@ export function groupTotal(g: Group, calFor: (m: Markup) => Calibration | undefi
       continue;
     }
     counted++;
-    if (g.type === 'length') total += markupLength(m, cal.metersPerPt);
-    else if (g.type === 'perimeter') total += markupPerimeter(m, cal.metersPerPt);
-    else if (g.type === 'volume') total += markupVolume(m, cal.metersPerPt);
-    else total += markupArea(m, cal.metersPerPt);
+    const factor = (m.timesing ?? 1) * (m.sign ?? 1);
+    if (g.type === 'length') total += markupLength(m, cal.metersPerPt) * factor;
+    else if (g.type === 'perimeter') total += markupPerimeter(m, cal.metersPerPt) * factor;
+    else if (g.type === 'volume') total += markupVolume(m, cal.metersPerPt) * factor;
+    else total += markupArea(m, cal.metersPerPt) * factor;
   }
   return { total: counted ? total : null, uncalibrated };
 }

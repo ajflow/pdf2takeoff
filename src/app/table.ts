@@ -23,12 +23,84 @@ import { templateById, templateSummary, templateMatrix } from '../engine/templat
 
 let tbody: HTMLElement;
 let totalsEl: HTMLElement;
+const expandedIds = new Set<string>();
 
 export function initTable(): void {
   tbody = document.getElementById('markupRows')!;
   totalsEl = document.getElementById('markupTotals')!;
   tbody.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    if (target.closest('summary') || target.closest('.markup-details')) {
+      const action = target.closest<HTMLElement>('[data-clone-for], [data-add-param-for], [data-add-link-for], [data-remove-param], [data-remove-link]');
+      if (!action) return;
+      if (action.dataset.cloneFor) {
+        const source = state.markups.find((m) => m.id === action.dataset.cloneFor);
+        if (source) {
+          const clone = structuredClone(source);
+          clone.id = `mk_${Math.random().toString(36).slice(2, 10)}`;
+          clone.label = `${source.label} copy`;
+          clone.createdAt = Date.now();
+          clone.points = source.points.map((p) => ({ ...p }));
+          recordTableHistoryUnavailable();
+          state.markups.push(clone);
+          syncUpsertMarkup(clone);
+          state.selectedId = clone.id;
+          expandedIds.add(clone.id);
+          emit();
+        }
+        return;
+      }
+      if (action.dataset.addParamFor) {
+        const m = state.markups.find((x) => x.id === action.dataset.addParamFor);
+        if (m) {
+          m.parameters ??= {};
+          let n = Object.keys(m.parameters).length + 1;
+          let key = `Parameter ${n}`;
+          while (Object.hasOwn(m.parameters, key)) key = `Parameter ${++n}`;
+          m.parameters[key] = '';
+          expandedIds.add(m.id);
+          syncUpsertMarkup(m);
+          emit();
+        }
+        return;
+      }
+      if (action.dataset.addLinkFor) {
+        const m = state.markups.find((x) => x.id === action.dataset.addLinkFor);
+        const targetMarkup = state.markups.find((x) => x.id !== m?.id);
+        if (m && targetMarkup) {
+          m.links ??= [];
+          if (!m.links.some((x) => x.markupId === targetMarkup.id)) {
+            m.links.push({ markupId: targetMarkup.id, relation: 'associated' });
+            expandedIds.add(m.id);
+            syncUpsertMarkup(m);
+            emit();
+          }
+        }
+        return;
+      }
+      if (action.dataset.removeParam !== undefined) {
+        const [id, key] = action.dataset.removeParam.split('::');
+        const m = state.markups.find((x) => x.id === id);
+        if (m?.parameters) {
+          delete m.parameters[key];
+          if (!Object.keys(m.parameters).length) delete m.parameters;
+          syncUpsertMarkup(m);
+          emit();
+        }
+        return;
+      }
+      if (action.dataset.removeLink !== undefined) {
+        const [id, index] = action.dataset.removeLink.split('::');
+        const m = state.markups.find((x) => x.id === id);
+        if (m?.links) {
+          m.links.splice(Number(index), 1);
+          syncUpsertMarkup(m);
+          emit();
+        }
+        return;
+      }
+      return;
+    }
     const st = target.closest('[data-status-for]');
     if (st) {
       const m = state.markups.find((x) => x.id === st.getAttribute('data-status-for'));
@@ -85,7 +157,42 @@ export function initTable(): void {
     emit();
   });
   tbody.addEventListener('change', (e) => {
-    const input = e.target as HTMLInputElement;
+    const input = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    const markupId = input.dataset.timesingFor || input.dataset.signFor || input.dataset.remarksFor ||
+      input.dataset.parameterKeyFor || input.dataset.parameterValueFor || input.dataset.linkTargetFor || input.dataset.linkRelationFor;
+    if (markupId) {
+      const m = state.markups.find((x) => x.id === markupId);
+      if (!m) return;
+      if (input.dataset.timesingFor) {
+        const n = Number(input.value);
+        if (!Number.isFinite(n) || n < 0) { input.value = String(m.timesing ?? 1); return; }
+        m.timesing = n;
+      } else if (input.dataset.signFor) {
+        m.sign = input.value === '-1' ? -1 : 1;
+      } else if (input.dataset.remarksFor) {
+        m.remarks = input.value;
+      } else if (input.dataset.parameterKeyFor) {
+        const oldKey = input.dataset.parameterKeyFor;
+        const value = m.parameters?.[oldKey] ?? '';
+        const key = input.value.trim();
+        if (!key) { input.value = oldKey; return; }
+        if (key !== oldKey && m.parameters) {
+          delete m.parameters[oldKey];
+          m.parameters[key] = value;
+        }
+      } else if (input.dataset.parameterValueFor) {
+        if (m.parameters) m.parameters[input.dataset.parameterValueFor] = input.value;
+      } else if (input.dataset.linkTargetFor) {
+        const index = Number(input.dataset.linkIndex);
+        if (m.links?.[index]) m.links[index].markupId = input.value;
+      } else if (input.dataset.linkRelationFor) {
+        const index = Number(input.dataset.linkIndex);
+        if (m.links?.[index]) m.links[index].relation = input.value as NonNullable<Markup['links']>[number]['relation'];
+      }
+      syncUpsertMarkup(m);
+      emit();
+      return;
+    }
     if (input.dataset.colorFor) {
       const m = state.markups.find((x) => x.id === input.dataset.colorFor);
       if (m) {
@@ -185,8 +292,29 @@ export function renderTable(): void {
       <td class="cell-num">p${m.page}</td>
       <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationForMarkup(m), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
       <td class="cell-status"><button data-status-for="${m.id}" class="status-btn st-${m.status ?? 'none'}" title="${m.status === 'check' ? 'Needs checking — click to confirm' : m.status === 'confirmed' ? 'Confirmed — click to clear' : 'Click to mark for checking'}">${m.status === 'check' ? '⚑' : m.status === 'confirmed' ? '✓' : '○'}</button></td>
-      <td class="cell-del"><button data-visibility-for="${m.id}" title="${m.visible === false ? 'Show on drawing' : 'Hide on drawing'}">${m.visible === false ? '◉' : '◌'}</button><button data-del="${m.id}" title="Delete">✕</button></td>`;
+      <td class="cell-del"><button data-visibility-for="${m.id}" title="${m.visible === false ? 'Show on drawing' : 'Hide on drawing'}">${m.visible === false ? '◉' : '◌'}</button><button data-clone-for="${m.id}" title="Clone measurement">⧉</button><button data-del="${m.id}" title="Delete">✕</button></td>`;
     tbody.appendChild(tr);
+    const detail = document.createElement('tr');
+    detail.className = 'markup-detail-row';
+    detail.innerHTML = `<td colspan="6"><details class="markup-details" data-detail-for="${m.id}" ${expandedIds.has(m.id) ? 'open' : ''}>
+      <summary>QS details · timesing, dimensions, remarks and linked take-off</summary>
+      <div class="markup-detail-grid">
+        <label>Timesing <input type="number" min="0" step="0.01" data-timesing-for="${m.id}" value="${m.timesing ?? 1}"></label>
+        <label>Sign <select data-sign-for="${m.id}"><option value="1" ${(m.sign ?? 1) > 0 ? 'selected' : ''}>+ Add</option><option value="-1" ${m.sign === -1 ? 'selected' : ''}>− Deduct</option></select></label>
+        <label class="wide">Remarks <input type="text" data-remarks-for="${m.id}" value="${escapeAttr(m.remarks ?? '')}" placeholder="Location, drawing reference, specification…"></label>
+      </div>
+      <div class="markup-parameters"><b>Dimensions / attributes</b>
+        ${Object.entries(m.parameters ?? {}).map(([key, val]) => `<div class="markup-param"><input aria-label="Parameter name" data-parameter-key-for="${m.id}" value="${escapeAttr(key)}"><input aria-label="Parameter value" data-parameter-value-for="${m.id}" value="${escapeAttr(val)}"><button type="button" data-remove-param="${m.id}::${escapeAttr(key)}" title="Remove parameter">×</button></div>`).join('')}
+        <button type="button" class="btn quiet" data-add-param-for="${m.id}">+ Add attribute</button>
+      </div>
+      <div class="markup-links"><b>Linked take-off</b>
+        ${(m.links ?? []).map((link, index) => `<div class="markup-link"><select data-link-target-for="${m.id}" data-link-index="${index}">${state.markups.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${x.id === link.markupId ? 'selected' : ''}>${escapeAttr(x.label)} · p${x.page}</option>`).join('')}</select><select data-link-relation-for="${m.id}" data-link-index="${index}"><option value="associated" ${link.relation === 'associated' ? 'selected' : ''}>Associated</option><option value="deduct" ${link.relation === 'deduct' ? 'selected' : ''}>Deduct from</option><option value="add" ${link.relation === 'add' ? 'selected' : ''}>Add to</option><option value="derive" ${link.relation === 'derive' ? 'selected' : ''}>Derived from</option></select><button type="button" data-remove-link="${m.id}::${index}" title="Remove link">×</button></div>`).join('')}
+        <button type="button" class="btn quiet" data-add-link-for="${m.id}" ${state.markups.length < 2 ? 'disabled' : ''}>+ Link to another measurement</button>
+        <small>Links identify related take-off entries. They do not change another quantity automatically; use the explicit +/− and timesing fields to control quantities.</small>
+      </div>
+      <small>Adjusted quantity = measured quantity × timesing × sign. Defaults for older projects are 1 and +.</small>
+    </details></td>`;
+    tbody.appendChild(detail);
   }
   renderTotals();
 }
@@ -214,7 +342,7 @@ function renderTotals(): void {
     const { total, uncalibrated } = groupTotal(g, calibrationForMarkup);
     let value = '';
     let unit = '';
-    if (g.type === 'count') [value, unit] = [String(g.items.length), 'ea'];
+    if (g.type === 'count') [value, unit] = [String(total ?? 0), 'ea'];
     else if (g.type === 'angle') value = '—'; // angles don't sum
     else if (total === null) unit = 'not calibrated';
     else if (g.type === 'length' || g.type === 'perimeter') [value, unit] = splitUnit(formatLength(total, state.displayUnit));
@@ -233,7 +361,7 @@ function renderTotals(): void {
       : notes.length
         ? `<small>${notes.join(' · ')}</small>`
         : '';
-    const extras = columnValuesFor(g.type === 'count' ? g.items.length : total, g.items.length);
+    const extras = columnValuesFor(total, g.items.length);
 
     const key = groupKey(g);
     const row = document.createElement('button');

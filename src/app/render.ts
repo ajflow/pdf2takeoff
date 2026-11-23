@@ -335,7 +335,7 @@ export function renderPreview(spec: PreviewSpec | null): void {
 
   // live measurement readout follows the cursor
   if (cur) {
-    const cal = calibrationFor(state.pageNum);
+    const cal = spec.kind === 'calibrate' ? undefined : calibrationForMarkup({ id: 'preview', page: state.pageNum, type: spec.kind, label: '', points: chain, createdAt: 0 });
     let text = '';
     if (spec.kind === 'calibrate') {
       // no factor yet — show raw paper distance so the user can sanity-check

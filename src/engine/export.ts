@@ -47,7 +47,7 @@ export function groupsOf(markups: Markup[]): Group[] {
 /** Read a dimensional parameter as metres. Bare width/height values default to mm. */
 function parameterMetres(m: Markup, names: string[]): number | null {
   for (const [rawKey, rawValue] of Object.entries(m.parameters ?? {})) {
-    const key = rawKey.toLowerCase().replace(/[^a-z]/g, '');
+    const key = rawKey.toLowerCase().replace(/\\s*\\([^)]*\\)\\s*/g, '').replace(/[^a-z]/g, '');
     if (!names.includes(key)) continue;
     const value = String(rawValue).trim().replace(/,/g, '');
     const match = /^([-+]?(?:\\d+\\.?\\d*|\\.\\d+))\\s*(mm|millimet(?:re|er)s?|cm|centimet(?:re|er)s?|m|met(?:re|er)s?|in|inch(?:es)?|ft|feet)?$/i.exec(value);

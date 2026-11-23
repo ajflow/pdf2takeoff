@@ -7,7 +7,7 @@ import { markupsLayer, previewLayer, pdfToView } from './viewer';
 import { formatMarkupValue } from '../engine/export';
 import { formatLength, formatArea } from '../engine/units';
 import { markupAngle } from '../engine/geometry';
-import { isVisibleLayer } from './layers';
+import { isVisibleLayer, layerColor } from './layers';
 import { ratioForMetersPerPt } from '../engine/units';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -199,7 +199,7 @@ function addVertices(g: SVGGElement, pts: { x: number; y: number }[], color: str
 }
 
 function renderMarkup(m: Markup): SVGGElement {
-  const color = m.color || COLORS[m.type] || '#333';
+  const color = m.color || layerColor(m) || COLORS[m.type] || '#333';
   const strokeWidth = Math.max(0.25, Math.min(12, m.strokeWidth ?? 1.6));
   const strokeOpacity = Math.max(0, Math.min(1, m.strokeOpacity ?? 1));
   const fillOpacity = Math.max(0, Math.min(1, m.fillOpacity ?? 0.13));

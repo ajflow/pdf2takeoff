@@ -40,6 +40,17 @@ export function initTable(): void {
       }
       return;
     }
+    const visibility = target.closest('[data-visibility-for]');
+    if (visibility) {
+      const id = visibility.getAttribute('data-visibility-for')!;
+      const m = state.markups.find((x) => x.id === id);
+      if (m) {
+        m.visible = m.visible === false;
+        syncUpsertMarkup(m);
+        emit();
+      }
+      return;
+    }
     const del = target.closest('[data-del]');
     if (del) {
       const id = del.getAttribute('data-del')!;
@@ -75,6 +86,15 @@ export function initTable(): void {
   });
   tbody.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
+    if (input.dataset.colorFor) {
+      const m = state.markups.find((x) => x.id === input.dataset.colorFor);
+      if (m) {
+        m.color = input.value.toLowerCase();
+        syncUpsertMarkup(m);
+        emit();
+      }
+      return;
+    }
     if (input.dataset.labelFor) {
       const m = state.markups.find((x) => x.id === input.dataset.labelFor);
       if (m) {
@@ -161,11 +181,11 @@ export function renderTable(): void {
       : m.type === 'perimeter' ? '↻' : m.type === 'volume' ? '◨' : m.type === 'note' ? '💬' : '∠';
     tr.innerHTML = `
       <td class="cell-label"><input data-label-for="${m.id}" value="${escapeAttr(m.label)}" title="Rename" /></td>
-      <td class="cell-type"><span class="tag tag-${m.type}" title="${m.type}">${typeIcon} <span class="tag-word">${m.type}</span></span></td>
+      <td class="cell-type"><span class="tag tag-${m.type}" title="${m.type}">${typeIcon} <span class="tag-word">${m.type}</span></span><input class="markup-color" type="color" data-color-for="${m.id}" value="${m.color || COLORS[m.type] || '#333333'}" title="Set colour (default is automatic)" aria-label="Colour for ${escapeAttr(m.label)}" /></td>
       <td class="cell-num">p${m.page}</td>
       <td class="cell-measure">${value ? `${escapeHtml(formatMarkupValue(m, calibrationForMarkup(m), state.displayUnit))}` : '<span class="warn">not calibrated</span>'}</td>
       <td class="cell-status"><button data-status-for="${m.id}" class="status-btn st-${m.status ?? 'none'}" title="${m.status === 'check' ? 'Needs checking — click to confirm' : m.status === 'confirmed' ? 'Confirmed — click to clear' : 'Click to mark for checking'}">${m.status === 'check' ? '⚑' : m.status === 'confirmed' ? '✓' : '○'}</button></td>
-      <td class="cell-del"><button data-del="${m.id}" title="Delete">✕</button></td>`;
+      <td class="cell-del"><button data-visibility-for="${m.id}" title="${m.visible === false ? 'Show on drawing' : 'Hide on drawing'}">${m.visible === false ? '◉' : '◌'}</button><button data-del="${m.id}" title="Delete">✕</button></td>`;
     tbody.appendChild(tr);
   }
   renderTotals();

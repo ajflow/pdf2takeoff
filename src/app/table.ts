@@ -58,7 +58,8 @@ export function initTable(): void {
     }
     if (target.closest('summary') || target.closest('.markup-details')) {
       const action = target.closest<HTMLElement>('[data-add-param-for], [data-add-link-for], [data-remove-param], [data-remove-link]');
-      if (!action) return;      if (action.dataset.addParamFor) {
+      if (!action) return;
+      if (action.dataset.addParamFor) {
         const m = state.markups.find((x) => x.id === action.dataset.addParamFor);
         if (m) {
           recordTakeoffHistory();
@@ -335,13 +336,13 @@ export function renderTable(): void {
         <label class="wide">Remarks <input type="text" data-remarks-for="${m.id}" value="${escapeAttr(m.remarks ?? '')}" placeholder="Location, drawing reference, specification…"></label>
       </div>
       <div class="markup-parameters"><b>Dimensions / attributes</b>
-        ${Object.entries(m.parameters ?? {}).map(([key, val]) => `<div class="markup-param"><input aria-label="Parameter name" data-parameter-key-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(key)}"><input aria-label="Parameter value" data-parameter-value-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(val)}"><button type="button" data-remove-param="${m.id}::${escapeAttr(key)}" title="Remove parameter">×</button></div>`).join('')}
+        ${Object.entries(m.parameters ?? {}).map(([key, val]) => `<div class="markup-param"><input aria-label="Parameter name" data-parameter-key-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(key)}"><input aria-label="Parameter value" data-parameter-value-for="${m.id}" data-parameter-key="${escapeAttr(key)}" value="${escapeAttr(val)}" placeholder="e.g. 900 mm or 0.9 m"><button type="button" data-remove-param="${m.id}::${escapeAttr(key)}" title="Remove parameter">×</button></div>`).join('')}
         <button type="button" class="btn quiet" data-add-param-for="${m.id}">+ Add attribute</button>
       </div>
       <div class="markup-links"><b>Linked take-off</b>
         ${(m.links ?? []).map((link, index) => `<div class="markup-link"><select data-link-target-for="${m.id}" data-link-index="${index}">${state.markups.filter((x) => x.id !== m.id).map((x) => `<option value="${x.id}" ${x.id === link.markupId ? 'selected' : ''}>${escapeAttr(x.label)} · p${x.page}</option>`).join('')}</select><select data-link-relation-for="${m.id}" data-link-index="${index}"><option value="associated" ${link.relation === 'associated' ? 'selected' : ''}>Associated</option><option value="deduct" ${link.relation === 'deduct' ? 'selected' : ''}>Deduct from</option><option value="add" ${link.relation === 'add' ? 'selected' : ''}>Add to</option><option value="derive" ${link.relation === 'derive' ? 'selected' : ''}>Derived from</option></select><button type="button" data-remove-link="${m.id}::${index}" title="Remove link">×</button></div>`).join('')}
-        <button type="button" class="btn quiet" data-add-link-for="${m.id}" ${state.markups.length < 2 ? 'disabled' : ''}>+ Link to another measurement</button>
-        <small>Add/Deduct links adjust the linked target's group total. For a counted opening, add Width and Height attributes: a linear target uses Width; an area target uses Width × Height. Associated/Derived links are references only.</small>
+        <button type="button" class="btn quiet" data-add-link-for="${m.id}" ${state.markups.length < 2 || (m.links ?? []).length >= state.markups.length - 1 ? 'disabled' : ''}>+ Link to another measurement</button>
+        <small>Add/Deduct links adjust the linked target's group total. For counted doors/windows, add Width and Height (bare values default to mm): a linear target deducts Width; an area target deducts Width × Height. A measured wall length linked to an area can use its Height attribute. Associated/Derived links are references only.</small>
       </div>
       <small>Adjusted quantity = measured quantity × timesing × sign. Defaults for older projects are 1 and +.</small>
     </details></td>`;

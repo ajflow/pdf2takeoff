@@ -116,6 +116,15 @@ const HINTS: Record<string, string> = {
 };
 
 let svg: SVGSVGElement;
+let loupeRoot: HTMLElement | null = null;
+let loupeViewport: HTMLElement | null = null;
+let loupeContent: HTMLElement | null = null;
+let loupeEnabled = false;
+let loupePointer = { x: 0, y: 0, valid: false };
+let loupeOffset = { x: 28, y: 28 };
+let loupeDragging = false;
+let loupeDragStart = { x: 0, y: 0, offsetX: 28, offsetY: 28 };
+const LOUPE_MAGNIFICATION = 2.5;
 let draft: Pt[] = [];
 let cursor: Pt | null = null;
 let calibFirst: Pt | null = null;
@@ -276,6 +285,97 @@ function drawSnapMarker(): void {
   g.append(c,h,label); previewLayer.appendChild(g);
 }
 
+function positionLoupe(): void {
+  if (!loupeRoot || !loupePointer.valid) return;
+  const width = loupeRoot.offsetWidth || 360;
+  const height = loupeRoot.offsetHeight || 252;
+  const left = Math.max(8, Math.min(window.innerWidth - width - 8, loupePointer.x + loupeOffset.x));
+  const top = Math.max(8, Math.min(window.innerHeight - height - 8, loupePointer.y + loupeOffset.y));
+  loupeRoot.style.left = `${left}px`;
+  loupeRoot.style.top = `${top}px`;
+}
+
+/** Copy the live page canvas and SVG overlay into a movable, magnified window. */
+function refreshLoupe(e: PointerEvent): void {
+  if (!loupeEnabled || !loupeRoot || !loupeContent || !loupeViewport) return;
+  const page = svg.parentElement;
+  const sourceCanvas = document.getElementById('pdfCanvas') as HTMLCanvasElement | null;
+  if (!page || !sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return;
+  const rect = page.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const width = page.clientWidth;
+  const height = page.clientHeight;
+  if (x < 0 || y < 0 || x > width || y > height || !width || !height) return;
+  loupePointer = { x: e.clientX, y: e.clientY, valid: true };
+
+  let pageCopy = loupeContent.querySelector<HTMLCanvasElement>('canvas[data-loupe-page]');
+  if (!pageCopy) {
+    pageCopy = document.createElement('canvas');
+    pageCopy.dataset.loupePage = 'true';
+    loupeContent.appendChild(pageCopy);
+  }
+  if (pageCopy.width !== sourceCanvas.width || pageCopy.height !== sourceCanvas.height) {
+    pageCopy.width = sourceCanvas.width;
+    pageCopy.height = sourceCanvas.height;
+  }
+  pageCopy.className = sourceCanvas.className;
+  pageCopy.style.width = `${width}px`;
+  pageCopy.style.height = `${height}px`;
+  const pageContext = pageCopy.getContext('2d');
+  if (pageContext) pageContext.drawImage(sourceCanvas, 0, 0);
+
+  const fxSource = document.getElementById('fxCanvas') as HTMLCanvasElement | null;
+  if (fxSource && fxSource.width && fxSource.height) {
+    let fxCopy = loupeContent.querySelector<HTMLCanvasElement>('canvas[data-loupe-fx]');
+    if (!fxCopy) {
+      fxCopy = document.createElement('canvas');
+      fxCopy.dataset.loupeFx = 'true';
+      loupeContent.appendChild(fxCopy);
+    }
+    if (fxCopy.width !== fxSource.width || fxCopy.height !== fxSource.height) {
+      fxCopy.width = fxSource.width;
+      fxCopy.height = fxSource.height;
+    }
+    fxCopy.style.width = `${width}px`;
+    fxCopy.style.height = `${height}px`;
+    fxCopy.getContext('2d')?.drawImage(fxSource, 0, 0);
+  }
+
+  let overlayCopy = loupeContent.querySelector<SVGSVGElement>('svg[data-loupe-overlay]');
+  if (!overlayCopy) {
+    overlayCopy = svg.cloneNode(false) as SVGSVGElement;
+    overlayCopy.removeAttribute('id');
+    overlayCopy.dataset.loupeOverlay = 'true';
+    loupeContent.appendChild(overlayCopy);
+  }
+  overlayCopy.setAttribute('viewBox', svg.getAttribute('viewBox') ?? `0 0 ${width} ${height}`);
+  overlayCopy.setAttribute('preserveAspectRatio', svg.getAttribute('preserveAspectRatio') ?? 'none');
+  overlayCopy.setAttribute('class', svg.getAttribute('class') ?? '');
+  overlayCopy.innerHTML = svg.innerHTML;
+  overlayCopy.style.width = `${width}px`;
+  overlayCopy.style.height = `${height}px`;
+
+  loupeContent.style.width = `${width}px`;
+  loupeContent.style.height = `${height}px`;
+  const centerX = loupeViewport.clientWidth / 2;
+  const centerY = loupeViewport.clientHeight / 2;
+  const tx = centerX - x * LOUPE_MAGNIFICATION;
+  const ty = centerY - y * LOUPE_MAGNIFICATION;
+  loupeContent.style.transform = `translate(${tx}px, ${ty}px) scale(${LOUPE_MAGNIFICATION})`;
+  loupeRoot.classList.remove('hidden');
+  positionLoupe();
+}
+
+function setLoupeEnabled(enabled: boolean): void {
+  loupeEnabled = enabled;
+  const button = document.getElementById('loupeToggle');
+  button?.classList.toggle('active', enabled);
+  button?.setAttribute('aria-pressed', String(enabled));
+  if (!enabled) loupeRoot?.classList.add('hidden');
+  else hint('Precision loupe enabled · move over the drawing; drag its title bar to reposition it');
+}
+
 export function initTools(overlay: SVGSVGElement): void {
   svg = overlay;
   calibModal = document.getElementById('calibModal')!;
@@ -299,7 +399,31 @@ export function initTools(overlay: SVGSVGElement): void {
     refreshPreview();
   });
   updateSnapToggle();
+  loupeRoot = document.getElementById('loupeWindow');
+  loupeViewport = document.getElementById('loupeViewport');
+  loupeContent = document.getElementById('loupeContent');
+  document.getElementById('loupeToggle')?.addEventListener('click', () => setLoupeEnabled(!loupeEnabled));
+  document.getElementById('loupeClose')?.addEventListener('click', () => setLoupeEnabled(false));
+  const loupeHeader = document.getElementById('loupeHeader');
+  loupeHeader?.addEventListener('pointerdown', (event) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    loupeDragging = true;
+    loupeDragStart = { x: event.clientX, y: event.clientY, offsetX: loupeOffset.x, offsetY: loupeOffset.y };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  window.addEventListener('pointermove', (event) => {
+    if (!loupeDragging) return;
+    loupeOffset = {
+      x: loupeDragStart.offsetX + event.clientX - loupeDragStart.x,
+      y: loupeDragStart.offsetY + event.clientY - loupeDragStart.y,
+    };
+    positionLoupe();
+  });
+  window.addEventListener('pointerup', () => { loupeDragging = false; });
   svg.addEventListener('pointermove', onPointerMove);
+  // Registered after onPointerMove so the copied SVG includes the latest preview and snap glyph.
+  svg.addEventListener('pointermove', refreshLoupe);
   svg.addEventListener('pointerleave', () => {
     cursor = null;
     refreshPreview();

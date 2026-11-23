@@ -352,15 +352,29 @@ function bindWheel(): void {
     'wheel',
     (e) => {
       if (!doc) return;
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const factor = Math.exp(-e.deltaY * 0.01);
-        zoomAt(e.clientX, e.clientY, factor);
-      }
-      // plain wheel/touchpad scrolls the container natively
+      // CAD-style navigation: the wheel always zooms around the pointer.
+      // Normalise line/page deltas so mouse wheels and touchpads behave alike.
+      e.preventDefault();
+      const delta =
+        e.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? e.deltaY * 16
+          : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? e.deltaY * scrollEl.clientHeight
+            : e.deltaY;
+      const factor = Math.exp(-delta * 0.002);
+      zoomAt(e.clientX, e.clientY, factor);
     },
     { passive: false },
   );
+
+  // Double-click zoom is navigation-only. Measurement tools retain their
+  // existing double-click-to-finish gesture.
+  svg.addEventListener('dblclick', (e) => {
+    if (!doc || state.tool !== 'pan') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    zoomAt(e.clientX, e.clientY, 1.5);
+  });
 }
 
 let spaceDown = false;
@@ -375,12 +389,24 @@ function bindPan(): void {
 
   svg.addEventListener('pointerdown', (e) => {
     if (!doc) return;
-    const wantPan = e.button === 1 || spaceDown || state.tool === 'pan';
-    if (!wantPan) return;
-    // clicking a markup selects/drags it — don't also pan the canvas
-    if (state.tool === 'pan' && e.target instanceof Element && e.target.closest('[data-id]')) return;
+    const middlePan = e.button === 1;
+    const spacePan = e.button === 0 && spaceDown;
+    const toolPan = e.button === 0 && state.tool === 'pan';
+    if (!middlePan && !spacePan && !toolPan) return;
+
+    // In selection mode a markup drag belongs to the markup, not the canvas.
+    if (toolPan && e.target instanceof Element && e.target.closest('[data-id]')) return;
+
     e.preventDefault();
-    svg.setPointerCapture(e.pointerId);
+    // Navigation gestures must never reach the measurement state machine.
+    if (middlePan || spacePan) e.stopImmediatePropagation();
+
+    try {
+      svg.setPointerCapture(e.pointerId);
+    } catch {
+      // The pointer may already have been cancelled by the browser.
+    }
+
     let lastX = e.clientX;
     let lastY = e.clientY;
     const move = (ev: PointerEvent) => {
@@ -389,14 +415,23 @@ function bindPan(): void {
       lastX = ev.clientX;
       lastY = ev.clientY;
     };
-    const up = () => {
+    const finish = () => {
       svg.removeEventListener('pointermove', move);
-      svg.removeEventListener('pointerup', up);
-      svg.removeEventListener('pointercancel', up);
+      svg.removeEventListener('pointerup', finish);
+      svg.removeEventListener('pointercancel', finish);
+      svg.removeEventListener('lostpointercapture', finish);
+      if (svg.hasPointerCapture(e.pointerId)) {
+        try {
+          svg.releasePointerCapture(e.pointerId);
+        } catch {
+          // Capture may already have been released by the browser.
+        }
+      }
     };
     svg.addEventListener('pointermove', move);
-    svg.addEventListener('pointerup', up);
-    svg.addEventListener('pointercancel', up);
+    svg.addEventListener('pointerup', finish);
+    svg.addEventListener('pointercancel', finish);
+    svg.addEventListener('lostpointercapture', finish);
   });
 }
 

@@ -893,6 +893,7 @@ function onDoubleClick(e: MouseEvent): void {
     const markup = id ? state.markups.find((m) => m.id === id && m.page === state.pageNum) : undefined;
     const geometry = markup?.sourceId ? state.markups.find((m) => m.id === markup.sourceId) ?? markup : markup;
     if (markup && geometry && ['length', 'area', 'perimeter', 'volume'].includes(markup.type) && geometry.points.length >= 2) {
+      if (isLockedLayer(layerOf(markup))) { hint('This measurement is on a locked layer · unlock it before editing'); return; }
       const points = geometry.points;
       const closed = markup.type === 'area' || markup.type === 'perimeter' || markup.type === 'volume';
       let best: { index: number; point: Pt; distance: number } | null = null;
@@ -1552,6 +1553,8 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   if ((k === 'delete' || k === 'backspace') && state.selectedId) {
+    const selectedMarkup = state.markups.find((m) => m.id === state.selectedId);
+    if (selectedMarkup && isLockedLayer(layerOf(selectedMarkup))) { hint('This measurement is on a locked layer · unlock it before deleting'); return; }
     const deleted = state.selectedId;
     recordHistory();
     state.markups = state.markups.filter((m) => m.id !== state.selectedId);
